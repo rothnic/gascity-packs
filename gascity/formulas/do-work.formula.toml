@@ -1,12 +1,9 @@
 description = """
-Full lifecycle implementation formula for one implementation convoy or a core
-drain-unit convoy of size one.
-
-Launch inputs:
-- input_convoy: {{convoy_id}}
-- context_path: {{context_path}} (empty means no extra context bundle)
-- implementation_target: {{implementation_target}}
-- summary_path: {{summary_path}} (empty means use the default item summary path)
+Managed implementation and independent acceptance for one original source.
+Native input convoy: {{convoy_id}}. Summary: {{summary_path}}.
+Frozen input: {{input_path}} (empty requires an exact source metadata handoff).
+Context: {{context_path}}. Implementation target: {{implementation_target}}.
+Every gate verifies the native claim/output contract; native retries stay bounded.
 """
 formula = "do-work"
 version = 1
@@ -15,6 +12,10 @@ extends = ["implementation-base"]
 target_required = true
 
 [vars]
+[vars.input_path]
+description = "Absolute frozen input JSON; empty requires source input_path and exact input_sha256."
+default = ""
+
 [vars.context_path]
 description = "Optional context bundle path."
 default = ""
@@ -29,28 +30,55 @@ default = ""
 
 [[steps]]
 id = "prepare-worktree"
-title = "Prepare item worktree"
+title = "Verify frozen input and prepare managed source worktree"
 metadata = { "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/do-work/prepare-worktree.md"
 
+[steps.check]
+max_attempts = 3
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/managed-prepare.sh"
+timeout = "5m"
+
 [[steps]]
 id = "implement"
-title = "Implement owned work"
+title = "Implement and publish exact tested output"
 needs = ["prepare-worktree"]
 metadata = { "gc.run_target" = "{{implementation_target}}", "gc.build.artifact_schema" = "gc.build.implementation-summary.v1", "gc.build.artifact_path_keys" = "gc.implementation.summary_path,gc.build.implementation_summary_path,gc.var.summary_path" }
 description_file = "../assets/workflows/do-work/implement.md"
 
 [steps.check]
 max_attempts = 3
-
 [steps.check.check]
 mode = "exec"
-path = "../assets/scripts/checks/build-artifact-valid.sh"
+path = "../assets/scripts/checks/managed-output.sh"
+timeout = "5m"
+
+[[steps]]
+id = "independent-acceptance"
+title = "Independently accept the exact tested output"
+needs = ["implement"]
+metadata = { "gc.run_target" = "gc.implementation-reviewer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.implementation.review_report_path" }
+description_file = "../assets/workflows/do-work/independent-acceptance.md"
+
+[steps.check]
+max_attempts = 3
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/managed-acceptance.sh"
 timeout = "5m"
 
 [[steps]]
 id = "close-source-anchor"
-title = "Close owned source anchor"
-needs = ["implement"]
+title = "Publish independently accepted source output"
+needs = ["independent-acceptance"]
 metadata = { "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/do-work/close-source-anchor.md"
+
+[steps.check]
+max_attempts = 3
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/managed-close.sh"
+timeout = "5m"

@@ -96,6 +96,49 @@ top-level stages only as anchored extensions:
 - added stages must preserve downstream artifact, traceability, mode, review,
   and publish contracts.
 
+## Managed Do-Work Admission
+
+The concrete base `do-work` adds `independent-acceptance` between implementation
+and source close while retaining the virtual `implementation-base` extension.
+The caller SHALL provision a per-original-source frozen contract containing exact
+source/store, canonical repository/root, immutable base SHA, branch/generation,
+declared verification command and exact accepted parent receipts. It SHALL pass
+`input_path` or publish a complete source `gc.implementation.input_path` and
+`input_sha256` handoff before admission. Missing or partial frozen input SHALL
+fail closed; no branch-tip, fetch, launcher-HEAD or plain-path fallback is allowed.
+
+The helper SHALL prove native intake/root/source ownership before preparation,
+use native managed worktree commands under the original source, preserve native
+provisioning attempts, require the frozen parent set to match native blockers
+except the proven own workflow edge, and refuse failed/canceled/held/unreviewed
+or stale parent output. Output and acceptance SHALL bind the exact tested commit,
+declared command, approved schema artifacts and current upstream hashes to distinct
+producer/reviewer native physical session/attempt identities. Close SHALL require
+both returned closed/pass identities and publish exact native shipped/pass receipt
+pins with readback. Every stage SHALL retain its bounded native exec check; no
+custom scheduling, budget reset, branch merge or destructive retry repair is part
+of this contract.
+
+This admission applies to base `do-work` and callers preserving that exact
+contract. Existing build/drain callers do not yet generate the frozen inputs.
+BMAD, Compound Engineering, gstack and Superpowers implementation/close overrides
+require separate receipt publication, acceptance ordering and managed gate
+migration before admission. Existing structural compatibility tests do not prove
+that migration. The shared `do-work-item` lane remains outside this increment.
+
+Native source/root/intake store pins SHALL agree. Native BD JSON does not prove
+the actual lookup store; cross-store and duplicate-ID routing remain admission
+gates. The isolated fixture covers a single native city store with a FileStore
+CLI bridge and deterministic workers, not genuine PM intake, installed external
+BD routing, model acceptance or universal worker-launch ownership binding.
+Creating an integrated parent input requires separate caller authority; commit
+containment alone does not prove semantic integration.
+
+Policy unit cases and formula/schema asset checks provide local source evidence.
+Native stand-in execution results and final exact-source independent acceptance
+are recorded separately in the handoff; this ledger does not grant installation
+or live admission.
+
 ## Global Invariants
 
 - `build-base` is internal and not user-runnable.
@@ -843,17 +886,19 @@ Proof expectation: validation requires `workflow.formula`, `producer.formula`,
 | GC-METH-009 | Drain and convoy-step compatibility | Derived packs may declare supported drain policies or replace drains with a convoy-step implementation while preserving convoy evidence. | this ledger; derived pack formula metadata |
 | GC-METH-010 | Build-basic path-shadow overrides | `build-basic` exposes stable major prompt override paths and one override file per review lane. | this ledger; future override-registry tests |
 | GC-METH-011 | Methodology metadata | Top-level build formulas declare `[metadata.gc.methodology]`; GitHub adapters validate selected formula compatibility. | this ledger; `formulas/build-base.formula.toml`; `README.md`; `tests/test_formula_assets.py::FormulaAssetTests::test_entrypoint_adapters_expose_methodology_formula_vars` |
-| GC-METH-012 | External implementation compatibility | Compound Engineering, Superpowers, BMAD, and gstack import this pack as `gc`, extend `build-base`, replace raw subagent dispatch with Gas City formulas/fanouts, and preserve base artifact/mode contracts. | `compound-engineering/REQUIREMENTS.md`; `superpowers/REQUIREMENTS.md`; `bmad/REQUIREMENTS.md`; `gstack/REQUIREMENTS.md`; `tests/test_derived_pack_compatibility.py::DerivedPackCompatibilityTests`; `docs/design/build-methodology-framework-audit.md` |
+| GC-METH-012 | External implementation compatibility | Compound Engineering, Superpowers, BMAD, and gstack import this pack as `gc`, extend `build-base`, replace raw subagent dispatch with Gas City formulas/fanouts, and preserve legacy base artifact/mode contracts. Managed `do-work` admission remains pending migration of frozen inputs, output publication, independent acceptance ordering and gates. | `compound-engineering/REQUIREMENTS.md`; `superpowers/REQUIREMENTS.md`; `bmad/REQUIREMENTS.md`; `gstack/REQUIREMENTS.md`; `tests/test_derived_pack_compatibility.py::DerivedPackCompatibilityTests`; `docs/design/build-methodology-framework-audit.md` |
 | GC-METH-013 | Shared artifact validation | Formula-specific check steps invoke one shared validator after producer stages and route failed validation back for bounded repair. | this ledger; future schema/gate tests |
 | GC-METH-014 | Coverage matrix consistency | YAML coverage is authoritative, markdown coverage mirrors IDs/statuses, and all non-covered statuses include rationale. | this ledger; future schema/gate tests |
 | GC-METH-015 | Neutral artifact metadata | Artifacts record workflow, methodology, and producer metadata without owner or role fields. | this ledger; future schema/gate tests |
 | GC-METH-016 | Nested continuation suffixes | `build-from-requirements-base -> build-from-plan-base -> build-from-decompose-base -> build-from-convoy-base -> build-from-review-base` form a nested suffix chain. Each suffix validates its prerequisite, performs its owned work, and hands off to the next suffix. Cataloged `build-from-*` wrappers expose the default Gas City behavior. | `formulas/build-from-*-base.formula.toml`; `formulas/build-from-*.formula.toml`; `tests/test_formula_assets.py::FormulaAssetTests::test_build_continuation_bases_form_nested_suffix_chain`; `tests/test_formula_assets.py::FormulaAssetTests::test_default_continuation_entrypoints_extend_suffix_bases` |
 
+| GC-METH-017 | Managed do-work lineage and independent acceptance | Base `do-work` requires frozen exact input/parents, managed original-source provenance, distinct native returned producer/reviewer identities, approved exact-hash artifacts and closed/shipped/pass readback through bounded gates. Missing caller provisioning, unmigrated derived overrides, cross-store route proof and genuine PM intake remain admission gates. | `formulas/do-work.formula.toml`; `assets/scripts/managed_do_work.py`; `tests/test_managed_do_work.py`; `tests/test_managed_do_work_native.py`; native/exact-review execution receipts recorded in handoff |
+
 ## Deferred Follow-Up Requirements
 
 | ID | Status | Follow-up condition |
 | --- | --- | --- |
-| GC-METH-012 | covered | Concrete implementation ledgers exist for `compound-engineering`, `superpowers`, `bmad`, and `gstack`, and `tests/test_derived_pack_compatibility.py` proves import-as-`gc`, anchored `build-base` extension with base anchors in order, methodology metadata vocabulary, selector defaults, drain or convoy-step strategy, providerless route targets, the shared claim protocol, the absence of provider-native subagent dispatch, and the pack-local ledgers for all four packs. |
+| GC-METH-012 | partial | Concrete implementation ledgers exist for `compound-engineering`, `superpowers`, `bmad`, and `gstack`, and `tests/test_derived_pack_compatibility.py` proves import-as-`gc`, anchored `build-base` extension with base anchors in order, methodology metadata vocabulary, selector defaults, drain or convoy-step strategy, providerless route targets, the shared claim protocol, the absence of provider-native subagent dispatch, and the pack-local ledgers for all four packs. These are structural/legacy checks; all four managed `do-work` overrides remain unadmitted until migrated and separately verified. |
 
 ## Evidence Index
 

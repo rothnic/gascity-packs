@@ -1,41 +1,24 @@
+Before any source read, edit, test, hash or commit, run this formula's pack
+helper: `python3 <pack-helper> verify --bead "$CLAIMED_BEAD_ID"`. Require the actual
+native current claim and `GC_SESSION_ID`. Read the returned canonical worktree
+path, then run `cd "$WORKTREE"` and verify `pwd -P` equals `$WORKTREE`.
+Do not edit files in the launcher checkout. The helper revalidates original source
+authority, frozen input bytes/location, every accepted parent, all managed source
+ownership fields and the exact native provisioning attempt. Do not infer the
+source anchor from dependency ids. Plain copied `work_dir` does not prove ownership.
 
-Resolve `<source-anchor-id>` as described below: the root's stamped
-`gc.source_anchor_id`, else the same rules as `prepare-worktree`. For a
-synthetic drain-unit convoy, the source anchor is the original drain member in
-`gc.drain_member_id`, not the synthetic convoy id. Read `work_dir` from the source anchor, never read `work_dir` from the synthetic drain-unit convoy,
-validate that it is an absolute existing git worktree, set `WORKTREE` to that
-path, then `cd "$WORKTREE"` before reading or editing source files. If
-`work_dir` is missing, invalid, or points at the launcher checkout, fail this step before editing.
+Implement only the source boundary, commit the owned change in this worktree, and
+run the frozen input's `verification_command` at the final exact HEAD. Record the
+observed result in a durable absolute JSON file:
+`{"tested_commit":"<full HEAD SHA>","result":"pass","command":"<exact frozen command>"}`.
+Additional evidence fields are allowed. Do not substitute another passing command
+or assert a result you did not observe. Recheck HEAD after verification.
 
-Do not infer the source anchor from dependency ids such as the
-`prepare-worktree` step. Read the claimed step bead's `gc.root_bead_id`, read
-that do-work root with `gc bd show <root-bead-id> --json`;
-if the JSON output is a one-element list, unwrap the first element before
-reading metadata. If the
-root has `gc.source_anchor_id`, `prepare-worktree` already resolved the anchor
-and stamped it there: use exactly that id and do not re-derive it. Only when
-the root has no `gc.source_anchor_id` (a workflow started before the stamp
-existed), read the root metadata `gc.input_convoy_id` and read that input
-convoy with `gc bd show <input-convoy-id> --json`. If the input convoy has
-`gc.synthetic_kind=drain-unit-convoy`, use its `gc.drain_member_id` as the
-source anchor. Else if it has `gc.synthetic=true`, use its single tracked member
-from `gc convoy status <input-convoy-id> --json`. Otherwise use the input
-convoy id as the source anchor. Then read the source anchor and use only its
-`work_dir` metadata as `WORKTREE`; for an unstamped root whose resolved member
-has no `work_dir`, a pre-stamp `prepare-worktree` persisted it on the
-`gc.synthetic=true` input convoy, so read `work_dir` from that convoy instead.
-
-`gc.work_dir` is the launcher rig root, not the implementation worktree. Use
-`gc.work_dir` only later to run the artifact validator.
-After resolving `WORKTREE`, run `cd "$WORKTREE"` and verify `pwd -P` equals
-`$WORKTREE` before any source read, source edit, test, file hash, `git add`, or
-`git commit`. If a command uses the launcher checkout path for source edits,
-verification, hashes, or commits, the step is invalid and must fail.
-
-Do not edit files in the launcher checkout. Implement only the owned source
-anchor boundary, run sandboxed verification from inside the worktree, and make a
-focused commit in the worktree. Leave the source anchor open for
-`close-source-anchor`; close only this implementation step when done.
+Leave the source anchor open for independent acceptance and close-source-anchor.
+Write a durable summary outside the disposable worktree. The summary must have
+`status: approved`, this workflow root ID, producer formula `do-work`, stage
+`implement`, and the actual positive native `gc.attempt`. Its `trace.upstream`
+must include the frozen input's exact absolute path and `sha256:<input_sha256>`.
 
 Write or update the task summary with these schema-required body sections,
 using the exact `##` headings below in this order:
@@ -63,8 +46,8 @@ Use mapping objects for front matter; do not use scalar shortcuts such as
 `workflow: build-basic`. The top-level YAML shape must be:
 
 - `schema: gc.build.implementation-summary.v1`
-- `workflow: {id: <workflow-root-id>, formula: <root-workflow-formula>}`
-- `methodology: {pack: gascity, name: build-basic}`
+- `workflow: {id: <workflow-root-id>, formula: do-work}`
+- `methodology: {pack: gascity, name: do-work}`
 - `producer: {formula: do-work, stage: implement, attempt: <positive integer>}`
 - `status: approved` or another schema-allowed status
 - `trace: {upstream: [...], coverage: [...]}`
@@ -83,4 +66,20 @@ Trace front matter must use the validator shape exactly:
   requirements; do not use `approved` in `trace.coverage[].status` or the
   Markdown coverage table.
 
-Artifact validation: this step is gated by the pack-owned `build-artifact-valid.sh` check, which validates the summary recorded at `gc.implementation.summary_path` (fallbacks `gc.build.implementation_summary_path`, then `gc.var.summary_path`) against schema `gc.build.implementation-summary.v1`. Before closing this step, read the launcher rig root from the workflow root bead's `gc.work_dir`, then run the same validator locally from that rig root. The validator is the script recorded as `gc.check_path` on the validation loop control bead (the dependent of this step bead whose `gc.kind` is `ralph`); Gas City resolves it to this pack's own `build-artifact-valid.sh` asset, so nothing has to be copied into the rig. Run `GC_BEAD_ID=<claimed-step-id> GC_RIG_ROOT=<launcher-rig-root> "<gc.check_path>"`; fix every reported validation error before setting `gc.outcome=pass`. On repair attempts (`gc.attempt` greater than 1), read the validator errors from `gc.attempt_log` on the validation loop control bead (the dependent of this step bead) and repair the summary in place instead of rewriting it. Two bounded repair attempts follow the first failure; exhausting them closes this stage with `gc.outcome=fail` and machine-readable validation errors that block downstream stages. Never ask questions in headless mode; record unresolved ambiguity inside the summary.
+
+Validate the summary with this pack's `validate_build_artifact.py` before publishing.
+Run `python3 <pack-helper> publish-output --bead "$CLAIMED_BEAD_ID" --summary
+"<absolute-summary-path>" --verification "<absolute-verification-json>"`.
+The helper validates the original schema, approved status, native producer attempt,
+exact input trace, tested HEAD, and frozen command; it writes an immutable output
+receipt and pins its hash/location on the root. A repeated physical attempt may
+publish only identical receipt bytes. A new native repair attempt has a new bead
+and receipt; acceptance always names the current pinned output.
+
+Close only this claimed step with `gc.outcome=pass`. The native controller runs
+`managed-output.sh` on the returned closed/pass subject, composing exact receipt
+checks with `build-artifact-valid.sh`. A failure supplies native `gc.attempt_log`
+repair context, within the existing three-attempt bound. Never reset counters,
+clean up worktrees, or skip the acceptance dependency. Git merge needs separate
+authority. Do not ask questions in headless mode; record unresolved ambiguity and
+return failure through the native step.

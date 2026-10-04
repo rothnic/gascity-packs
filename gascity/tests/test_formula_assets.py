@@ -276,6 +276,7 @@ BUILD_ARTIFACT_VALIDATION_GATES = {
     ("fix-loop-base", "re-review"): FIX_LOOP_REVIEW_GATE,
     ("implementation-base", "implement"): ITEM_SUMMARY_GATE,
     ("do-work", "implement"): ITEM_SUMMARY_GATE,
+    ("do-work", "independent-acceptance"): ("gc.build.review.v1", "gc.implementation.review_report_path"),
     ("implementation-item-base", "implement-item"): ITEM_SUMMARY_GATE,
     ("do-work-item", "implement-item"): ITEM_SUMMARY_GATE,
     ("implement", "summarize"): AGGREGATE_SUMMARY_GATE,
@@ -1414,7 +1415,10 @@ class FormulaAssetTests(unittest.TestCase):
                 resolved = resolve_formula(root, name)
                 parent = load_formula(root, parents[0])
                 self.assertEqual(data["extends"], parents)
-                self.assertEqual([step["id"] for step in resolved["steps"]], [step["id"] for step in parent["steps"]])
+                expected_ids = [step["id"] for step in parent["steps"]]
+                if name == "do-work":
+                    expected_ids += ["independent-acceptance"]
+                self.assertEqual([step["id"] for step in resolved["steps"]], expected_ids)
 
     def test_entrypoint_adapters_expose_methodology_formula_vars(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
@@ -2170,6 +2174,11 @@ class FormulaAssetTests(unittest.TestCase):
             "assets/workflows/build-base/summarize-implementation.md",
         ):
             text = (root / relative_path).read_text(encoding="utf-8")
+            if relative_path == "assets/workflows/do-work/implement.md":
+                self.assertIn("Validate the summary with this pack's `validate_build_artifact.py`", text)
+                self.assertIn("on the returned closed/pass subject", text)
+                self.assertIn("existing three-attempt bound", text)
+                continue
             for fragment in (
                 "read the launcher rig root from the workflow root bead's `gc.work_dir`",
                 # The gate's validator is a pack asset, not a rig-local
@@ -2473,6 +2482,7 @@ class FormulaAssetTests(unittest.TestCase):
                             "task-review",
                             "record-item-result",
                             "close-source-anchor",
+                            "independent-acceptance",
                         },
                     )
                     self.assertEqual(
@@ -2487,13 +2497,17 @@ class FormulaAssetTests(unittest.TestCase):
                             "task-review": ["verify-test-passes"],
                             "record-item-result": ["task-review"],
                             "close-source-anchor": ["record-item-result"],
+                            "independent-acceptance": ["implement"],
                         },
                     )
                 else:
                     self.assertEqual(
                         [step["id"] for step in resolved_item["steps"]],
-                        ["prepare-worktree", "implement", "close-source-anchor"],
+                        ["prepare-worktree", "implement", "close-source-anchor", "independent-acceptance"],
                     )
+                composed = {step["id"]: step for step in resolved_item["steps"]}
+                self.assertEqual(composed["independent-acceptance"]["check"]["check"]["path"],
+                                 "../assets/scripts/checks/managed-acceptance.sh")
                 self.assertTrue(any(step["id"] == "implement" for step in item_formula["steps"]))
                 text = effective_formula_text_from_dirs(
                     [gascity_root / "formulas", pack_root / "formulas"],
@@ -3636,7 +3650,8 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(do_work["vars"]["implementation_target"]["default"], "gc.implementation-worker")
         self.assertEqual(do_work["steps"][0]["metadata"]["gc.run_target"], "gc.run-operator")
         self.assertEqual(do_work["steps"][1]["metadata"]["gc.run_target"], "{{implementation_target}}")
-        self.assertEqual(do_work["steps"][2]["metadata"]["gc.run_target"], "gc.run-operator")
+        self.assertEqual(do_work["steps"][2]["metadata"]["gc.run_target"], "gc.implementation-reviewer")
+        self.assertEqual(do_work["steps"][3]["metadata"]["gc.run_target"], "gc.run-operator")
 
         do_work_item = tomllib.loads((root / "formulas" / "do-work-item.formula.toml").read_text(encoding="utf-8"))
         self.assertEqual(do_work_item["extends"], ["implementation-item-base"])
@@ -3650,62 +3665,48 @@ class FormulaAssetTests(unittest.TestCase):
         do_work = tomllib.loads((root / "formulas" / "do-work.formula.toml").read_text(encoding="utf-8"))
         steps = {step["id"]: step for step in do_work["steps"]}
 
-        prepare = node_description(root, steps["prepare-worktree"])
-        for fragment in (
-            "current step bead metadata",
-            "gc.root_bead_id",
-            "gc.input_convoy_id",
-            "gc.synthetic_kind",
-            "gc.drain_member_id",
-            "do not use the synthetic drain-unit convoy id as `<source-anchor-id>`",
-            "never persist `work_dir` on the synthetic drain-unit convoy",
-            "hard-fail if the selected source anchor id equals the synthetic input convoy id",
-            "worktrees/<source-anchor-id>",
-            "git worktree add",
-            "gc bd update <source-anchor-id> --set-metadata work_dir=",
-            "Do not edit source files in the launcher checkout",
-        ):
-            with self.subTest(step="prepare-worktree", fragment=fragment):
-                self.assertIn(fragment, prepare)
-
-        implement = node_description(root, steps["implement"])
-        for fragment in (
-            "Read `work_dir` from the source anchor",
-            "never read `work_dir` from the synthetic drain-unit convoy",
-            "Do not infer the source anchor from dependency ids",
-            "`gc.work_dir` is the launcher rig root, not the implementation worktree",
-            "if the JSON output is a one-element list, unwrap the",
-            "verify `pwd -P` equals",
-            "cd \"$WORKTREE\"",
-            "fail this step before editing",
-            "Do not edit files in the launcher checkout",
-            "Leave the source anchor open",
-        ):
-            with self.subTest(step="implement", fragment=fragment):
-                self.assertIn(fragment, implement)
-
-        close_source = node_description(root, steps["close-source-anchor"])
-        for fragment in (
-            "gc.root_bead_id",
-            "gc.source_anchor_id",
-            "DO NOT re-derive",
-            "FALLBACK — only if the root has NO `gc.source_anchor_id`",
-            "gc.synthetic_kind=drain-unit-convoy",
-            "gc.drain_member_id",
-            "Read `work_dir` from the source anchor",
-            "close only `<source-anchor-id>`",
-            "handle both an object and a",
-            "`gc.work_dir` is the launcher rig",
-            "points at a worktree without the",
-            "gc bd show <source-anchor-id> --json",
-            "status=closed",
-            "gc.outcome=pass",
-            "if either check fails",
-            "anchor before closing this step",
-            "Do not close this step with pass while the source anchor remains open",
-        ):
-            with self.subTest(step="close-source-anchor", fragment=fragment):
-                self.assertIn(fragment, close_source)
+        expected = {
+            "prepare-worktree": ("gc.root_bead_id", "gc.input_convoy_id",
+                                "gc.synthetic_kind=drain-unit-convoy", "gc.drain_member_id",
+                                "gc.synthetic=true", "gc convoy status <input-convoy-id> --json",
+                                "gc.source_anchor_id", "input_sha256", "gc worktree ensure",
+                                "base_sha", "native attempt", "full managed provenance",
+                                "Do not edit source files in the"),
+            "implement": ('verify --bead "$CLAIMED_BEAD_ID"', 'cd "$WORKTREE"',
+                          "verification_command", "publish-output", "tested_commit",
+                          "Leave the source anchor open", "managed-output.sh",
+                          "build-artifact-valid.sh", "gc.attempt_log"),
+            "independent-acceptance": ("GC_SESSION_ID", "native session must differ",
+                                      "gc.build.review.v1", "status: approved",
+                                      "record-acceptance", "output_commit",
+                                      "actual-positive-native-attempt", "sha256:",
+                                      "managed-acceptance.sh"),
+            "close-source-anchor": ("gc.root_bead_id", "gc.source_anchor_id",
+                                    "close-source", "gc.work_outcome=shipped",
+                                    "gc.work_commit", "gc.work_verification",
+                                    "Do not close this step with pass",
+                                    "bare", "legacy caller", "managed-close.sh"),
+        }
+        checks = {
+            "prepare-worktree": "prepare", "implement": "output",
+            "independent-acceptance": "acceptance", "close-source-anchor": "close",
+        }
+        for stage, fragments in expected.items():
+            text = node_description(root, steps[stage])
+            for fragment in fragments:
+                with self.subTest(step=stage, fragment=fragment):
+                    self.assertIn(fragment, text)
+            self.assertEqual(steps[stage]["check"], {
+                "max_attempts": 3, "check": {
+                    "mode": "exec",
+                    "path": "../assets/scripts/checks/managed-" + checks[stage] + ".sh",
+                    "timeout": "5m",
+                },
+            })
+        self.assertEqual(steps["independent-acceptance"]["needs"], ["implement"])
+        self.assertEqual(steps["close-source-anchor"]["needs"], ["independent-acceptance"])
+        self.assertEqual(do_work["vars"]["input_path"]["default"], "")
+        self.assertIn("source input_path", do_work["vars"]["input_path"]["description"])
 
     def test_pack_close_source_anchor_overrides_read_root_stamped_anchor(self) -> None:
         gascity_root = pathlib.Path(__file__).resolve().parents[1]
@@ -3730,12 +3731,7 @@ class FormulaAssetTests(unittest.TestCase):
                 self.assertIn(fragment, close_source)
 
     def test_do_work_source_anchor_is_stamped_once_and_read_back(self) -> None:
-        """prepare-worktree is the only resolver; later steps read its stamp.
-
-        Covers the three resolution paths every source-anchor consumer must
-        handle: the stamped id, the unstamped (legacy / shared-drain item)
-        fallback, and the missing-anchor fail-closed path.
-        """
+        """Managed base proves native intake on replay; legacy overrides stay explicit."""
         gascity_root = pathlib.Path(__file__).resolve().parents[1]
         repo_root = gascity_root.parent
 
@@ -3747,7 +3743,14 @@ class FormulaAssetTests(unittest.TestCase):
         prepare = flat(node_description(gascity_root, steps["prepare-worktree"]))
         implement = flat(node_description(gascity_root, steps["implement"]))
         close_source = flat(node_description(gascity_root, steps["close-source-anchor"]))
-
+        self.assertIn("Existing `gc.source_anchor_id` and source `workflow_id` must agree", prepare)
+        self.assertIn("Missing frozen input fails closed", prepare)
+        self.assertIn("all managed source ownership fields", implement)
+        self.assertIn("Plain copied `work_dir` does not prove ownership", implement)
+        self.assertIn("never guesses an anchor", close_source)
+        self.assertIn("bare source closed/pass", close_source)
+        for text in (prepare, implement, close_source):
+            self.assertNotIn("FALLBACK", text)
         sp_formulas = [gascity_root / "formulas", repo_root / "superpowers" / "formulas"]
         sp_closes = {
             name: flat(
@@ -3761,22 +3764,6 @@ class FormulaAssetTests(unittest.TestCase):
             for name in ("superpowers-development", "superpowers-development-item")
         }
 
-        # Stamped path: prepare-worktree writes the stamp, idempotently, and
-        # verifies it; every downstream step reads exactly that id.
-        for fragment in (
-            "gc bd update <root-bead-id> --set-metadata gc.source_anchor_id=<source-anchor-id>",
-            "If the root already has `gc.source_anchor_id` (a retry), it must equal the id resolved above; hard-fail on a mismatch instead of overwriting it",
-            "the root now has `gc.source_anchor_id=<source-anchor-id>` before closing this step",
-        ):
-            with self.subTest(path="stamped", step="prepare-worktree", fragment=fragment):
-                self.assertIn(fragment, prepare)
-        with self.subTest(path="stamped", step="implement"):
-            self.assertIn("If the root has `gc.source_anchor_id`", implement)
-            self.assertIn("use exactly that id and do not re-derive it", implement)
-        for name, text in {"do-work": close_source, **sp_closes}.items():
-            with self.subTest(path="stamped", step="close-source-anchor", formula=name):
-                self.assertIn("read that root's `gc.source_anchor_id` metadata", text)
-                self.assertIn("DO NOT re-derive it", text)
         for rel in (
             "bmad/assets/workflows/bmad-story-development/implement-story.md",
             "bmad/assets/workflows/bmad-story-development/apply-story-findings.md",
@@ -3791,16 +3778,15 @@ class FormulaAssetTests(unittest.TestCase):
 
         # A single-item sling wraps the item in a `gc.synthetic=true` input
         # convoy; the item, never the wrapper, is the source anchor.
-        for name, text in {"prepare-worktree": prepare, "implement": implement, "do-work close": close_source, **sp_closes}.items():
+        for name, text in sp_closes.items():
             with self.subTest(path="single-item-wrapper", step=name):
                 self.assertIn("`gc.synthetic=true`", text)
                 self.assertIn("gc convoy status <input-convoy-id> --json", text)
-        self.assertIn("Never use the synthetic wrapper convoy id as `<source-anchor-id>`", prepare)
 
         # Fallback path: unstamped roots (pre-stamp in-flight runs, the shared
         # drain item lane) derive the anchor with prepare-worktree's rules and
         # still find a pre-stamp work_dir on the wrapper convoy.
-        for name, text in {"do-work": close_source, **sp_closes}.items():
+        for name, text in sp_closes.items():
             with self.subTest(path="fallback", formula=name):
                 self.assertIn("FALLBACK — only if the root has NO `gc.source_anchor_id`", text)
                 self.assertIn("gc.synthetic_kind=drain-unit-convoy", text)
@@ -3808,15 +3794,15 @@ class FormulaAssetTests(unittest.TestCase):
                 self.assertIn("read `work_dir` from that convoy", text)
                 self.assertIn("still close the member", text)
         self.assertIn("superpowers-development-item` lane, which has no `prepare-worktree`", sp_closes["superpowers-development-item"])
-        self.assertIn("read `work_dir` from that convoy instead", implement)
 
         # Missing-anchor / wrong-bead path: fail closed before closing anything.
-        for name, text in {"do-work": close_source, **sp_closes}.items():
+        for name, text in sp_closes.items():
             with self.subTest(path="missing-anchor", formula=name):
                 self.assertIn("if it is missing too, fail this step without closing any bead", text)
                 self.assertIn("gc.synthetic=true", text)
                 self.assertRegex(text, r"fail this step without closing any bead (if it does not hold|unless)")
                 self.assertIn("do not close it again", text)
+
 
     def test_wrapper_formulas_route_role_agents(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
@@ -4313,6 +4299,10 @@ description = "Override sink that writes the base triage report contract."
                 "design-review-approved.sh",
                 "gap-analysis-approved.sh",
                 "implementation-review-approved.sh",
+                "managed-acceptance.sh",
+                "managed-close.sh",
+                "managed-output.sh",
+                "managed-prepare.sh",
             ],
         )
         for script in scripts:
@@ -4360,6 +4350,10 @@ description = "Override sink that writes the base triage report contract."
                 "build-artifact-valid.sh",
                 "design-review-approved.sh",
                 "implementation-review-approved.sh",
+                "managed-acceptance.sh",
+                "managed-close.sh",
+                "managed-output.sh",
+                "managed-prepare.sh",
             },
         )
 
@@ -4433,12 +4427,20 @@ description = "Override sink that writes the base triage report contract."
                     step["check"]["check"],
                     {
                         "mode": "exec",
-                        "path": GASCITY_BUILD_ARTIFACT_CHECK_SCRIPT,
+                        "path": ({
+                            ("do-work", "implement"): "../assets/scripts/checks/managed-output.sh",
+                            ("do-work", "independent-acceptance"): "../assets/scripts/checks/managed-acceptance.sh",
+                        }.get((formula_name, step_id), GASCITY_BUILD_ARTIFACT_CHECK_SCRIPT)),
                         "timeout": "5m",
                     },
                 )
                 self.assertEqual(step["metadata"]["gc.build.artifact_schema"], schema)
                 self.assertEqual(step["metadata"]["gc.build.artifact_path_keys"], path_keys)
+                if formula_name == "do-work":
+                    check_text = (root / "assets/scripts/checks" /
+                                  pathlib.Path(step["check"]["check"]["path"]).name).read_text()
+                    self.assertIn('"$SCRIPT_DIR/build-artifact-valid.sh"', check_text)
+                    self.assertIn("managed_do_work.py", check_text)
 
     def _run_build_artifact_check(
         self,

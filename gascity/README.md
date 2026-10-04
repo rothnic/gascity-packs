@@ -318,7 +318,8 @@ flowchart TD
         direction TB
         SeparatePrep["prepare-worktree<br/>do-work"]:::base --> Implement["implement owned work<br/>gc.implementation-worker"]:::basic
         SharedImplement["implement shared item<br/>do-work-item"]:::base
-        Implement --> CloseItem["close source anchor<br/>do-work"]:::base
+        Implement --> AcceptItem["independent acceptance<br/>do-work"]:::basic
+        AcceptItem --> CloseItem["close source anchor<br/>do-work"]:::base
     end
 
     DrainSeparate --> SeparatePrep
@@ -727,46 +728,133 @@ which source anchors passed, failed, or were skipped.
 
 ### Per-Item Implementation
 
-Use this for the worker behavior applied to each drained implementation item.
+Base `do-work` prepares a managed original-source worktree, publishes an exact
+tested output, obtains independent native acceptance, and publishes the source as
+closed/shipped/pass. The native graph and bounded checks own readiness, retries
+and completion. The pack helper does not schedule workers, reset budgets, merge
+branches or clean up worktrees.
 
-Stable basic override:
-`assets/workflows/do-work/implement.md`
+Before cooking or draining a supported item, its caller must write a frozen JSON
+contract outside the source worktree. Pass its absolute path as `input_path` or
+record both `gc.implementation.input_path` and
+`gc.implementation.input_sha256` on the original source. The latter is a supported
+handoff only after the helper proves the native root/intake/source relationship.
+The path/hash pair must be complete on each source/root independently; a partial
+pair fails closed even when an explicit path is supplied. Once recorded, neither
+bytes nor canonical location may change on retry.
 
-Stable advanced steps:
-`do-work` steps `prepare-worktree`, `implement`, `close-source-anchor`;
-`do-work-item` step `implement-item`
+The input has exactly these fields:
 
-Basic example: require local test selection and worktree discipline.
-
-Create `assets/workflows/do-work/implement.md`:
-
-```markdown
-Implement only the assigned source anchor.
-
-- Read `work_dir` from source-anchor metadata and `cd` there before editing.
-- Select tests based on the changed area and explain why they are sufficient.
-- For Go changes, prefer package-level tests first, then `make test-fast-parallel`
-  before closing if the change spans packages.
-- Leave unrelated files and unassigned beads untouched. Do not close the source
-  anchor; the close step owns that.
+```json
+{
+  "schema_version": 1,
+  "source_anchor_id": "<original-native-source-id>",
+  "source_store_ref": "city:city",
+  "repo_dir": "/canonical/repository",
+  "worktree_root": "/canonical/managed-worktrees",
+  "base_sha": "<full-lowercase-commit-SHA>",
+  "branch": "work/<source-id>",
+  "generation": "<stable-provisioning-fence>",
+  "verification_command": "<declared-command-to-run-at-final-HEAD>",
+  "parents": [
+    {
+      "source_anchor_id": "<accepted-parent-source-id>",
+      "source_store_ref": "city:city",
+      "accepted_commit": "<full-lowercase-commit-SHA>",
+      "acceptance_path": "/durable/parent.acceptance.json",
+      "acceptance_sha256": "<sha256-of-exact-receipt-bytes>"
+    }
+  ]
+}
 ```
 
-Advanced example: replace each item with a build-test-repair loop.
+`parents` is empty only for a native leaf. It must equal the original source's
+blocking dependency set, excluding only its proven own current workflow root.
+Every parent must still have exact native closed/shipped/pass publication,
+unchanged current worktree HEAD, accepted commit and receipt hash, original
+workflow ownership, and distinct producer/reviewer native returned identities.
+Missing, failed, canceled, held, unreviewed or stale parent outputs block the
+caller even when the engine's generated recipe step appears ready.
 
-Copy `do-work.formula.toml` and replace `implement`:
+The frozen base must contain each accepted parent commit. Constructing a common
+input for multiple parents is a separate caller responsibility and requires its
+own authority. Commit containment alone does not prove semantic integration:
+implementation and independent review must verify the combined behavior at the
+new output's exact HEAD. No branch merge or automatic combined-commit creation is
+provided here.
 
-```toml
-[[steps]]
-id = "implement"
-title = "Implement item through build-test-repair loop"
-needs = ["prepare-worktree"]
-expand = "company-implementation-item-loop"
-metadata = { "gc.run_target" = "gc.implementation-worker" }
-```
+The helper `assets/scripts/managed_do_work.py` supports:
 
-The loop can implement, test, repair, and self-review the item, but
-`close-source-anchor` must still be able to verify the source anchor outcome and
-close it with `gc.outcome=pass`.
+| Mode | Required caller/evidence |
+| --- | --- |
+| `prepare --bead ID [--input ABS_JSON]` | Current native claim/session; frozen input or complete source handoff |
+| `verify --bead ID` | Current native claim/session; unchanged source/provenance/input/parents |
+| `publish-output --bead ID --summary ABS_MD --verification ABS_JSON` | Implement claim; approved bound summary; observed passing exact HEAD and frozen command |
+| `record-acceptance --bead ID --report ABS_MD` | Distinct reviewer claim/session; approved bound review of current output |
+| `close-source --bead ID` | Close claim; producer/reviewer closed/pass; exact accepted evidence |
+| `check --bead ID --phase prepare\|output\|acceptance\|close` | Controller-supplied returned closed/pass physical subject; read only |
+
+Worker modes require `GC_SESSION_ID` and actual `gc hook current --id-only`;
+`GC_BEAD_ID` alone is insufficient. Physical `gc.session_id` and positive native
+`gc.attempt` bind receipts. Scalar native metadata booleans/numbers are normalized
+as native `Bead.StringMap` does; input and receipt JSON fields keep strict types.
+
+Preparation calls native `gc worktree ensure` with the original source as owner
+bead, workflow root as owner, creator `gascity/do-work`, deterministic
+`<worktree_root>/<source-id>`, and the full frozen SHA as both `--base` and
+`--base-sha`. Full provenance and equal `gc.work_dir`/`work_dir` are published only
+on the source. Plain copied paths on generated steps remain unmanaged. A root or
+source attempt pin requires complete matching source provenance verified before
+any ensure call; the helper cannot repair or adopt another provisioning attempt.
+
+Output receipts bind frozen input hash/location, base, full native provenance,
+exact tested commit, declared verification command, producer ID/session/attempt,
+and summary/verification file hashes. Approved summary artifacts bind this root,
+stage/attempt and exact frozen input in `trace.upstream`. Acceptance receipts add
+a distinct reviewer ID/session/attempt, approved `gc.build.review.v1` report hash,
+and exact output receipt hash. Report workflow, stage/attempt and upstream
+path/hash must agree; a schema-valid draft, blocked report or stale approval is
+not acceptance. Close and parent consumption revalidate those bindings.
+
+Successful close publishes native `gc.work_outcome=shipped`, exact `gc.work_commit`,
+`gc.outcome=pass`, and
+`gc.work_verification=<acceptance-path>#sha256:<acceptance-hash>` with pinned
+acceptance path/hash in one native source update, followed by exact readback.
+Each of prepare, output, acceptance and close has a read-only native exec gate
+with three bounded attempts. Output and acceptance also retain the existing
+artifact/schema validator. Missing output follows native failure/retry behavior;
+cancellation, `molecule_failed`, nonempty `gc.cancel_requested`, terminal non-pass
+roots and holds block entry. No counters or budgets are reset. Worktrees and
+receipts are retained.
+
+Compatibility and installation:
+
+- Existing build/drain callers do not provision these per-source inputs today.
+  They must write the frozen contract and accepted parent receipts before this
+  base formula is enabled. Missing input fails closed; there is no default-branch,
+  tip, fetch, local HEAD or legacy plain-path fallback.
+- This increment supports base `do-work` and callers using its exact managed
+  contract. Unmigrated BMAD, compound-work, gstack and superpowers overrides are
+  not admitted: their implement/close replacements must publish the output,
+  preserve independent acceptance ordering and all managed gates, then receive
+  separate verification. `do-work-item` and other shared-workspace lanes retain
+  their existing contract.
+- Native source/root/intake store pins must all agree when present. Native
+  `gc bd show` does not return an authoritative store reference; provenance's
+  `store_ref` proves worktree ownership, not the BD lookup route. The deterministic
+  integration fixture proves one isolated native city store only. Cross-store
+  routes or duplicate IDs need separate installation/admission proof.
+- The fixture uses real native init, formula cook, worktrees, claim readback and
+  controls with a FileStore CLI bridge and deterministic worker/reviewer stand-ins.
+  It does not prove genuine PM intake, installed external BD routing, live worker
+  launch binding or model acceptance. Caller provisioning, genuine intake and
+  authorization to construct integrated parent input remain separate gates.
+
+Stable assets are `assets/workflows/do-work/{prepare-worktree,implement,
+independent-acceptance,close-source-anchor}.md`. Overrides must keep the helper
+entry verification, exact output publication, approved schema artifacts, distinct
+reviewer acceptance and the final close readback; a plain `work_dir` instruction
+does not retain this contract.
 
 ### Gap Analysis
 

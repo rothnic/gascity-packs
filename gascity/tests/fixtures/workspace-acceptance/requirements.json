@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "items": [
+    {"price_cents": 1250, "quantity": 2},
+    {"price_cents": 250, "quantity": 1}
+  ],
+  "subtotal_cents": 2750,
+  "shipping_cents": {"domestic": 500, "international": 1500},
+  "domestic_quote": {"subtotal_cents": 2750, "shipping_cents": 500, "total_cents": 3250},
+  "international_quote": {"subtotal_cents": 2750, "shipping_cents": 1500, "total_cents": 4250},
+  "empty_quote": {"subtotal_cents": 0, "shipping_cents": 500, "total_cents": 500},
+  "domestic_receipt": "Subtotal: $27.50\nShipping: $5.00\nTotal: $32.50",
+  "international_receipt": "Subtotal: $27.50\nShipping: $15.00\nTotal: $42.50"
+}

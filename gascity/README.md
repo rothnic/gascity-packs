@@ -295,6 +295,9 @@ Workspace lifecycle record contracts and their read-only JSON validator are
 documented in [`schemas/workspace/README.md`](schemas/workspace/README.md). The
 contracts include a closed source inventory and acceptance oracles for later
 workflow migration. Current formulas retain their existing lifecycle behavior.
+The [workspace acceptance fixture](tests/fixtures/workspace-acceptance/README.md)
+provides frozen project assertions, real Git composition checks and named native
+cases that remain unrun.
 
 `build-base` is the virtual contract. `build-basic` is the concrete Gas City
 implementation that demonstrates the override surface without vendoring a

@@ -296,6 +296,10 @@ documented in [`schemas/workspace/README.md`](schemas/workspace/README.md). The
 contracts include a closed source inventory and acceptance oracles for later
 workflow migration. Current formulas retain their existing lifecycle behavior.
 
+The [workspace source discovery command](schemas/workspace/discovery.md)
+checks that supplied source and override layers match the declared inventory.
+Workflow migration requires separate runtime acceptance.
+
 `build-base` is the virtual contract. `build-basic` is the concrete Gas City
 implementation that demonstrates the override surface without vendoring a
 third-party methodology.

@@ -414,6 +414,12 @@
         },
         "base_oid": {
           "$ref": "#/$defs/oid"
+        },
+        "worktree_lifecycle": {
+          "enum": [
+            "legacy",
+            "new"
+          ]
         }
       },
       "required": [
@@ -425,7 +431,8 @@
         "source_anchor_id",
         "rig_root",
         "common_git_dir",
-        "base_oid"
+        "base_oid",
+        "worktree_lifecycle"
       ],
       "additionalProperties": false
     },

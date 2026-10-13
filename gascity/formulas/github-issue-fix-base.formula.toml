@@ -31,6 +31,11 @@ contract = "graph.v2"
 target_required = false
 
 [vars]
+[vars.worktree_lifecycle]
+description = "Source lifecycle for this run: legacy or new. Current source paths require legacy."
+default = "legacy"
+enum = ["legacy", "new"]
+
 [vars.github_issue_url]
 description = "Full GitHub issue URL: https://github.com/<owner>/<repo>/issues/<number>."
 required = true
@@ -90,8 +95,16 @@ default = "fix-loop-base"
 [[steps]]
 id = "snapshot"
 title = "Snapshot GitHub issue"
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"legacy\"}" }
 description_file = "../assets/workflows/github-issue-fix-base/snapshot.md"
+
+[steps.check]
+max_attempts = 1
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/workspace-lifecycle-valid.py"
+timeout = "1m"
 
 [[steps]]
 id = "triage"

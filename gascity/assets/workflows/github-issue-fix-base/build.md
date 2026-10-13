@@ -9,6 +9,11 @@ Selected methodology formulas:
 - code_review_formula: {{code_review_formula}}
 - review_fix_formula: {{review_fix_formula}}
 
+On every explicit implementation, review or fix launch, pass
+`--var worktree_lifecycle="{{worktree_lifecycle}}"`. Treat an unsupported
+source lifecycle as blocked; never omit or replace the selected value to make
+a launch proceed. Native drains retain it through parent runtime variables.
+
 Selector compatibility was validated at the snapshot gate; the effective
 interaction mode is recorded as `gc.var.interaction_mode` on the workflow
 root. The requested review mode is {{review_mode}}.

@@ -10,9 +10,6 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-import jsonschema
-
-
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "workspace" / "records.v1.json"
 
 
@@ -53,6 +50,8 @@ def record_schema(kind: str) -> dict[str, Any]:
 
 
 def validate_record(kind: str, record: dict[str, Any]) -> dict[str, Any]:
+    import jsonschema
+
     record_schema(kind)
     canonical_bytes(record)
     schema = {"$defs": schema_bundle()["$defs"], "$ref": f"#/$defs/{kind}"}
@@ -108,6 +107,30 @@ def verify_replay(kind: str, stored: dict[str, Any], candidate: dict[str, Any]) 
     if canonical_bytes(stored) != canonical_bytes(candidate):
         raise RecordError("conflicting replay: same identity has a different payload")
     return True
+
+
+def verify_run_mode(run: dict[str, Any], selected_mode: str, workflow_root_id: str) -> str:
+    """Check a supplied run snapshot before a later step or continuation."""
+    validate_record("run", run)
+    if run["workflow_root_id"] != workflow_root_id:
+        raise RecordError("workflow root conflicts with the recorded run")
+    if selected_mode not in ("legacy", "new"):
+        raise RecordError("worktree lifecycle must be explicit legacy or new")
+    if run["worktree_lifecycle"] != selected_mode:
+        raise RecordError("worktree lifecycle conflicts with the recorded run")
+    return selected_mode
+
+
+def verify_source_modes(selected_mode: str, surfaces: dict[str, str]) -> str:
+    """Refuse missing classifications or source paths from another lifecycle."""
+    if selected_mode not in ("legacy", "new"):
+        raise RecordError("worktree lifecycle must be explicit legacy or new")
+    if not isinstance(surfaces, dict) or not surfaces or not any(value != "reference" for value in surfaces.values()):
+        raise RecordError("worktree lifecycle requires explicit source classifications")
+    for path, mode in surfaces.items():
+        if not isinstance(path, str) or not path.strip() or mode not in (selected_mode, "reference"):
+            raise RecordError(f"worktree lifecycle {selected_mode!r} cannot use {path!r} classified {mode!r}")
+    return selected_mode
 
 
 def resolve_record_id(kind: str, record: dict[str, Any], references: list[dict[str, Any]]) -> str:

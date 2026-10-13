@@ -229,7 +229,8 @@ def exercise(root: Path, topology: str = "ordinary", core_oid: str | None = None
     run_record = {"version": 1, "workflow_root_id": "fixture-run", "generation": 1,
                   "writer_step_id": "capture-fixture", "input_convoy_id": "fixture-input",
                   "source_anchor_id": "fixture-source", "rig_root": state["rig_root"],
-                  "common_git_dir": state["common_git_dir"], "base_oid": state["base_oid"]}
+                  "common_git_dir": state["common_git_dir"], "base_oid": state["base_oid"],
+                  "worktree_lifecycle": "new"}
     records.validate_record("run", run_record)
     records.verify_replay("run", run_record, dict(run_record))
     for scenario, name, record in (

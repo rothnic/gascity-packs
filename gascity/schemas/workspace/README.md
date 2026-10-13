@@ -35,6 +35,13 @@ Every record requires integer `version: 1`, `workflow_root_id`, positive integer
 The run record captures the initial generation, `1`; later source-plan
 generations refer to its fixed base rather than recapturing it.
 
+Run records also require `worktree_lifecycle`, either `legacy` or `new`.
+`verify_run_mode(run, selected_mode, workflow_root_id)` validates a supplied run
+snapshot and rejects a different root or mode. The mode is payload, so exact
+replay rejects a changed value under the same identity. These pure checks do
+not perform first durable capture or atomically enforce later store reads.
+Those operations belong to the run-capture and record-access writers.
+
 The identity prefix is `(workflow_root_id, generation)`. The suffixes below are
 ordered and form the full logical identity. Payload fields outside the identity
 still participate in replay comparison.
@@ -153,8 +160,17 @@ review's conditional source writes are explicit lifecycle responsibilities.
 planning/artifact-only surfaces. Every discovered asset must be listed; absent
 or changed entries fail discovery. No existing formula is declared migrated.
 Base, Compound and gstack shared-item commit-contract gaps are explicit. A future
-migration must update classifications, hashes and owning steps together; runtime
-mode selection and shadowed-pack admission are separate implementation work.
+migration must update classifications, hashes and owning steps together.
+
+`verify_source_modes(selected_mode, surfaces)` requires at least one source
+classification and accepts only the selected lifecycle plus planning-only
+`reference` entries. Missing, mixed and unknown classifications fail. Existing
+entry preflights use the executable `workspace-lifecycle-valid.py` check with
+`gc.lifecycle` and JSON-string `gc.lifecycle.source_modes` step metadata. The
+check reads the exact check bead through `gc bd show`; it makes no store writes.
+Current entries declare their workflow `legacy` and refuse a `new` selection.
+This checks supplied declarations. Installed-layer priority, shadowed source
+admission and new-workflow acceptance require separate runtime verification.
 
 [scenario-coverage.v1.json](scenario-coverage.v1.json) maps all 23
 [design scenarios](https://github.com/gastownhall/gascity-packs/issues/209) to an
@@ -166,6 +182,10 @@ partial JSON validation tests.
 Fixtures in `tests/fixtures/workspace-records/` are independent synthetic payloads
 for each kind, malformed fields/versions and conflicting replay. They do not
 represent an executed workflow or a consistent multi-record store.
+
+`tests/fixtures/workspace-lifecycle/` covers matching and conflicting snapshot
+modes. Component tests also check default entry propagation and the read-only
+preflight using a disposable command stub; they do not execute a native worker.
 
 Run the focused contract tests from the repository root:
 

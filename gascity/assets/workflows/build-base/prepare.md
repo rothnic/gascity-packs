@@ -11,6 +11,7 @@ Launch inputs:
 - plan_path: {{plan_path}}
 - decomposition_path: {{decomposition_path}}
 - drain_policy: {{drain_policy}}
+- worktree_lifecycle: {{worktree_lifecycle}}
 - interaction_mode: {{interaction_mode}}
 - review_mode: {{review_mode}}
 - implementation_target: {{implementation_target}}
@@ -39,11 +40,20 @@ the workflow root, then close this step with `gc.outcome=fail` and
 `gc.failure_class=methodology_incompatible`. In `headless` interaction mode,
 never ask questions; treat missing required input as the same blocked outcome.
 
-To read the running formula's methodology metadata, derive the running formula from the claimed step bead's `gc.step_ref` prefix before `.prepare` (for example
-`build-basic.prepare` means `build-basic`), then run
-`gc formula show <running-formula> --json` and inspect
-`metadata.gc.methodology` in that output. Do not inspect pack source directories, repository files, `.beads/config.yaml`, session logs, or runtime
-state to discover methodology metadata.
+To read the running formula's methodology metadata, identify the claimed step
+bead from `CLAIMED_BEAD_ID` in the startup claim output, or `$GC_BEAD_ID` if the
+claim output did not expose one. For that fallback, assign
+`CLAIMED_BEAD_ID="$GC_BEAD_ID"` before the read. Stop as blocked if neither value
+is present.
+Read `gc bd show "$CLAIMED_BEAD_ID" --json` and take `gc.root_bead_id` from its
+metadata as `ROOT_ID`. Read `gc bd show "$ROOT_ID" --json` and take the root's
+exact `gc.formula_name` as `RUNNING_FORMULA`. If either metadata value is missing,
+malformed or ambiguous, stop as blocked and do not run formula show.
+Run `gc formula show "$RUNNING_FORMULA" --json` and inspect
+`metadata.gc.methodology` in that output. Never infer the formula name from
+`gc.step_ref`; checked attempts can have `gc.step_ref=prepare.iteration.1`.
+Do not inspect pack source directories, repository files, `.beads/config.yaml`,
+session logs, or runtime state to discover methodology metadata.
 
 Record the selected methodology formulas as adapter inputs, not as behavior in
 this virtual contract. Entrypoint adapters may launch those formulas explicitly;

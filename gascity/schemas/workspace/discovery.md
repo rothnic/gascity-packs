@@ -93,6 +93,11 @@ the unclassified-asset check in scenario 19. Scenario 19's explicit legacy run
 still requires a separate end-to-end workflow test. This command does not add the
 runtime `worktree_lifecycle` selector.
 
+Entry formulas declare that selector separately and check their declared source
+lifecycle at preflight. The [record contract](README.md) supplies pure mode and
+replay validation. Discovery still does not inspect installed priority, capture
+run state or prove an end-to-end legacy or new run.
+
 Run the focused regression tests:
 
 ```sh

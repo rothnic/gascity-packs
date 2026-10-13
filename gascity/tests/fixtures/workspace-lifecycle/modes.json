@@ -1,0 +1,8 @@
+[
+  {"name": "explicit legacy", "stored": "legacy", "selected": "legacy", "ok": true},
+  {"name": "explicit new", "stored": "new", "selected": "new", "ok": true},
+  {"name": "legacy cannot become new", "stored": "legacy", "selected": "new", "ok": false},
+  {"name": "new cannot become legacy", "stored": "new", "selected": "legacy", "ok": false},
+  {"name": "unclassified selection", "stored": "legacy", "selected": "", "ok": false},
+  {"name": "unknown selection", "stored": "legacy", "selected": "automatic", "ok": false}
+]

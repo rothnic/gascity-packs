@@ -10,7 +10,8 @@
       "source_anchor_id": "anchor-example",
       "rig_root": "/example/rig",
       "common_git_dir": "/example/rig/.git",
-      "base_oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "base_oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "worktree_lifecycle": "legacy"
     },
     "error": "required property"
   },
@@ -26,7 +27,8 @@
       "source_anchor_id": "anchor-example",
       "rig_root": "/example/rig",
       "common_git_dir": "/example/rig/.git",
-      "base_oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "base_oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "worktree_lifecycle": "legacy"
     },
     "error": "version"
   },
@@ -68,7 +70,8 @@
       "source_anchor_id": "anchor-example",
       "rig_root": "ambient/rig",
       "common_git_dir": "/example/rig/.git",
-      "base_oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      "base_oid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "worktree_lifecycle": "legacy"
     },
     "error": "rig_root"
   },

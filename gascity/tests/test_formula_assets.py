@@ -1609,8 +1609,13 @@ class FormulaAssetTests(unittest.TestCase):
             "gc.blocked_reason",
             "gc.failure_class=methodology_incompatible",
             "never ask questions",
-            "derive the running formula from the claimed step bead's `gc.step_ref`",
-            "gc formula show <running-formula> --json",
+            'gc bd show "$CLAIMED_BEAD_ID" --json',
+            "gc.root_bead_id",
+            'gc bd show "$ROOT_ID" --json',
+            "gc.formula_name",
+            'gc formula show "$RUNNING_FORMULA" --json',
+            "prepare.iteration.1",
+            "If either metadata value is missing",
             "Do not inspect pack source directories",
             ".beads/config.yaml",
             "Close commands do not accept metadata flags",
@@ -1621,6 +1626,7 @@ class FormulaAssetTests(unittest.TestCase):
         ):
             with self.subTest(asset="build-base/prepare.md", fragment=fragment):
                 self.assertIn(fragment, prepare)
+        self.assertNotIn("derive the running formula from the claimed step bead's `gc.step_ref`", prepare)
 
     def test_build_base_is_full_lifecycle_virtual_contract(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
@@ -3905,6 +3911,7 @@ class FormulaAssetTests(unittest.TestCase):
                     "pr_mode",
                     "planning_formula",
                     "drain_policy",
+                    "worktree_lifecycle",
                     "implementation_target",
                     "review_fix_formula",
                 },
@@ -4360,6 +4367,7 @@ description = "Override sink that writes the base triage report contract."
                 "build-artifact-valid.sh",
                 "design-review-approved.sh",
                 "implementation-review-approved.sh",
+                "workspace-lifecycle-valid.py",
             },
         )
 

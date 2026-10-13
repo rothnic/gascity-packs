@@ -25,6 +25,8 @@ Requirements:
 - reject legacy `issue`, `bead_id`, or user-supplied `convoy_id` inputs
 - validate context_path {{context_path}} with `{{pack_root}}/assets/scripts/validate_context_bundle.py` when set
 - reject drain_policy {{drain_policy}} values other than `separate` or `same-session`
+- record worktree_lifecycle {{worktree_lifecycle}} as `gc.var.worktree_lifecycle`
+  on the workflow root; the preflight check permits only the declared source lifecycle
 - inspect the convoy target branch, defaulting to the repo default branch
 - write a run-status artifact if summary_path {{summary_path}} or artifact root is provided
 - record push {{push}} and open_pr {{open_pr}}

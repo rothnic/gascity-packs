@@ -73,7 +73,7 @@ class WorkspaceDiscoveryTests(unittest.TestCase):
 
     def test_current_legacy_inventory_passes_only_stage_a(self):
         report = self.check()
-        self.assertEqual(report["classifications"], {"legacy": 241, "new": 0, "reference": 145})
+        self.assertEqual(report["classifications"], {"legacy": 243, "new": 0, "reference": 145})
         self.assertEqual(report["source_owner_count"], 10)
         self.assertEqual(set(report["inspected_roots"]), set(self.manifest["packs"]))
         self.assertEqual(report["unresolved_inputs"], [])

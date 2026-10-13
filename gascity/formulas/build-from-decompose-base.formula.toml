@@ -64,8 +64,16 @@ default = "decomposition-base"
 [[steps]]
 id = "prepare-decompose"
 title = "Validate decompose continuation inputs"
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"legacy\"}" }
 description_file = "../assets/workflows/build-from-decompose-base/prepare-decompose.md"
+
+[steps.check]
+max_attempts = 1
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/workspace-lifecycle-valid.py"
+timeout = "1m"
 
 [[steps]]
 id = "decompose"
@@ -86,5 +94,13 @@ timeout = "5m"
 id = "prepare-convoy"
 title = "Validate implementation convoy"
 needs = ["decompose"]
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"legacy\"}" }
 description_file = "../assets/workflows/build-from-decompose-base/prepare-convoy.md"
+
+[steps.check]
+max_attempts = 1
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/workspace-lifecycle-valid.py"
+timeout = "1m"

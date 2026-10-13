@@ -25,6 +25,11 @@ name = "implement"
 description = "Launch implementation for an approved convoy without the full build loop."
 
 [vars]
+[vars.worktree_lifecycle]
+description = "Source lifecycle for this run: legacy or new. Current source paths require legacy."
+default = "legacy"
+enum = ["legacy", "new"]
+
 [vars.context_path]
 description = "Optional context bundle path with name/path/description entries."
 default = ""
@@ -52,8 +57,16 @@ default = "false"
 [[steps]]
 id = "prepare"
 title = "Validate implementation convoy"
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"legacy\"}" }
 description_file = "../assets/workflows/implement/prepare.md"
+
+[steps.check]
+max_attempts = 1
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/workspace-lifecycle-valid.py"
+timeout = "1m"
 
 [[steps]]
 id = "drain-separate"

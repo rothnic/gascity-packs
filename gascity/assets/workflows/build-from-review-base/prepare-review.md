@@ -14,6 +14,7 @@ Validate that implementation evidence exists before review runs:
 - implementation_formula: {{implementation_formula}}
 - implementation_item_formula: {{implementation_item_formula}}
 - implementation_target: {{implementation_target}}
+- worktree_lifecycle: {{worktree_lifecycle}}
 - review_mode: {{review_mode}}
 - interaction_mode: {{interaction_mode}}
 - max_iterations: {{max_iterations}}

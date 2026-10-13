@@ -19,6 +19,11 @@ interaction_modes = ["interactive", "autonomous", "headless"]
 review_modes = ["report", "agent", "interactive"]
 
 [vars]
+[vars.worktree_lifecycle]
+description = "Source lifecycle for this run: legacy or new. Current source paths require legacy."
+default = "legacy"
+enum = ["legacy", "new"]
+
 [vars.artifact_root]
 description = "Build artifact root containing or receiving continuation artifacts."
 required = true
@@ -90,8 +95,16 @@ default = "false"
 [[steps]]
 id = "prepare-review"
 title = "Validate review continuation inputs"
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"legacy\"}" }
 description_file = "../assets/workflows/build-from-review-base/prepare-review.md"
+
+[steps.check]
+max_attempts = 1
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/workspace-lifecycle-valid.py"
+timeout = "1m"
 
 [[steps]]
 id = "review"

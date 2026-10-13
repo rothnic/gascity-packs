@@ -20,6 +20,10 @@ findings. This stage records the review result; the following `repair-review`
 stage owns any selected review-fix loop, restart handoff, or blocked repair
 state.
 
+If launching the selected review formula explicitly, pass
+`--var worktree_lifecycle="{{worktree_lifecycle}}"`. An unsupported source
+lifecycle blocks the handoff; do not substitute a different value.
+
 For `review_mode=report`, write findings and verdicts without mutating code.
 For `review_mode=agent`, write a structured fix handoff for the caller or
 selected fix loop. For `review_mode=interactive`, safe fixes may be negotiated

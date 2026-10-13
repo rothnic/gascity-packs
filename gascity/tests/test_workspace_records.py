@@ -8,6 +8,8 @@ import pathlib
 import tomllib
 import unittest
 
+import jsonschema
+
 
 PACK_ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPO_ROOT = PACK_ROOT.parent
@@ -31,13 +33,13 @@ def fixture_records():
 class WorkspaceRecordTests(unittest.TestCase):
     def test_schema_bundle_validates_records_without_the_helper(self):
         module = records_module()
-        module.jsonschema.Draft202012Validator.check_schema(module.schema_bundle())
-        validator = module.jsonschema.Draft202012Validator(module.schema_bundle())
+        jsonschema.Draft202012Validator.check_schema(module.schema_bundle())
+        validator = jsonschema.Draft202012Validator(module.schema_bundle())
         for kind, record in fixture_records().items():
             with self.subTest(kind=kind):
                 validator.validate(record)
                 invalid = dict(record, version=2)
-                with self.assertRaises(module.jsonschema.ValidationError):
+                with self.assertRaises(jsonschema.ValidationError):
                     validator.validate(invalid)
 
     def test_valid_records_have_closed_versioned_contracts(self):
@@ -232,8 +234,8 @@ class WorkspaceRecordTests(unittest.TestCase):
             with self.subTest(kind=kind, field=field):
                 with self.assertRaises(module.RecordError):
                     module.validate_record(kind, invalid)
-                with self.assertRaises(module.jsonschema.ValidationError):
-                    module.jsonschema.Draft202012Validator(module.schema_bundle()).validate(invalid)
+                with self.assertRaises(jsonschema.ValidationError):
+                    jsonschema.Draft202012Validator(module.schema_bundle()).validate(invalid)
         for char in map(chr, list(range(32)) + [127]):
             invalid = copy.deepcopy(records["run"])
             invalid["rig_root"] += char

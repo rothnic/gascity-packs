@@ -390,6 +390,25 @@ states.
 
 ## Mode Contracts
 
+`worktree_lifecycle` selects one source lifecycle for a run. Its development
+default is `legacy`. Entry preflight checks require explicit source
+classifications and refuse unknown or mixed modes before implementation.
+Current source paths declare `legacy`, so a `new` request stops at preflight.
+The later Stage A rollout selects the qualified default.
+
+Run records require `worktree_lifecycle: legacy|new`. The read-only
+`verify_run_mode` helper checks the selected mode against the supplied run and
+workflow root. Exact replay also rejects a changed mode under the same run
+identity. The run-capture writer must perform first durable capture and atomic
+replay under the proven storage, claim and lock contract. Later steps and
+continuations must read that record before effects. These durable writer and
+workflow checks remain separate implementation requirements.
+
+Delegators retain the selected value. Native drains inherit parent runtime
+variables. Manual formula launches must pass `worktree_lifecycle` explicitly.
+Existing formulas retain their legacy source paths until their source owners
+migrate and pass workflow acceptance.
+
 `interaction_mode` values:
 
 | Value | Required behavior |
@@ -857,6 +876,7 @@ Proof expectation: validation requires `workflow.formula`, `producer.formula`,
 | GC-METH-014 | Coverage matrix consistency | YAML coverage is authoritative, markdown coverage mirrors IDs/statuses, and all non-covered statuses include rationale. | this ledger; future schema/gate tests |
 | GC-METH-015 | Neutral artifact metadata | Artifacts record workflow, methodology, and producer metadata without owner or role fields. | this ledger; future schema/gate tests |
 | GC-METH-016 | Nested continuation suffixes | `build-from-requirements-base -> build-from-plan-base -> build-from-decompose-base -> build-from-convoy-base -> build-from-review-base` form a nested suffix chain. Each suffix validates its prerequisite, performs its owned work, and hands off to the next suffix. Cataloged `build-from-*` wrappers expose the default Gas City behavior. | `formulas/build-from-*-base.formula.toml`; `formulas/build-from-*.formula.toml`; `tests/test_formula_assets.py::FormulaAssetTests::test_build_continuation_bases_form_nested_suffix_chain`; `tests/test_formula_assets.py::FormulaAssetTests::test_default_continuation_entrypoints_extend_suffix_bases` |
+| GC-METH-017 | Source lifecycle mode | Build, implementation, issue-fix and continuation entries expose `worktree_lifecycle: legacy|new`, default to legacy, reject conflicting source declarations at preflight and retain the value through delegation. Pure run/replay validation rejects a supplied mode change; durable capture and atomic runtime continuation checks remain writer requirements. | `schemas/workspace/records.v1.json`; `assets/scripts/workspace_records.py`; `tests/test_workspace_lifecycle.py`; `formulas/REQUIREMENTS.md` |
 
 ## Deferred Follow-Up Requirements
 

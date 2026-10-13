@@ -261,7 +261,16 @@ expansion children. Structured step-file prompts are usually good candidates for
 separate formulas or expansion loops because Gas City can then retry, observe,
 and resume each step independently.
 
-Use two mode concepts when designing or launching methodology formulas:
+Use these mode inputs when designing or launching methodology formulas:
+
+- `worktree_lifecycle` selects the source lifecycle. Build, implementation,
+  issue-fix and continuation entrypoints default to `legacy`; their preflight
+  checks reject a selection that conflicts with the declared source lifecycle.
+  Current source paths declare `legacy`, so `new` stops at preflight. Native
+  drains inherit the value; explicit child launches and restart handoffs must
+  retain it. The [run record contract](schemas/workspace/README.md) validates
+  supplied run snapshots, but durable capture and runtime continuation checks
+  still require their workflow writers.
 
 - `interaction_mode` controls human participation in planning and gates.
   `interactive` preserves blocking questions and approval menus, `autonomous`

@@ -23,6 +23,7 @@ restart from. Record at least:
 - `gc.restart.review_report_path=<review report path>`
 - `gc.restart.review_fix_formula={{review_fix_formula}}`
 - `gc.restart.implementation_target={{implementation_target}}`
+- `gc.restart.worktree_lifecycle={{worktree_lifecycle}}`
 
 Then close this step with failure metadata so the workflow cannot finalize as a
 pass without an explicit restart.
@@ -34,6 +35,11 @@ recorded review findings and implementation evidence until one of these happens:
 - the implementation is approved;
 - review or repair returns blocked;
 - max_iterations is exhausted.
+
+For each explicit fix launch and continuation restart, pass
+`--var worktree_lifecycle="{{worktree_lifecycle}}"` and retain
+`gc.restart.worktree_lifecycle={{worktree_lifecycle}}` in the handoff metadata.
+An unsupported source lifecycle blocks repair; never switch modes to proceed.
 
 Record every attempt on the workflow root metadata and in artifacts. On
 approval, record `gc.build.repair_status=approved` and the final review report

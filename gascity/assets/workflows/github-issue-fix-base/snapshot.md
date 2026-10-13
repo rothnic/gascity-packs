@@ -6,6 +6,7 @@ Resolved interaction mode: {{interaction_mode}} (empty means normalize from the 
 Resolved review mode: {{review_mode}}
 Resolved PR mode: {{pr_mode}}
 Resolved drain policy: {{drain_policy}}
+Resolved source lifecycle: {{worktree_lifecycle}} (current source paths require legacy)
 
 Normalize the interaction mode before any other work. `mode` is only a
 backward-compatible alias: the effective interaction mode is

@@ -8,7 +8,6 @@ import json
 import os
 from pathlib import Path
 import secrets
-import stat
 import sys
 from typing import Any
 
@@ -63,8 +62,8 @@ def allocate_placeholder(store, *, title: str, existing_id: str | None = None,
                          verified_rows: dict[str, Any] | None = None) -> str:
     """Allocate one native closed record without publishing any lifecycle state.
 
-    A lost create acknowledgement is not retried. An operator may pass the exact
-    returned native ID after inspecting the original command's outcome.
+    A lost create acknowledgement is not retried. The retained role journal can
+    recover its physical ID through the native unique-description query.
     """
     if existing_id is None:
         rig = store.store_ref.split(":", 1)[1] if store.store_ref.startswith("rig:") else None
@@ -100,37 +99,36 @@ def allocate_placeholder(store, *, title: str, existing_id: str | None = None,
     return existing_id
 
 
-def _allocation_packet(path: Path) -> dict[str, Any]:
-    info = path.lstat()
-    require(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid()
-            and info.st_nlink == 1 and not stat.S_IMODE(info.st_mode) & 0o077,
-            "allocation journal has unknown ownership or permissions")
-    raw = path.read_text()
-    packet = parse_record(raw)
-    require(canonical_bytes(packet).decode() == raw, "allocation journal is not canonical")
-    return packet
-
-
 def allocate_run_placeholders(store, attempt, *, workflow_root_id: str, input_convoy_id: str,
                               source_anchor_id: str, rig_root: str, worktree_lifecycle: str,
                               base_ref: str = "@default", run_record_id: str | None = None,
-                              authority_id: str | None = None, checks_config: str | None = None) -> dict[str, Any]:
+                              authority_id: str | None = None, checks_config: str | None = None,
+                              writer_map=None, writer_rows=None) -> dict[str, Any]:
     """Retain the source and each native create boundary before effects."""
     from workspace_requests import allocation_directory, require_resolved_scope
     from workspace_store import transition_locks
     from workspace_outputs import immutable_json
+    from workspace_allocation import read_packet, writer_origin, admit_writer, allocate_roles
     scope = run_scope(workflow_root_id)
     directory = allocation_directory(store)
     prefix = "run-" + hashlib.sha256(canonical_bytes(scope)).hexdigest()
     path = directory / (prefix + ".intent.json")
     binding = {"store": parse_record(store._binding().decode()), "scope": scope,
-               "writer_attempt_id": attempt.writer_attempt_id, "base_ref": base_ref,
+               "base_ref": base_ref,
                "checks_config": checks_config}
     with transition_locks(store.common_git_dir, scope):
         require_resolved_scope(store, scope)
-        original = _allocation_packet(path) if path.exists() else None
+        original = read_packet(path) if path.exists() else None
         require(original is None or original.get("binding") == binding,
                 "run allocation belongs to a different source configuration or attempt; inspect " + str(path))
+        require(original is None or isinstance(original.get("origin"), dict),
+                "retained allocation has no original cooked writer evidence; inspect " + str(path))
+        if writer_rows is None and writer_map is not None:
+            declared = writer_map.declaration
+            writer_rows = store.snapshot(list(dict.fromkeys([workflow_root_id, declared["source_member_id"],
+                declared["expansion_root_id"], *(step["bead_id"] for step in declared["steps"])])))
+        admit_writer(store, attempt, scope, writer_map, writer_rows,
+                     origin=original.get("origin") if original else None)
         captured = capture_payload(workflow_root_id=workflow_root_id, input_convoy_id=input_convoy_id,
             source_anchor_id=source_anchor_id, rig_root=rig_root, writer_step_id=attempt.claimed_bead_id,
             worktree_lifecycle=worktree_lifecycle, base_ref=base_ref,
@@ -145,45 +143,18 @@ def allocate_run_placeholders(store, attempt, *, workflow_root_id: str, input_co
                     "new run allocation requires canonical native worktree_checks")
             check_scope(config["required_checks"])
         packet = original or {"version": 1, "binding": binding, "captured_run": captured,
-                              "nonce": secrets.token_hex(32)}
-        require(set(packet) == {"version", "binding", "captured_run", "nonce"}
+                              "origin": writer_origin(attempt, writer_map), "nonce": secrets.token_hex(32)}
+        require(set(packet) == {"version", "binding", "captured_run", "origin", "nonce"}
                 and type(packet["version"]) is int and packet["version"] == 1
-                and isinstance(packet["nonce"], str) and len(packet["nonce"]) == 64,
+                and isinstance(packet["nonce"], str) and len(packet["nonce"]) == 64
+                and all(value in "0123456789abcdef" for value in packet["nonce"]),
                 "retained run allocation intent is malformed")
         immutable_json(path, packet)
-        ids, rows = {}, {}
-        for role, title, supplied in (("run", "Immutable build run", run_record_id),
-                                     ("authority", "Build run writer grant", authority_id)):
-            pending = directory / (prefix + "." + role + ".pending.json")
-            receipt = directory / (prefix + "." + role + ".json")
-            description = "Gas City workspace allocation " + hashlib.sha256(
-                canonical_bytes({"intent": packet, "role": role})).hexdigest()
-            expected = {"intent_sha256": record_sha256(packet), "role": role,
-                        "title": title, "description": description}
-            saved = None
-            if receipt.exists():
-                saved = _allocation_packet(receipt)
-                require(set(saved) == {*expected, "bead_id", "snapshot"}
-                        and all(saved[key] == value for key, value in expected.items()),
-                        "native allocation receipt conflicts with its original intent")
-                require(supplied is None or supplied == saved["bead_id"], "supplied native allocation ID changed")
-                supplied = saved["bead_id"]
-            elif pending.exists():
-                require(_allocation_packet(pending) == expected, "native allocation pending intent changed")
-                require(supplied is not None,
-                        "native allocation has no known physical ID; reconcile its original creation before retrying: " + str(pending))
-            immutable_json(pending, expected)
-            try:
-                bead_id = allocate_placeholder(store, title=title, existing_id=supplied,
-                                                allocation_description=description, verified_rows=rows)
-            except (RecordError, OSError) as exc:
-                raise EntryError(f"native {role} allocation unresolved; retained intent {pending}: {exc}") from exc
-            require(bead_id not in ids.values(), "run and authority must be distinct native allocations")
-            if saved is not None:
-                require(rows[bead_id] == saved["snapshot"], "native allocation changed since its original receipt")
-                rows[bead_id] = saved["snapshot"]
-            immutable_json(receipt, {**expected, "bead_id": bead_id, "snapshot": rows[bead_id]})
-            ids[role] = bead_id
+        ids, rows = allocate_roles(store, packet, prefix=prefix,
+            roles=(("run", "Immutable build run", run_record_id),
+                   ("authority", "Build run writer grant", authority_id)),
+            allocate=allocate_placeholder, native_read=native_json,
+            admit=lambda: admit_writer(store, attempt, scope, writer_map, writer_rows, origin=packet["origin"]))
         return {"run_record_id": ids["run"], "authority_id": ids["authority"],
                 "captured_run": captured, "allocation_rows": rows, "allocation_journal": str(path)}
 
@@ -453,7 +424,8 @@ def prepare_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
     allocated = allocate_run_placeholders(store, attempt, workflow_root_id=workflow_root_id,
         input_convoy_id=current_id, source_anchor_id=anchor, rig_root=rig_root,
         worktree_lifecycle=worktree_lifecycle, base_ref=base_ref,
-        run_record_id=run_record_id, authority_id=authority_id, checks_config=checks_config)
+        run_record_id=run_record_id, authority_id=authority_id, checks_config=checks_config,
+        writer_map=writer_map, writer_rows=writer_rows)
     run_record_id, authority_id = allocated["run_record_id"], allocated["authority_id"]
     captured = capture_run(store, attempt, gc=gc, city_root=city_root, rig_name=rig_name,
         workflow_root_id=workflow_root_id, input_convoy_id=current_id, record_bead_id=run_record_id,

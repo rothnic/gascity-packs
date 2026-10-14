@@ -19,6 +19,12 @@ checks must still match.
   original request; it does not submit another write. Only exact committed or
   replayed readback clears the pending marker.
 
+If readback still reports `unknown`, keep that scope stopped. Retain the
+`request_path` and inspect the recorded workspace with `status`. Ask the native
+store owner to investigate the original request and any changed rows. Resume
+only after exact readback establishes the original result; a changed claim or
+visible record alone cannot resolve an uncertain transaction.
+
 ## Native record allocation
 
 Workflow entry records the original base commit, configuration and attempt in the
@@ -29,13 +35,34 @@ from another process or diagnostic directory.
 - **Known ID:** supply the original physical ID with `--run-record-id` or
   `--authority-id`. Entry verifies the empty native record, its title and the
   unique description written by the original create command before proceeding.
-- **Unknown ID:** inspect the original native creation and retained allocation
-  packet. Entry refuses to create a replacement until the original physical ID
-  can be identified. It does not manufacture IDs or search an unrelated store.
+- **Lost reply:** entry queries the selected native store for the original
+  allocation's unique description. Exactly one matching empty, closed,
+  unassigned record may be recovered. Missing, ambiguous or malformed results
+  remain blocked; entry never repeats that create command.
 - **Original source:** recovery keeps the captured base commit when the default
-  branch moves. Changed configuration, attempt or native record identity refuses
-  reuse.
+  branch moves. Changed configuration, store or native record identity refuses
+  reuse. A completed allocation receipt retains the original row and revision;
+  another read cannot replace it with a newer revision.
+- **Replacement writer:** a new incarnation of the same physical workflow step
+  may resume with its current native claim stamp and the original cooked writer
+  map. The allocation intent, base, check policy and original writer provenance
+  stay unchanged. The old incarnation is refused. Initial run publication cannot
+  move to a different physical step.
 
 These recovery rules apply to workflow entry's run and writer-grant allocation.
 The standalone `allocate` action verifies a known native ID; fresh allocation
 requires an admitted workflow entry.
+
+## Result and review records
+
+Result, review, canonical and publication records use the same retained native
+allocation receipts. When a record already exists, replacement of its writer
+grant joins the payload and reference in one guarded transaction. It requires
+the exact preceding grant and native occurrence; a different physical writer
+needs a closed, declared predecessor. Existing checks and review must still
+qualify the exact source commit.
+
+An unresolved original write blocks further allocation and publication in that
+scope across process and attempt changes. Resolve its retained request before
+continuing. Old allocation receipts without the original writer-map and native
+row evidence remain blocked; recovery does not invent missing provenance.

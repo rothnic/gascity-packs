@@ -195,6 +195,16 @@ original workflow or a verified native child.
   [checkout recovery interface](../assets/scripts/workspace_checkout.md#cli)
   provides `status` and `verify` with existing run and workspace identities.
   Use `recover` only for an explicitly identified partial result or checkpoint.
+- **Worker replacement:** retain the original source and required-check policy.
+  A current native claim may resume the same physical step. Published records
+  transfer writer authority together with the record update; stale attempts and
+  active foreign writers are refused. See
+  [record allocation and recovery](../assets/scripts/workspace_run.md#native-record-allocation).
+- **Lost replies:** resolve the original guarded write before further effects.
+  Native record allocation can recover one exact match by its original unique
+  description. An unavailable or ambiguous lookup blocks another creation.
+  Changing the diagnostic directory or worker attempt does not clear a pending
+  write.
 
 Read-only inspection helps identify the retained state:
 

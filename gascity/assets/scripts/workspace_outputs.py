@@ -427,7 +427,8 @@ def prepare_record(store, attempt, payload: dict, *, kind: str, record_id: str, 
                    reference_owner_id: str, writer_map, guards=(), native_rows=None, initial_write: bool = False,
                    operation_nonce: str | None = None):
     """Use the writer-owned transaction; callers supply every qualified dependency guard."""
-    from workspace_store import CookedWriterMap, GuardRead, MISSING, RecordWrite, ReferenceWrite, SCOPE_OWNER, record_reference
+    from workspace_store import (CookedWriterMap, GuardRead, GRANT_KEY, MISSING, NativeRunContinuation,
+                                 RecordWrite, ReferenceWrite, SCOPE_OWNER, record_reference)
     require(isinstance(writer_map, CookedWriterMap), "native cooked writer map is required")
     validate_record(kind, payload)
     require(store.common_git_dir is not None, "record write requires its exact repository lock root")
@@ -435,7 +436,7 @@ def prepare_record(store, attempt, payload: dict, *, kind: str, record_id: str, 
     row = store.snapshot([reference_owner_id])[reference_owner_id]
     raw = row["metadata"].get(key, MISSING)
     guards = [*guards, GuardRead(reference_owner_id, key, raw)]
-    expected_rows = None
+    expected_rows = {}
     if native_rows is not None:
         require(isinstance(native_rows, dict) and bool(native_rows)
                 and all(isinstance(value, dict) and value.get("id") == bead_id for bead_id, value in native_rows.items()),
@@ -446,15 +447,52 @@ def prepare_record(store, attempt, payload: dict, *, kind: str, record_id: str, 
                                   reference_owner_id, *(guard.bead_id for guard in guards),
                                   writer_map.declaration["expansion_root_id"], writer_map.declaration["source_member_id"],
                                   *(step["bead_id"] for step in writer_map.declaration["steps"])]))
-        expected_rows = store.snapshot(ids)
+        if writer_map.continuation is not None:
+            ids.extend(writer_map.continuation.row_ids)
+        expected_rows = store.snapshot(list(dict.fromkeys(ids)))
         expected_rows.update(copy.deepcopy(native_rows))
     require(type(initial_write) is bool, "initial write admission must be explicit boolean authority")
     method = store.install_grant if initial_write else store.write_records
+    replacement = {}
+    if not initial_write:
+        if authority_id not in expected_rows:
+            expected_rows.update(store.snapshot([authority_id]))
+        raw_grant = expected_rows[authority_id]["metadata"].get(GRANT_KEY)
+        require(isinstance(raw_grant, str), "published record lacks its exact native predecessor grant")
+        grant = parse_record(raw_grant)
+        guards.append(GuardRead(authority_id, GRANT_KEY, raw_grant))
+        if grant.get("attempt") != attempt.admission:
+            previous = grant.get("attempt", {}).get("claimed_bead_id")
+            occurrence = grant.get("writer_occurrence", {})
+            expansion = occurrence.get("expansion_root_id")
+            require(isinstance(previous, str) and isinstance(expansion, str),
+                    "predecessor grant lacks its native occurrence")
+            ids = [previous, expansion]
+            if "continuation" in occurrence:
+                ids.extend(NativeRunContinuation(canonical_bytes(occurrence["continuation"])).row_ids)
+            missing = [bead_id for bead_id in dict.fromkeys(ids) if bead_id not in expected_rows]
+            if missing:
+                expected_rows.update(store.snapshot(missing))
+            guards.extend(GuardRead(bead_id, "gc.workspace_transition_nonce",
+                          expected_rows[bead_id]["metadata"].get("gc.workspace_transition_nonce", MISSING))
+                          for bead_id in dict.fromkeys(ids))
+            method = store.accept_replacement
+            replacement["expected_grant"] = grant
+    if expected_rows:
+        ids = list(dict.fromkeys([authority_id, attempt.claimed_bead_id, payload["workflow_root_id"], record_id,
+            reference_owner_id, *(guard.bead_id for guard in guards),
+            writer_map.declaration["expansion_root_id"], writer_map.declaration["source_member_id"],
+            *(step["bead_id"] for step in writer_map.declaration["steps"]),
+            *(writer_map.continuation.row_ids if writer_map.continuation is not None else ())]))
+        missing = [bead_id for bead_id in ids if bead_id not in expected_rows]
+        if missing:
+            expected_rows.update(store.snapshot(missing))
     return method(attempt=attempt, scope={"workflow_root_id": payload["workflow_root_id"],
                                "generation": payload["generation"], "writer_scope_id": payload[SCOPE_OWNER[kind]], "record_kind": kind},
                                authority_id=authority_id, writes=[RecordWrite(kind, record_id, payload)],
                                references=[ReferenceWrite(reference_owner_id, key, record_reference(kind, record_id, payload))],
-                               writer_map=writer_map, guards=guards, expected_rows=expected_rows, operation_nonce=operation_nonce)
+                               writer_map=writer_map, guards=guards, expected_rows=expected_rows or None,
+                               operation_nonce=operation_nonce, **replacement)
 
 
 def native_rows(evidence: dict, result: dict) -> dict:

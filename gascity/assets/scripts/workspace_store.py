@@ -689,6 +689,24 @@ def transition_locks(common_git_dir: Path | str, scope: dict, timeout: float = 3
         os.close(directory_fd)
 
 
+def validate_grant_index(index, *, workflow_root_id):
+    """Validate the entire native authority index before allocation or publication."""
+    if set(index) != {"version", "scopes"} or type(index["version"]) is not int or index["version"] != 1 or not isinstance(index["scopes"], dict):
+        raise StoreError("malformed root authority references")
+    seen_authorities = set()
+    for reference_hash, reference in index["scopes"].items():
+        if not isinstance(reference, dict) or set(reference) != {"scope", "authority_id"}:
+            raise StoreError("unknown root authority reference")
+        reference_scope = _scope(reference["scope"])
+        _id(reference["authority_id"], "referenced authority_id")
+        if (reference_scope["workflow_root_id"] != workflow_root_id
+                or reference_hash != hashlib.sha256(canonical_bytes(reference_scope)).hexdigest()
+                or reference["authority_id"] in seen_authorities):
+            raise StoreError("conflicting root authority reference")
+        seen_authorities.add(reference["authority_id"])
+    return seen_authorities
+
+
 class WorkspaceStore:
     def __init__(self, store_ref: str, gc: str = "gc", cwd: Path | str | None = None,
                  common_git_dir: Path | str | None = None, timeout: float = 30.0):
@@ -935,19 +953,7 @@ class WorkspaceStore:
         index = _metadata_record(rows[root_id], GRANT_REFS_KEY)
         if index is None:
             index = {"version": 1, "scopes": {}}
-        if set(index) != {"version", "scopes"} or type(index["version"]) is not int or index["version"] != 1 or not isinstance(index["scopes"], dict):
-            raise StoreError("malformed root authority references")
-        seen_authorities = set()
-        for reference_hash, reference in index["scopes"].items():
-            if not isinstance(reference, dict) or set(reference) != {"scope", "authority_id"}:
-                raise StoreError("unknown root authority reference")
-            reference_scope = _scope(reference["scope"])
-            _id(reference["authority_id"], "referenced authority_id")
-            if (reference_scope["workflow_root_id"] != root_id
-                    or reference_hash != hashlib.sha256(canonical_bytes(reference_scope)).hexdigest()
-                    or reference["authority_id"] in seen_authorities):
-                raise StoreError("conflicting root authority reference")
-            seen_authorities.add(reference["authority_id"])
+        seen_authorities = validate_grant_index(index, workflow_root_id=root_id)
         grant_ref = {"scope": scope, "authority_id": authority_id}
         if operation == "install":
             if old_grant is not None or authority["metadata"] or scope_key in index["scopes"] or authority_id in seen_authorities:

@@ -2054,7 +2054,7 @@
     "gascity/assets/scripts/workspace_outputs.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "2b966f22dfed4bda279295e4f3028866a0c8a0a0113a794d1aed9e3be944679b"
+      "sha256": "15fddd4a86209c92d9a199979348766923b81f2d3fde04e4f78b50b8cbee16e3"
     },
     "gascity/assets/scripts/workspace_inputs.py": {
       "classification": "new",
@@ -2084,22 +2084,22 @@
     "gascity/assets/scripts/workspace_run.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "fe7aac13fde8725ac19bc6f6331d991b9685d6b24087445a126daec1cefa6c90"
+      "sha256": "c76744f31824ae315d29e8eda0e803406e5704086b69eda6d6f3439ce7eea83e"
     },
     "gascity/assets/scripts/workspace_store.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "a152fefb991860215fb5290c2d1fbce32fff23e80a077ca3b4aad6b5a7d0d47f"
+      "sha256": "5a844771363564b2a3ac6886ea0b1743afff58aaf6b10aacf1e66ec3f485478c"
     },
     "gascity/assets/scripts/workspace_entry.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "d410dbe9bb56ce7f853ad66438082c2fb8b9d249795faa961d76fa4e584fe272"
+      "sha256": "5370eb34c4f10443f17ce77cee394506d1a282a7124577eade834161bb858bb6"
     },
     "gascity/assets/scripts/workspace_flow.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "8ccf51773083ddcb575d264adb93935a4da2c27eec7496224bca72ff8ff0e165"
+      "sha256": "e26d20052dc0c664b095942601de704ab68bab06ecb379871a3b18893f4f5d0c"
     },
     "gascity/assets/scripts/workspace_acceptance_fixture.py": {
       "classification": "new",
@@ -2170,6 +2170,11 @@
       "classification": "new",
       "responsibility": "immutable native write requests, pending scope and allocation journals bound to the captured repository/city/store",
       "sha256": "5fcb0e21184f86b026040fce82fab0511885d3d72370a3a7d43686dcbb4219fd"
+    },
+    "gascity/assets/scripts/workspace_allocation.py": {
+      "classification": "new",
+      "responsibility": "recover native closed record allocations under the retained writer and source intent without repeating uncertain creates",
+      "sha256": "add08a46d5baef8c371841a25552b182f3e093eba53ea2772b3707bcc10275f8"
     }
   },
   "source_owners": [

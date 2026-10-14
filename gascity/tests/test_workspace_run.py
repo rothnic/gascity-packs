@@ -490,7 +490,7 @@ class RunStoreTests(unittest.TestCase):
     def allocation_args(self):
         return dict(workflow_root_id="root-1", input_convoy_id="convoy-1", source_anchor_id="source-1",
             rig_root=str(self.repo), worktree_lifecycle="new", base_ref="@default",
-            checks_config=self.port.rows["root-1"]["metadata"][run.CHECKS_CONFIG_KEY])
+            checks_config=self.port.rows["root-1"]["metadata"][run.CHECKS_CONFIG_KEY], writer_map=self.writer_map)
 
     def native_allocator(self, *, lose_reply_at=None, change_on_show=False):
         import workspace_entry as entry
@@ -509,6 +509,8 @@ class RunStoreTests(unittest.TestCase):
                 if len(created) == lose_reply_at:
                     raise run.RunError("native create committed; acknowledgement lost")
                 return {"id": bead_id}
+            if args[:2] == ["bd", "list"]:
+                raise run.RunError("native readonly lookup unavailable")
             self.assertEqual(args[:2], ["bd", "show"])
             self.assertTrue(kwargs["unwrap_singleton"])
             value = copy.deepcopy(created[args[2]])
@@ -529,8 +531,10 @@ class RunStoreTests(unittest.TestCase):
         (self.repo / "file").write_text("moving default while allocation is unresolved\n")
         self.git("commit", "-am", "move default")
         state = self.root / "allocation-fixture.json"
+        serialized_args = dict(args)
+        serialized_args["writer_map"] = json.loads(self.writer_map.declaration_bytes)
         state.write_text(json.dumps({"rows": self.port.rows, "cwd": self.store.cwd,
-            "common": str(self.store.common_git_dir), "sys_path": sys.path, "args": args,
+            "common": str(self.store.common_git_dir), "sys_path": sys.path, "args": serialized_args,
             "entry_source": entry.__file__, "run_source": run.__file__}))
         script = '''import importlib.util,json,sys
 from pathlib import Path
@@ -539,14 +543,16 @@ data=json.loads(Path(sys.argv[1]).read_text());sys.path[:0]=data['sys_path']
 for name,key in [('workspace_run','run_source'),('workspace_entry','entry_source')]:
  spec=importlib.util.spec_from_file_location(name,data[key]);module=importlib.util.module_from_spec(spec)
  sys.modules[name]=module;spec.loader.exec_module(module)
-from workspace_store import WorkspaceStore,Attempt
+from workspace_store import WorkspaceStore,Attempt,CookedWriterMap
+from workspace_records import canonical_bytes,RecordError
 from test_workspace_store import MemoryPort
 from workspace_entry import allocate_run_placeholders,EntryError
+data['args']['writer_map']=CookedWriterMap(canonical_bytes(data['args']['writer_map']))
 store=WorkspaceStore('rig:example',cwd=data['cwd'],common_git_dir=data['common'])
 port=MemoryPort(data['rows']);store._command=port
-with patch('workspace_entry.native_json',side_effect=AssertionError('duplicate native create')):
+with patch('workspace_entry.native_json',side_effect=RecordError('native readonly lookup unavailable')):
  try:allocate_run_placeholders(store,Attempt('session-1','incarnation-1','writer-1'),**data['args'])
- except EntryError as exc:
+ except RecordError as exc:
   assert 'no known physical ID' in str(exc), str(exc)
   assert port.requests==[]
   print('refused-original-unknown-allocation')

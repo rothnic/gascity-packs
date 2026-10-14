@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import argparse
-import fcntl
 import hashlib
 import json
 import os
+import secrets
 from pathlib import Path
-import tempfile
 
 from workspace_records import RecordError, canonical_bytes, contracts, parse_record, record_sha256
-from workspace_entry import allocate_placeholder, read_entry, reference
+from workspace_entry import allocate_placeholder, native_json, read_entry, reference
 from workspace_cooked import read_cooked_writer_map
-from workspace_store import (GRANT_REFS_KEY, GRANT_KEY, WorkspaceStore, validate_cooked_writer_map,
+from workspace_store import (GRANT_REFS_KEY, GRANT_KEY, MISSING, WorkspaceStore, validate_cooked_writer_map, validate_grant_index,
                              NativeSourceClose, RecordWrite, ReferenceWrite, SuccessorRelation, record_reference)
 from workspace_requests import retain_request, resolve_request, require_resolved_scope, allocation_directory
 from workspace_runtime import NativeSourceRuntime
@@ -44,6 +43,8 @@ class WorkspaceFlow:
         return outputs.referenced_record(self.runtime._fence, kind, owner)[0]
 
     def _allocation(self, kind, scope_owner, reference_owner, *, generation=None):
+        self.runtime._fresh()
+        self.runtime._admitted()
         outputs.require(not self._terminated, "this transition ended the retained runtime; load the next source plan")
         validate_cooked_writer_map(self.writer_map, self.runtime.guard_rows,
             workflow_root_id=self.run["workflow_root_id"], store_ref=self.store.store_ref,
@@ -52,51 +53,57 @@ class WorkspaceFlow:
                      writer_scope_id=scope_owner, record_kind=kind)
         require_resolved_scope(self.store, scope)
         root = self.store.snapshot([self.run["workflow_root_id"]])[self.run["workflow_root_id"]]
-        raw = root["metadata"].get(GRANT_REFS_KEY)
-        index = parse_record(raw) if raw else {"version": 1, "scopes": {}}
+        raw = root["metadata"].get(GRANT_REFS_KEY, MISSING)
+        outputs.require(raw is MISSING or isinstance(raw, str), "native writer grant index is malformed")
+        index = parse_record(raw) if raw is not MISSING else {"version": 1, "scopes": {}}
+        validate_grant_index(index, workflow_root_id=self.run["workflow_root_id"])
         scope_hash = hashlib.sha256(canonical_bytes(scope)).hexdigest()
-        grant = index["scopes"].get(scope_hash)
+        grant = index["scopes"].get(scope_hash, MISSING)
         owner = self.store.snapshot([reference_owner])[reference_owner]
-        pointer = owner["metadata"].get(contracts()[kind]["metadata_key"] + "_ref")
-        if pointer:
-            outputs.require(grant and grant["scope"] == scope, "record has no exact native writer grant")
+        pointer = owner["metadata"].get(contracts()[kind]["metadata_key"] + "_ref", MISSING)
+        if pointer is not MISSING:
+            outputs.require(isinstance(grant, dict) and set(grant) == {"scope", "authority_id"}
+                            and grant["scope"] == scope, "record has no exact native writer grant")
             return dict(record_id=reference(pointer, kind)["bead_id"],
                         authority_id=grant["authority_id"], initial_write=False)
+        outputs.require(grant is MISSING, "missing record pointer under an existing grant requires original request resolution")
 
-        # Persist an allocation boundary before each native create. A lost reply
-        # leaves a pending journal; rerunning cannot allocate a duplicate.
+        from workspace_allocation import read_packet, writer_origin, admit_writer, allocate_roles
+        from workspace_store import transition_locks
         directory = allocation_directory(self.store)
-        path = directory / (scope_hash + ".json")
-        binding = dict(scope=scope, store_ref=self.store.store_ref,
-                       attempt_id=self.attempt.writer_attempt_id)
-        def save(value):
-            fd, tmp = tempfile.mkstemp(dir=directory)
-            try:
-                with os.fdopen(fd, "wb") as stream:
-                    stream.write(canonical_bytes(value))
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                os.replace(tmp, path)
-            finally:
-                if os.path.exists(tmp):
-                    os.unlink(tmp)
-        with (directory / (scope_hash + ".lock")).open("a") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            if path.exists():
-                receipt = parse_record(path.read_text())
-                outputs.require(receipt.get("binding") == binding and receipt.get("status") == "ready",
-                                "native allocation is uncertain or belongs to another attempt; inspect its journal")
-            else:
-                outputs.require(grant is None, "missing record pointer under an existing grant requires the original allocation journal")
-                receipt = dict(binding=binding, status="record_pending")
-                save(receipt)
-                receipt["record_id"] = allocate_placeholder(self.store, title="Workspace " + kind)
-                receipt["status"] = "authority_pending"
-                save(receipt)
-                receipt["authority_id"] = allocate_placeholder(self.store, title="Workspace " + kind + " writer")
-                receipt["status"] = "ready"
-                save(receipt)
-        return {key: receipt[key] for key in ("record_id", "authority_id")} | {"initial_write": grant is None}
+        path = directory / (scope_hash + ".intent.json")
+        binding = dict(scope=scope, store=parse_record(self.store._binding().decode()),
+            reference_owner_id=reference_owner, run_sha256=record_sha256(self.run),
+            source_plan_sha256=record_sha256(self.plan), policy=self.runtime.policy_binding)
+        with transition_locks(self.store.common_git_dir, scope):
+            require_resolved_scope(self.store, scope)
+            outputs.require(path.exists() or not (directory / (scope_hash + ".json")).exists(),
+                            "old allocation receipt lacks its original native writer and row evidence")
+            packet = read_packet(path) if path.exists() else None
+            outputs.require(packet is None or packet.get("binding") == binding,
+                            "retained native allocation source scope changed")
+            outputs.require(packet is None or isinstance(packet.get("origin"), dict),
+                            "retained allocation has no original cooked writer evidence")
+            admit_writer(self.store, self.attempt, scope, self.writer_map, self.runtime.guard_rows,
+                         origin=packet.get("origin") if packet else None)
+            if packet is None:
+                outputs.require(grant is MISSING, "missing record pointer under an existing grant requires the original allocation journal")
+                packet = dict(version=1, binding=binding, origin=writer_origin(self.attempt, self.writer_map),
+                              nonce=secrets.token_hex(32))
+                outputs.immutable_json(path, packet)
+            outputs.require(set(packet) == {"version", "binding", "origin", "nonce"}
+                            and type(packet["version"]) is int and packet["version"] == 1
+                            and isinstance(packet["nonce"], str) and len(packet["nonce"]) == 64
+                            and all(value in "0123456789abcdef" for value in packet["nonce"]),
+                            "retained native allocation intent is malformed")
+            ids, original_rows = allocate_roles(self.store, packet, prefix=scope_hash,
+                roles=(("record", "Workspace " + kind, None),
+                       ("authority", "Workspace " + kind + " writer", None)),
+                allocate=allocate_placeholder, native_read=native_json,
+                admit=lambda: admit_writer(self.store, self.attempt, scope, self.writer_map,
+                                          self.runtime.guard_rows, origin=packet["origin"]))
+            self.runtime._fence.retain(original_rows)
+        return dict(record_id=ids["record"], authority_id=ids["authority"], initial_write=True)
 
     def _commit(self, prepared, payload, *, terminal=False):
         outputs.require(not self._terminated, "this transition ended the retained runtime; load the next source plan")

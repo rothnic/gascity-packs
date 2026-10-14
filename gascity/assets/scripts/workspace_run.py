@@ -140,7 +140,7 @@ def capture_payload(*, workflow_root_id: str, input_convoy_id: str, source_ancho
 
 
 def native_json(gc: str, city_root: str, args: list[str], rig: str | None = None,
-                *, unwrap_singleton: bool = False) -> dict[str, Any]:
+                *, unwrap_singleton: bool = False, require_array: bool = False) -> dict[str, Any]:
     command = [gc, "--city", city_root]
     if rig is not None:
         command += ["--rig", rig]
@@ -155,6 +155,7 @@ def native_json(gc: str, city_root: str, args: list[str], rig: str | None = None
     require(result.returncode == 0, "native source read failed: " + result.stderr.strip()[-1000:])
     if unwrap_singleton:
         value = parse_record('{"value":' + result.stdout + '}')["value"]
+        require(not require_array or isinstance(value, list), "native bead listing must return an array")
         if isinstance(value, list):
             require(len(value) == 1, "native bead read must return exactly one physical row")
             value = value[0]
@@ -292,7 +293,7 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
                 captured_run: dict[str, Any] | None = None,
                 captured_checks_config: str | None = None,
                 expected_source_anchor_id: str | None = None, operation_nonce: str | None = None) -> dict[str, Any]:
-    from workspace_store import GuardRead, MISSING, RecordWrite, ReferenceWrite, RunCheckPolicyProjection
+    from workspace_store import GRANT_KEY, GuardRead, MISSING, RecordWrite, ReferenceWrite, RunCheckPolicyProjection
     from workspace_requests import require_resolved_scope, retain_request, resolve_request
 
     city_root = canonical_path(city_root)
@@ -362,12 +363,25 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
         policy = capture_check_policy(payload, record_bead_id, raw_checks)
         projections = [RunCheckPolicyProjection(record_bead_id, policy)]
         guards += (GuardRead(workflow_root_id, CHECKS_CONFIG_KEY, raw_checks),)
+    from workspace_allocation import admit_writer
+    replacement = {}
     method = store.install_grant if stored is None else store.write_records
+    origin = None
+    if stored is not None:
+        raw_grant = rows[authority_id]["metadata"].get(GRANT_KEY)
+        require(isinstance(raw_grant, str), "captured run lacks its exact native writer grant")
+        grant = parse_record(raw_grant)
+        origin = {"attempt": grant.get("attempt"), "writer_map_sha256": grant.get("writer_map_sha256")}
+        guards += (GuardRead(authority_id, GRANT_KEY, raw_grant),)
+        if grant.get("attempt") != attempt.admission:
+            method = store.accept_replacement
+            replacement["expected_grant"] = grant
+    admit_writer(store, attempt, run_scope(workflow_root_id), writer_map, rows, origin=origin)
     prepared = method(attempt, run_scope(workflow_root_id), authority_id,
                       [RecordWrite("run", record_bead_id, payload)],
                       references=[ReferenceWrite(workflow_root_id, RUN_REFERENCE_KEY, reference)],
                       guards=guards, expected_rows=rows, operation_nonce=operation_nonce, writer_map=writer_map,
-                      projections=projections)
+                      projections=projections, **replacement)
     request_path, _ = retain_request(store, prepared)
     try:
         write_receipt = store.execute(prepared)

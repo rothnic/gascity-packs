@@ -107,11 +107,20 @@ class ComposedFlowTests(unittest.TestCase):
         data['allocation_counter'] += 1
         key = 'allocated-' + str(data['allocation_counter'])
     data['stores']['rig:fixture'][key] = dict(id=key, revision='1', status='closed',
-        assignee='', type='task', labels=[], metadata={})
+        assignee='', type='task', labels=[], metadata={},
+        title=args[args.index('create')+1], description=option('description'))
     state_path.write_text(json.dumps(data))
     emit(dict(id=key))
+if 'bd' in args and 'show' in args:
+    emit(data['stores']['rig:fixture'][args[args.index('show')+1]])
+if 'bd' in args and 'list' in args and '--desc-contains' in args:
+    value=option('desc-contains')
+    emit([row for row in data['stores']['rig:fixture'].values() if value in row.get('description','')][:2])
 '''
         text = text.replace("if 'list' in args and 'bd' in args:", insert + "if 'list' in args and 'bd' in args:")
+        text = text.replace("        result = [rows[i] for i in option('snapshot').split(',')]",
+            "        fields={'id','revision','status','assignee','type','labels','metadata','close_reason','closed_by_session'}\n"
+            "        result = [{key:value for key,value in rows[i].items() if key in fields} for i in option('snapshot').split(',')]")
         text = text.replace("            for key in item.get('delete', []): row['metadata'].pop(key, None)",
             "            for key in item.get('delete', []): row['metadata'].pop(key, None)\n"
             "            if 'close_reason' in item:\n"

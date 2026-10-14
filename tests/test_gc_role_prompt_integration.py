@@ -153,7 +153,8 @@ def write_gastown_sling_workspace(root: Path) -> PromptWorkspace:
 
             [[rigs]]
             name = "fixture"
-            prefix = "gc"
+            # The legacy shared file store derives this prefix from the city name.
+            prefix = "gsi"
             default_branch = "main"
 
             [rigs.imports.gastown]
@@ -238,6 +239,7 @@ def test_plain_gastown_polecat_sling_starts_default_graph_workflow(
     assert payload["formula"] == "mol-polecat-work"
     assert payload["workflow_id"]
     assert payload["bead_id"] == payload["workflow_id"]
+    assert payload["bead_id"].startswith("gsi-")
     assert "molecule_id" not in payload
 
 

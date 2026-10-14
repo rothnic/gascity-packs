@@ -237,7 +237,7 @@
     "gascity/assets/workflows/build-basic/decompose.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "f50f3d45b759ada7f0bca15542d6cb99c82894fef176782d8e1910501963d251"
+      "sha256": "643989d2b30f27743355cc4ccbb876f5875079c4e2dfc112ae1151efd1cbdfd3"
     },
     "gascity/assets/workflows/build-basic/finalize.md": {
       "classification": "reference",
@@ -457,7 +457,7 @@
     "gascity/assets/workflows/do-work/prepare-worktree.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,workspace-prepare",
-      "sha256": "4b5b18224e707e734414c0e5ed0da9c8d02625c2ff1b13476f854563dcc37745"
+      "sha256": "27d4c9e2f31642dd72f5860a0d68cb33117a136bd4ab776f06b3dcbdbfdc91bb"
     },
     "gascity/assets/workflows/do-work-item/implement-item.md": {
       "classification": "new",
@@ -1982,7 +1982,7 @@
     "gascity/assets/workflows/workspace-entry.md": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "3c10d4efbcc86ae2e3e34a1a919444db9a75108e74d2ee3a43fce201813e379c"
+      "sha256": "1c7be8f3273417c6bf5a96f424eb7a699e693df0ffeeb3546b09a281ef0ce453"
     },
     "gascity/assets/workflows/workspace-publication.md": {
       "classification": "new",
@@ -2074,32 +2074,32 @@
     "gascity/assets/scripts/workspace_cooked.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "d813b56b2fd4d79a2ea435af6478ee7061a27e99d55ea507dce9b7409b0b874b"
+      "sha256": "2c30bf28dbb266ec193f6aea8b7aaadfb5f00a9995de7c41ff0aee35222883aa"
     },
     "gascity/assets/scripts/workspace_source_plan.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "95f747a2e6084b07e6ad7c77957cb621ea5e6f4c948c611c04df878ee19eba8e"
+      "sha256": "8b329efbdc8ec9bf37e30c33c3e203401054915469a162f5ecb5afbe0c0f0afc"
     },
     "gascity/assets/scripts/workspace_run.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "952c617ada4daaf918f1e73fd2eb3b07f1d0aace4a7113301d56f403b1198477"
+      "sha256": "fe7aac13fde8725ac19bc6f6331d991b9685d6b24087445a126daec1cefa6c90"
     },
     "gascity/assets/scripts/workspace_store.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "5debe1a6cd5aa146ba483c83d187215b8f7a55918e65582dd01369110e7cb37a"
+      "sha256": "a152fefb991860215fb5290c2d1fbce32fff23e80a077ca3b4aad6b5a7d0d47f"
     },
     "gascity/assets/scripts/workspace_entry.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "914a4cfcf3df88d32d31e10c9355fdb52debf526a18e011591b2642e48503a36"
+      "sha256": "d410dbe9bb56ce7f853ad66438082c2fb8b9d249795faa961d76fa4e584fe272"
     },
     "gascity/assets/scripts/workspace_flow.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "af72a08792d917a252f5ed1fb24fe40a4517a2af6293783a589624f773b926e4"
+      "sha256": "8ccf51773083ddcb575d264adb93935a4da2c27eec7496224bca72ff8ff0e165"
     },
     "gascity/assets/scripts/workspace_acceptance_fixture.py": {
       "classification": "new",
@@ -2109,7 +2109,7 @@
     "gascity/assets/scripts/create_beads_from_tasks.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "b33e13bbaf9fc3df9124e77824dfcffa12b07a18462a18d3ef8bfcf6f301b60a"
+      "sha256": "3969434f35085338dc1e1bb253141cdc57f04e33ac675f2e2d9f338ca331cc69"
     },
     "gascity/pack.toml": {
       "classification": "reference",
@@ -2154,17 +2154,22 @@
     "gascity/assets/scripts/workspace_checkout.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "1dcd3babfc2a8ec06f318578326f5a3d449c717440d7f8a40e3228e10d7e08c1"
+      "sha256": "4c55e210c8b6449e749d135ee10e8d96cba71ff64f24771c6f4faa5f42088bcb"
     },
     "gascity/assets/scripts/workspace_dependency.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "b134b10146126c7f043c58e0d9318e4bfc286182a0159386b8c33f196b48b1e8"
+      "sha256": "2ba6bac7430f407778c387907c3afb6233540d6bcc9245392e928bc91faf4db5"
     },
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",
-      "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "5e752c5a66de51110ad59dc8eda753f946adff24da3ee4da8b15ade5dd93d72a"
+      "responsibility": "native claim/session and exact-commit project check, review and accepted-output qualification",
+      "sha256": "0a043da7e446a73d5155ccebd8af1d6d28d9f4e16ad811aeceb58b87d28d6ce0"
+    },
+    "gascity/assets/scripts/workspace_requests.py": {
+      "classification": "new",
+      "responsibility": "immutable native write requests, pending scope and allocation journals bound to the captured repository/city/store",
+      "sha256": "5fcb0e21184f86b026040fce82fab0511885d3d72370a3a7d43686dcbb4219fd"
     }
   },
   "source_owners": [

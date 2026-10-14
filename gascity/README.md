@@ -157,8 +157,10 @@ a Markdown file at the same relative path in a higher-priority layer, and
 every documented step can be swapped for your own expansion — see "Stable
 Workflow Override Interface" below for the recipe and per-stage examples.
 
-If part of the factory already ran, launch the targetless continuation
-entrypoint that matches the artifacts you already have:
+If part of the factory already ran, choose the continuation entrypoint that
+matches the artifacts you already have. This artifact-only recipe applies to
+legacy work. New mode also requires the retained run under its original workflow
+or a verified native child; see [Worktree dependencies](docs/worktree-dependencies.md#continue-existing-work).
 
 ```sh
 gc sling gc.run-operator <request-id> --on build-from-decompose \

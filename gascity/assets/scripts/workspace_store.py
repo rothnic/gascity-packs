@@ -34,6 +34,7 @@ GRANT_KEY = "gc.workspace_write_grant"
 GRANT_REFS_KEY = "gc.workspace_write_grant_refs"
 CLAIM_NONCE_KEY = "gc.workspace_write_nonce"
 TRANSITION_NONCE_KEY = "gc.workspace_transition_nonce"
+CONTINUATION_KEY = "gc.workspace_run_continuation.v1"
 MAX_ROWS = 100
 TOPOLOGY = "gc.native_step_dependencies.v1"
 ROOT_KEYS = ("workflow_id", "molecule_id", "gc.root_bead_id")
@@ -60,9 +61,59 @@ class StoreError(RecordError):
 
 
 @dataclass(frozen=True)
+class NativeRunContinuation:
+    """Immutable logical-run binding proved by native drain rows."""
+    binding_bytes: bytes
+
+    @property
+    def binding(self) -> dict:
+        require(isinstance(self.binding_bytes, bytes), "continuation requires canonical binding bytes")
+        try:
+            data = parse_record(self.binding_bytes.decode("utf-8"))
+        except (UnicodeError, RecordError) as exc:
+            raise StoreError("malformed native run continuation") from exc
+        fields = {"version", "workflow_root_id", "store_ref", "generation", "child_root_id",
+                  "unit_convoy_id", "implementation_convoy_id", "drain_control_id", "member_id",
+                  "run_ref", "source_plan_ref", "run_sha256", "source_plan_sha256", "check_policy_sha256"}
+        require(set(data) == fields and type(data["version"]) is int and data["version"] == 1
+                and type(data["generation"]) is int and data["generation"] > 0
+                and isinstance(data["store_ref"], str) and STORE_REF.fullmatch(data["store_ref"])
+                and canonical_bytes(data) == self.binding_bytes, "continuation binding is malformed")
+        ids = [data[k] for k in ("workflow_root_id", "child_root_id", "unit_convoy_id",
+                                "implementation_convoy_id", "drain_control_id", "member_id")]
+        for value in ids:
+            _id(value, "continuation physical ID")
+        require(len(set(ids)) == len(ids), "continuation physical roles overlap")
+        for kind, key in (("run", "run_ref"), ("source-plan", "source_plan_ref")):
+            ref = _reference(data[key])
+            require(ref["kind"] == kind and ref["identity"][0] == data["workflow_root_id"],
+                    "continuation record belongs to another root or kind")
+        require(data["source_plan_ref"]["identity"][1] == data["generation"],
+                "continuation plan generation changed")
+        for key in ("run_sha256", "source_plan_sha256", "check_policy_sha256"):
+            require(isinstance(data[key], str) and re.fullmatch(r"[0-9a-f]{64}", data[key]),
+                    "continuation authority fingerprint is malformed")
+        return data
+
+    @property
+    def row_ids(self) -> tuple:
+        data = self.binding
+        owner = dict(zip(contracts()["source-plan"]["identity"], data["source_plan_ref"]["identity"]))["source_plan_owner_id"]
+        return tuple(dict.fromkeys([data[k] for k in ("workflow_root_id", "child_root_id", "unit_convoy_id",
+                "implementation_convoy_id", "drain_control_id", "member_id")]
+                + [data["run_ref"]["bead_id"], data["source_plan_ref"]["bead_id"], owner]))
+
+    @property
+    def sha256(self) -> str:
+        self.binding
+        return hashlib.sha256(self.binding_bytes).hexdigest()
+
+
+@dataclass(frozen=True)
 class CookedWriterMap:
     """Exact physical occurrences and responsibilities from one native expansion."""
     declaration_bytes: bytes
+    continuation: NativeRunContinuation | None = None
 
     @property
     def declaration(self) -> dict:
@@ -71,6 +122,14 @@ class CookedWriterMap:
             return parse_record(self.declaration_bytes.decode("utf-8"))
         except (UnicodeError, RecordError) as exc:
             raise StoreError("cooked writer admission: malformed occurrence map") from exc
+
+    @property
+    def sha256(self) -> str:
+        if self.continuation is None:
+            return hashlib.sha256(self.declaration_bytes).hexdigest()
+        require(isinstance(self.continuation, NativeRunContinuation), "typed continuation is required")
+        return hashlib.sha256(canonical_bytes({"declaration": self.declaration,
+                                              "continuation": self.continuation.binding})).hexdigest()
 
 
 def require(condition, message):
@@ -81,6 +140,100 @@ def require(condition, message):
 def _root(row):
     metadata = row["metadata"]
     return next((metadata[key] for key in ROOT_KEYS if metadata.get(key)), None)
+
+
+def _exact_root(row, root_id):
+    values = [row["metadata"][key] for key in ROOT_KEYS if key in row["metadata"]]
+    return bool(values) and all(value == root_id for value in values)
+
+
+def validate_native_continuation(continuation, snapshots, *, store_ref, workflow_root_id,
+                                 claimed_step_id=None, require_reference=False):
+    require(isinstance(continuation, NativeRunContinuation) and type(require_reference) is bool,
+            "typed native continuation and explicit reference mode are required")
+    data = continuation.binding
+    require(data["workflow_root_id"] == workflow_root_id and data["store_ref"] == store_ref,
+            "continuation belongs to another logical root/store")
+    require(isinstance(snapshots, dict) and all(i in snapshots and snapshots[i].get("id") == i
+            for i in continuation.row_ids), "continuation native row union is incomplete")
+    root, child, unit, convoy, control, member = (snapshots[data[key]] for key in
+        ("workflow_root_id", "child_root_id", "unit_convoy_id", "implementation_convoy_id", "drain_control_id", "member_id"))
+    require(root["metadata"].get("gc.kind") == "workflow"
+            and all(root["metadata"][k] == workflow_root_id for k in ROOT_KEYS if k in root["metadata"]),
+            "original native row is not the recorded workflow root")
+    require(child["metadata"].get("gc.kind") == "workflow"
+            and child["metadata"].get("gc.root_store_ref") == store_ref
+            and all(child["metadata"][k] == data["child_root_id"] for k in ROOT_KEYS if k in child["metadata"])
+            and all(child["metadata"].get(k) == data[v] for k, v in
+                (("gc.input_convoy_id", "unit_convoy_id"), ("gc.drain_control_id", "drain_control_id"),
+                 ("gc.drain_member_id", "member_id"))), "child root lacks its exact native drain relationship")
+    require(unit["type"] == "convoy" and unit["metadata"].get("gc.synthetic_kind") == "drain-unit-convoy"
+            and all(unit["metadata"].get(k) == data[v] for k, v in
+                (("gc.parent_convoy_id", "implementation_convoy_id"), ("gc.drain_control_id", "drain_control_id"),
+                 ("gc.drain_member_id", "member_id"))), "native drain unit relationship changed")
+    require(control["metadata"].get("gc.kind") == "drain" and _exact_root(control, workflow_root_id)
+            and control["metadata"].get("gc.root_store_ref") == store_ref,
+            "native drain control belongs to another root/store")
+    for row in (convoy, member):
+        require(_exact_root(row, workflow_root_id) and row["metadata"].get("gc.root_store_ref") == store_ref
+                and row["metadata"].get("gc.source_root_id") == workflow_root_id
+                and row["metadata"].get("gc.source_generation") == str(data["generation"]),
+                "native source member/convoy belongs to another root/store/generation")
+    require(convoy["type"] == "convoy" and root["metadata"].get("gc.root_store_ref") == store_ref
+            and root["metadata"].get("gc.input_convoy_id") == data["implementation_convoy_id"]
+            and root["metadata"].get("gc.build.implementation_convoy_id") == data["implementation_convoy_id"],
+            "original root no longer selects this implementation convoy")
+    payloads = {}
+    for kind, key, fingerprint in (("run", "run_ref", "run_sha256"),
+                                   ("source-plan", "source_plan_ref", "source_plan_sha256")):
+        ref = data[key]
+        row = snapshots[ref["bead_id"]]
+        WorkspaceStore._dedicated(row)
+        payload = _metadata_record(row, contracts()[kind]["metadata_key"])
+        require(payload is not None, "continuation authority payload is absent")
+        validate_record(kind, payload)
+        require(record_reference(kind, ref["bead_id"], payload) == ref and record_sha256(payload) == data[fingerprint],
+                "continuation authority reference or payload changed")
+        payloads[kind] = payload
+    run, plan = payloads["run"], payloads["source-plan"]
+    require(run["worktree_lifecycle"] == "new" and _metadata_record(root, "gc.implementation_run_ref") == data["run_ref"],
+            "original root has no exact new-mode run reference")
+    plan_owner = snapshots[plan["source_plan_owner_id"]]
+    require(_exact_root(plan_owner, workflow_root_id) and plan_owner["metadata"].get("gc.root_store_ref") == store_ref
+            and plan_owner["metadata"].get("gc.source_root_id") == workflow_root_id
+            and plan_owner["metadata"].get("gc.source_generation") == str(data["generation"])
+            and _metadata_record(plan_owner, "gc.source_plan_ref") == data["source_plan_ref"]
+            and convoy["metadata"].get("gc.source_plan_owner_id") == plan["source_plan_owner_id"]
+            and convoy["metadata"].get("gc.source_plan_sha256") == data["source_plan_sha256"]
+            and sum(data["member_id"] in node["member_ids"] for node in plan["nodes"]) == 1,
+            "native implementation convoy/member lacks its exact published plan")
+    policy = _metadata_record(snapshots[data["run_ref"]["bead_id"]], "gc.workspace_required_checks.v1")
+    require(policy is not None and set(policy) == {"version", "workflow_root_id", "run_record_id", "run_identity",
+            "base_oid", "required_checks", "policy_sha256"}
+            and hashlib.sha256(canonical_bytes(policy)).hexdigest() == data["check_policy_sha256"]
+            and policy.get("version") == 1 and type(policy["version"]) is int
+            and policy.get("workflow_root_id") == workflow_root_id and policy.get("run_record_id") == data["run_ref"]["bead_id"]
+            and policy.get("run_identity") == list(record_identity("run", run)) and policy.get("base_oid") == run["base_oid"],
+            "captured run check policy changed or belongs to another run")
+    checks = policy.get("required_checks")
+    require(isinstance(checks, list) and checks and all(isinstance(c, dict) and set(c) == {"id", "argv"}
+            and isinstance(c["id"], str) and c["id"] and isinstance(c["argv"], list) and c["argv"]
+            and all(isinstance(a, str) and a and "\0" not in a for a in c["argv"]) for c in checks)
+            and len({c["id"] for c in checks}) == len(checks)
+            and policy.get("policy_sha256") == hashlib.sha256(canonical_bytes({"required_checks": checks})).hexdigest(),
+            "captured run check policy is malformed")
+    native_ref = child["metadata"].get("gc.implementation_run_ref", MISSING)
+    native_context = child["metadata"].get(CONTINUATION_KEY, MISSING)
+    if native_ref is MISSING and native_context is MISSING:
+        require(not require_reference, "child inherited-run reference has not been published")
+    else:
+        require(native_ref == canonical_bytes(data["run_ref"]).decode()
+                and native_context == continuation.binding_bytes.decode(), "child inherited-run reference is partial or changed")
+    if claimed_step_id is not None:
+        require(claimed_step_id in snapshots and _exact_root(snapshots[claimed_step_id], data["child_root_id"])
+                and snapshots[claimed_step_id]["metadata"].get("gc.root_store_ref") == store_ref,
+                "claimed native occurrence is outside the proven child root/store")
+    return data
 
 
 def _native_step_id(value):
@@ -119,7 +272,7 @@ def _kinds(metadata, step_ref):
         return ["run"]
     if stage == "decompose" and schema == "gc.build.decomposition.v1":
         return ["source-plan"]
-    if stage == "plan-fixes" and metadata.get("gc.run_target") == "gc.run-operator":
+    if stage == "plan-fixes" and metadata.get("gc.run_target") in ("gc.run-operator", "gc.review-synthesizer"):
         return ["source-plan"]
     if stage == "prepare-worktree" and metadata.get("gc.run_target") == "gc.run-operator":
         return ["blocker", "workspace"]
@@ -163,6 +316,13 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
             and canonical_bytes(data) == writer_map.declaration_bytes, "native occurrence map scope changed")
     for field in ("workflow_root_id", "source_member_id", "expansion_root_id"):
         _id(data[field], field)
+    continuation = writer_map.continuation
+    physical_root = workflow_root_id
+    if continuation is not None:
+        binding = validate_native_continuation(continuation, snapshots, store_ref=store_ref,
+            workflow_root_id=workflow_root_id, claimed_step_id=claimed_step_id)
+        physical_root = binding["child_root_id"]
+        require(data["source_member_id"] == binding["member_id"], "map differs from its inherited native source member")
     require(isinstance(data["steps"], list) and 1 <= len(data["steps"]) <= MAX_ROWS,
             "native physical occurrence list is absent or oversized")
     require(data["expansion_root_id"] in snapshots and data["source_member_id"] in snapshots,
@@ -170,7 +330,7 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
     expansion = snapshots[data["expansion_root_id"]]
     require(_formula_identity(expansion) == (data["formula_name"], data["formula_hash"], data["formula_source"]),
             "native expansion identity changed")
-    require(_root(expansion) in (None, workflow_root_id) and expansion["metadata"].get("gc.root_store_ref") == store_ref,
+    require(_root(expansion) in (None, physical_root) and expansion["metadata"].get("gc.root_store_ref") == store_ref,
             "native expansion belongs to another root/store")
     member_row = snapshots[data["source_member_id"]]
     require((data["source_member_id"] == workflow_root_id or _root(member_row) == workflow_root_id)
@@ -188,11 +348,13 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
         seen_refs.add(item["step_ref"])
         row = snapshots[item["bead_id"]]
         metadata = row["metadata"]
-        require(_root(row) == workflow_root_id and metadata.get("gc.root_store_ref") == store_ref,
+        require((_exact_root(row, physical_root) if continuation is not None else _root(row) == physical_root)
+                and metadata.get("gc.root_store_ref") == store_ref,
                 "native step belongs to another root/store")
-        require((metadata.get("gc.attach_root_id") or workflow_root_id) == data["expansion_root_id"],
+        require((metadata.get("gc.attach_root_id") or physical_root) == data["expansion_root_id"],
                 "native step belongs to a sibling expansion")
-        member = metadata.get("gc.source_anchor_id", metadata.get("gc.drain_member_id", workflow_root_id))
+        member = metadata.get("gc.source_anchor_id", metadata.get("gc.drain_member_id",
+            binding["member_id"] if continuation is not None else workflow_root_id))
         require(member == data["source_member_id"] and metadata.get("gc.drain_member_id", member) == member,
                 "native step belongs to another source member")
         require(item["step_id"] == metadata.get("gc.step_id") and item["step_ref"] == metadata.get("gc.step_ref")
@@ -313,6 +475,18 @@ class SourcePlanConvoyBinding:
 class RunCheckPolicyProjection:
     run_record_id: str
     payload: dict
+
+
+@dataclass(frozen=True)
+class InheritedRunReference:
+    continuation: NativeRunContinuation
+
+
+@dataclass(frozen=True)
+class NativeSourceClose:
+    member_id: str
+    result_bead_id: str
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -577,26 +751,53 @@ class WorkspaceStore:
             raise StoreError("incomplete native snapshot")
         result = {}
         for bead_id, row in zip(ids, rows):
-            if (not isinstance(row, dict) or set(row) != {"id", "revision", "status", "assignee", "type", "labels", "metadata"}
+            required = {"id", "revision", "status", "assignee", "type", "labels", "metadata"}
+            optional = {"close_reason", "closed_by_session"}
+            if (not isinstance(row, dict) or not required <= set(row) or set(row) - required - optional
                     or row["id"] != bead_id or not isinstance(row["revision"], str)
                     or not re.fullmatch(r"-?(?:0|[1-9][0-9]*)", row["revision"])
                     or not -(2**63) <= int(row["revision"]) < 2**63
                     or any(not isinstance(row[k], str) for k in ("status", "assignee", "type"))
                     or not isinstance(row["metadata"], dict)
+                    or any(not isinstance(row[key], str) for key in optional if key in row)
                     or (row["labels"] is not None and (not isinstance(row["labels"], list) or any(not isinstance(v, str) for v in row["labels"])))):
                 raise StoreError("malformed or out-of-order native snapshot row")
             canonical_bytes(row)
             result[bead_id] = copy.deepcopy(row)
         return result
 
-    def read_record(self, kind: str, bead_id: str, identity: list | tuple | None = None) -> dict | None:
+    def read_record(self, kind: str, bead_id: str, identity: list | tuple | None = None, *,
+                    continuation: NativeRunContinuation | None = None) -> dict | None:
         if kind not in contracts():
             raise StoreError("unknown record kind")
-        row = self.snapshot([bead_id])[bead_id]
+        native_roots = ()
+        if continuation is None:
+            rows = self.snapshot([bead_id])
+        else:
+            require(kind == "workspace" and isinstance(continuation, NativeRunContinuation),
+                    "typed continuation record reads are limited to workspace records")
+            rows = self.snapshot(list(dict.fromkeys([bead_id, *continuation.row_ids])))
+            binding = validate_native_continuation(continuation, rows, store_ref=self.store_ref,
+                workflow_root_id=continuation.binding["workflow_root_id"], require_reference=True)
+            native_roots = (binding["child_root_id"],)
+        row = rows[bead_id]
         record = _metadata_record(row, contracts()[kind]["metadata_key"])
         if record is not None:
             validate_record(kind, record)
-            self._dedicated(row, record if kind == "workspace" else None)
+            if continuation is not None:
+                plan = _metadata_record(rows[binding["source_plan_ref"]["bead_id"]], contracts()["source-plan"]["metadata_key"])
+                node = next(n for n in plan["nodes"] if binding["member_id"] in n["member_ids"])
+                require(record["workflow_root_id"] == binding["workflow_root_id"]
+                        and record["generation"] == binding["generation"]
+                        and record["source_plan_owner_id"] == plan["source_plan_owner_id"]
+                        and record["workspace_owner_id"] == node["owner_id"]
+                        and record["strategy"] == node["strategy"]
+                        and record["active_member_id"] == binding["member_id"]
+                        and record["next_member_position"] == node["member_ids"].index(binding["member_id"])
+                        and (not OWNER_PROJECTION_KEYS.intersection(row["metadata"])
+                             or row["metadata"].get("gc.root_bead_id") == binding["child_root_id"]),
+                        "workspace read differs from its retained native continuation")
+            self._dedicated(row, record if kind == "workspace" else None, native_roots=native_roots)
             if identity is not None and list(record_identity(kind, record)) != list(identity):
                 raise StoreError("record identity does not match its exact reference")
         return record
@@ -636,8 +837,9 @@ class WorkspaceStore:
         if any(not isinstance(g, GuardRead) for g in guards):
             raise StoreError("write requires typed read guards")
         if any(not isinstance(p, (NativeOwnerProjection, NativeWorktreeReference, SourceMembershipProjection,
-                                  SourcePlanConvoyBinding, RunCheckPolicyProjection)) for p in projections):
+                                  SourcePlanConvoyBinding, RunCheckPolicyProjection, InheritedRunReference, NativeSourceClose)) for p in projections):
             raise StoreError("unknown native projection operation")
+        require(sum(isinstance(p, NativeSourceClose) for p in projections) <= 1, "one source closure per admitted workspace transition is required")
         if operation == "install" and not writes:
             raise StoreError("initial grant publication must join its first lifecycle payload")
         nonce = operation_nonce or secrets.token_hex(32)
@@ -646,6 +848,12 @@ class WorkspaceStore:
         if operation == "replace":
             self._grant(expected_grant, scope, authority_id)
         require(isinstance(writer_map, CookedWriterMap), "typed native occurrence map is required")
+        continuation = writer_map.continuation
+        previous_continuation = None
+        if operation == "replace" and "continuation" in expected_grant["writer_occurrence"]:
+            previous_continuation = NativeRunContinuation(canonical_bytes(expected_grant["writer_occurrence"]["continuation"]))
+        if continuation is not None:
+            require(isinstance(continuation, NativeRunContinuation), "typed native continuation is required")
         declaration = writer_map.declaration
         require(isinstance(declaration.get("steps"), list)
                 and all(isinstance(item, dict) and "bead_id" in item for item in declaration["steps"])
@@ -653,6 +861,10 @@ class WorkspaceStore:
                 "native occurrence map is incomplete")
         map_ids = [declaration["expansion_root_id"], declaration["source_member_id"],
                    *(item["bead_id"] for item in declaration["steps"])]
+        if continuation is not None:
+            map_ids.extend(continuation.row_ids)
+        if previous_continuation is not None:
+            map_ids.extend(previous_continuation.row_ids)
         for bead_id in map_ids:
             _id(bead_id, "writer map bead_id")
         ids = list(dict.fromkeys([authority_id, attempt.claimed_bead_id, root_id,
@@ -663,6 +875,8 @@ class WorkspaceStore:
                                  *(p.bead_id for p in projections if isinstance(p, (NativeWorktreeReference, SourceMembershipProjection))),
                                  *(p.convoy_id for p in projections if isinstance(p, SourcePlanConvoyBinding)),
                                  *(p.run_record_id for p in projections if isinstance(p, RunCheckPolicyProjection)),
+                                 *(bead_id for p in projections if isinstance(p, NativeSourceClose)
+                                   for bead_id in (p.member_id, p.result_bead_id)),
                                  *([expected_grant["attempt"]["claimed_bead_id"],
                                     expected_grant["writer_occurrence"]["expansion_root_id"]] if operation == "replace" else []),
                                  *([successor_relation.source_plan_bead_id, successor_relation.reference_bead_id] if successor_relation else [])]))
@@ -674,15 +888,46 @@ class WorkspaceStore:
         rows = {i: rows[i] for i in ids}
         claim = rows[attempt.claimed_bead_id]
         native = claim["metadata"]
+        physical_root = root_id
+        native_roots = [root_id]
+        inheritance = [p for p in projections if isinstance(p, InheritedRunReference)]
+        if continuation is not None:
+            binding = validate_native_continuation(continuation, rows, store_ref=self.store_ref,
+                workflow_root_id=root_id, claimed_step_id=attempt.claimed_bead_id)
+            physical_root = binding["child_root_id"]
+            native_roots.append(physical_root)
+            require(binding["generation"] == scope["generation"] and scope["record_kind"] not in ("run", "source-plan"),
+                    "inherited authority cannot recapture a run or redeclare its source plan")
+            plan = _metadata_record(rows[binding["source_plan_ref"]["bead_id"]], contracts()["source-plan"]["metadata_key"])
+            node = next(n for n in plan["nodes"] if binding["member_id"] in n["member_ids"])
+            if scope["record_kind"] in ("workspace", "blocker", "owner-output"):
+                require(scope["writer_scope_id"] == node["owner_id"], "inherited writer scope differs from the declared workspace owner")
+            elif scope["record_kind"] == "member-result":
+                require(scope["writer_scope_id"] == binding["member_id"], "inherited writer scope differs from the native member")
+            require(len(inheritance) <= 1 and all(p.continuation == continuation for p in inheritance),
+                    "inherited reference projection differs from the admitted native context")
+            if CONTINUATION_KEY not in rows[physical_root]["metadata"]:
+                require(len(inheritance) == 1 and scope["record_kind"] == "workspace"
+                        and any(w.kind == "workspace" for w in writes),
+                        "first child inherited reference must join its workspace publication")
+            else:
+                validate_native_continuation(continuation, rows, store_ref=self.store_ref,
+                    workflow_root_id=root_id, require_reference=True)
+        else:
+            require(not inheritance, "inherited reference requires the exact map continuation")
+        if previous_continuation is not None:
+            validate_native_continuation(previous_continuation, rows, store_ref=self.store_ref,
+                workflow_root_id=root_id, claimed_step_id=expected_grant["attempt"]["claimed_bead_id"], require_reference=True)
+            native_roots.append(previous_continuation.binding["child_root_id"])
         native_root = next((native[k] for k in ("workflow_id", "molecule_id", "gc.root_bead_id") if native.get(k)), None)
         if (claim["status"] != "in_progress" or not claim["assignee"]
-                or native.get("gc.session_id") != attempt.session_id or native_root != root_id
+                or native.get("gc.session_id") != attempt.session_id or native_root != physical_root
                 or native.get("gc.root_store_ref") != self.store_ref
                 or not isinstance(native.get("gc.step_ref"), str) or not native["gc.step_ref"].strip()):
             raise StoreError("retained claimed step lacks exact native session, root, store or step binding")
         declaration = validate_cooked_writer_map(writer_map, rows, store_ref=self.store_ref,
             workflow_root_id=root_id, record_kind=scope["record_kind"], claimed_step_id=attempt.claimed_bead_id)
-        map_sha256 = hashlib.sha256(writer_map.declaration_bytes).hexdigest()
+        map_sha256 = writer_map.sha256
         authority = rows[authority_id]
         self._dedicated(authority)
         old_grant = _metadata_record(authority, GRANT_KEY)
@@ -720,7 +965,7 @@ class WorkspaceStore:
             else:
                 if old_grant != expected_grant:
                     raise StoreError("replacement requires the exact recorded predecessor grant")
-                self._successor(old_grant, attempt, scope, successor_relation, rows, declaration, map_sha256)
+                self._successor(old_grant, attempt, scope, successor_relation, rows, declaration, map_sha256, continuation)
         if old_grant is not None and old_grant["operation_nonce"] == nonce:
             raise StoreError("a consumed operation nonce cannot be reused for a new transaction")
         grant = {"version": 1, "scope": scope, "authority_id": authority_id,
@@ -729,6 +974,8 @@ class WorkspaceStore:
                     ("source_member_id", "expansion_root_id", "formula_name", "formula_hash", "formula_source")}}
         designated = next(item for item in declaration["steps"] if item["bead_id"] == attempt.claimed_bead_id)
         grant["writer_occurrence"].update({key: designated[key] for key in ("step_id", "step_ref")})
+        if continuation is not None:
+            grant["writer_occurrence"]["continuation"] = continuation.binding
         patches = {i: {"id": i, "expected_revision": rows[i]["revision"],
                        "expected_status": rows[i]["status"], "expected_assignee": rows[i]["assignee"],
                        "require_change": True, "set": {TRANSITION_NONCE_KEY: nonce}} for i in ids}
@@ -756,13 +1003,19 @@ class WorkspaceStore:
                 raise StoreError("one dedicated physical record row cannot contain multiple payload writes")
             record_rows.add(write.bead_id)
             payload = validate_record(write.kind, write.payload)
+            if continuation is not None and write.kind == "workspace":
+                require(payload["active_member_id"] == binding["member_id"]
+                        and payload["next_member_position"] == node["member_ids"].index(binding["member_id"])
+                        and payload["strategy"] == node["strategy"]
+                        and payload["source_plan_owner_id"] == plan["source_plan_owner_id"],
+                        "workspace differs from its proven native member/source-plan strategy")
             identity = (write.kind, record_identity(write.kind, payload))
             if identity in record_identities:
                 raise StoreError("one logical record cannot publish multiple physical payloads in the same batch")
             record_identities.add(identity)
             if write.kind != scope["record_kind"] and not (scope["record_kind"] == "workspace" and write.kind == "blocker"):
                 raise StoreError("payload kind is outside the grant's designated writer responsibility")
-            self._dedicated(rows[write.bead_id], payload if write.kind == "workspace" else None)
+            self._dedicated(rows[write.bead_id], payload if write.kind == "workspace" else None, native_roots=native_roots)
             if (payload["workflow_root_id"] != root_id or payload["generation"] != scope["generation"]
                     or payload[SCOPE_OWNER[write.kind]] != scope["writer_scope_id"]):
                 raise StoreError("payload is outside the designated writer scope")
@@ -778,7 +1031,14 @@ class WorkspaceStore:
             else:
                 exact_replay = validate_transition(write.kind, stored, payload)
             if write.kind == "workspace" and OWNER_PROJECTION_KEYS.intersection(rows[write.bead_id]["metadata"]):
-                self._owner_projection(payload, {k: rows[write.bead_id]["metadata"].get(k) for k in OWNER_PROJECTION_KEYS}, rows)
+                retained_root = rows[write.bead_id]["metadata"].get("gc.root_bead_id")
+                require(retained_root in native_roots, "retained native owner belongs to an unproved root")
+                if retained_root != physical_root:
+                    require(operation == "replace" and any(isinstance(p, NativeOwnerProjection)
+                            and p.workspace_bead_id == write.bead_id for p in projections),
+                            "inherited successor must atomically move its native owner projection")
+                self._owner_projection(payload, {k: rows[write.bead_id]["metadata"].get(k) for k in OWNER_PROJECTION_KEYS},
+                                       rows, native_root_id=retained_root)
             replay &= exact_replay
             if not exact_replay and payload["writer_step_id"] != attempt.claimed_bead_id:
                 raise StoreError("changed payload must name the admitted exact writer step")
@@ -865,6 +1125,54 @@ class WorkspaceStore:
         if new_run and len(policies) != 1:
             raise StoreError("new-mode run publication requires one captured required-check policy")
         for projection in projections:
+            if isinstance(projection, NativeSourceClose):
+                require(scope["record_kind"] == "workspace" and operation != "install"
+                        and claim["metadata"]["gc.step_id"].rsplit(".", 1)[-1] == "close-source-anchor",
+                        "source close requires its admitted native closure writer and retained workspace grant")
+                require(isinstance(projection.reason, str) and projection.reason.strip(), "source close requires its retained reason")
+                result = _metadata_record(rows[projection.result_bead_id], contracts()["member-result"]["metadata_key"])
+                require(result is not None, "source close requires its exact accepted result record")
+                validate_record("member-result", result)
+                self._dedicated(rows[projection.result_bead_id])
+                candidates = [payload for (kind, _), payload in published.items() if kind == "workspace"]
+                require(len(candidates) == 1, "source close must join its retained workspace checkpoint")
+                workspace = candidates[0]
+                member = rows[projection.member_id]
+                source = member["metadata"]
+                require(result["acceptance"]["status"] == "accepted" and result["member_id"] == projection.member_id
+                        and result["workflow_root_id"] == root_id and result["generation"] == scope["generation"]
+                        and result["workspace_owner_id"] == scope["writer_scope_id"]
+                        and workspace["phase"] == "result" and workspace["active_member_id"] == projection.member_id
+                        and workspace["source_plan_owner_id"] == result["source_plan_owner_id"]
+                        and workspace["input_oid"] == result["input_oid"]
+                        and workspace["output_oid"] == workspace["current_oid"] == result["output_oid"]
+                        and _metadata_record(member, "gc.workspace_result_ref") == record_reference("member-result", projection.result_bead_id, result)
+                        and _root(member) == root_id and source.get("gc.root_store_ref") == self.store_ref
+                        and source.get("gc.source_root_id") == root_id and source.get("gc.source_generation") == str(scope["generation"])
+                        and projection.member_id not in (root_id, attempt.claimed_bead_id, authority_id),
+                        "source close differs from its accepted member/checkpoint/native scope")
+                require(member["status"] != "closed", "closed source requires read-only reconciliation")
+                put(projection.member_id, "gc.outcome", "pass")
+                put(projection.member_id, "gc.work_outcome", "no-op" if result["status"] == "no_change" else "shipped")
+                if result["status"] == "changed":
+                    put(projection.member_id, "gc.work_commit", result["output_oid"])
+                    if workspace["work_branch"]:
+                        put(projection.member_id, "gc.work_branch", workspace["work_branch"])
+                    else:
+                        patches[projection.member_id]["delete"] = ["gc.work_branch"]
+                else:
+                    patches[projection.member_id]["delete"] = ["gc.work_commit", "gc.work_branch"]
+                patches[projection.member_id]["close_reason"] = projection.reason
+                replay = False
+                continue
+            if isinstance(projection, InheritedRunReference):
+                require(continuation is not None and projection.continuation == continuation
+                        and scope["record_kind"] == "workspace"
+                        and any(kind == "workspace" for kind, _ in published),
+                        "inherited reference must join the admitted workspace payload")
+                put(physical_root, "gc.implementation_run_ref", canonical_bytes(binding["run_ref"]).decode())
+                put(physical_root, CONTINUATION_KEY, continuation.binding_bytes.decode())
+                continue
             if isinstance(projection, RunCheckPolicyProjection):
                 run = published.get(("run", projection.run_record_id))
                 policy = projection.payload
@@ -967,24 +1275,26 @@ class WorkspaceStore:
             if workspace is None:
                 raise StoreError("native projection requires a validated workspace record in the same transaction")
             validate_record("workspace", workspace)
-            self._dedicated(rows[owner_id], workspace)
+            self._dedicated(rows[owner_id], workspace, native_roots=native_roots)
             if (workspace["workflow_root_id"] != root_id or workspace["generation"] != scope["generation"]
                     or workspace["workspace_owner_id"] != scope["writer_scope_id"] or workspace["workspace_bead_id"] != owner_id):
                 raise StoreError("native projection workspace conflicts with the writer scope")
             if isinstance(projection, NativeOwnerProjection):
-                self._owner_projection(workspace, projection.metadata, rows)
+                self._owner_projection(workspace, projection.metadata, rows, native_root_id=physical_root)
                 for key, value in projection.metadata.items():
                     previous = rows[owner_id]["metadata"].get(key, MISSING)
                     if previous is not MISSING and previous != value:
-                        raise StoreError("native owner projection conflicts with retained provisioning identity")
+                        if not (key == "gc.root_bead_id" and operation == "replace"
+                                and previous in native_roots and continuation is not None):
+                            raise StoreError("native owner projection conflicts with retained provisioning identity")
                     put(owner_id, key, value)
             else:
                 owners = [p for p in projections if isinstance(p, NativeOwnerProjection) and p.workspace_bead_id == owner_id]
                 if len(owners) > 1:
                     raise StoreError("duplicate native owner projections")
                 metadata = owners[0].metadata if owners else {k: rows[owner_id]["metadata"].get(k) for k in OWNER_PROJECTION_KEYS}
-                self._owner_projection(workspace, metadata, rows)
-                self._worktree_reference(workspace, projection, rows[projection.bead_id])
+                self._owner_projection(workspace, metadata, rows, native_root_id=physical_root)
+                self._worktree_reference(workspace, projection, rows[projection.bead_id], native_root_id=physical_root)
                 value = canonical_bytes(projection.reference).decode()
                 previous = rows[projection.bead_id]["metadata"].get("gc.worktree_ref", MISSING)
                 if previous is not MISSING and previous != value:
@@ -1003,12 +1313,18 @@ class WorkspaceStore:
         after = copy.deepcopy(rows)
         for bead_id, patch in patches.items():
             after[bead_id]["metadata"].update(patch["set"])
+            for key in patch.get("delete", []):
+                after[bead_id]["metadata"].pop(key, None)
+            if "close_reason" in patch:
+                after[bead_id].update(status="closed", close_reason=patch["close_reason"], closed_by_session=attempt.session_id)
+        require(len(patches) + sum("close_reason" in patch for patch in patches.values()) <= MAX_ROWS,
+                "complete guarded source close exceeds 100 native items; chunking is forbidden")
         request = {"admission": attempt.admission, "rows": list(patches.values())}
         return PreparedWrite(canonical_bytes(request), canonical_bytes(rows), canonical_bytes(after),
                              canonical_bytes(scope), self._binding(), replay)
 
     @staticmethod
-    def _dedicated(row, workspace=None):
+    def _dedicated(row, workspace=None, *, native_roots=()):
         if row["status"] != "closed" or row["assignee"]:
             raise StoreError("dedicated lifecycle rows must remain closed and unassigned")
         runtime = {"gc.session_id", "gc.root_bead_id", "gc.root_store_ref", "gc.step_ref",
@@ -1016,7 +1332,8 @@ class WorkspaceStore:
                    "gc.drain_member_id", "gc.drain_owner_id"}
         if workspace is not None:
             if (row["id"] != workspace["workspace_bead_id"]
-                    or row["metadata"].get("gc.root_bead_id", workspace["workflow_root_id"]) != workspace["workflow_root_id"]):
+                    or row["metadata"].get("gc.root_bead_id", workspace["workflow_root_id"])
+                       not in (workspace["workflow_root_id"], *native_roots)):
                 raise StoreError("native owner projection has conflicting workspace root identity")
             present = OWNER_PROJECTION_KEYS.intersection(row["metadata"])
             if present and present != OWNER_PROJECTION_KEYS:
@@ -1027,14 +1344,14 @@ class WorkspaceStore:
         if runtime.intersection(row["metadata"]):
             raise StoreError("dedicated record carries native runtime routing identity")
 
-    def _owner_projection(self, workspace, metadata, rows):
+    def _owner_projection(self, workspace, metadata, rows, *, native_root_id=None):
         if (not isinstance(metadata, dict) or set(metadata) != OWNER_PROJECTION_KEYS
                 or any(not isinstance(v, str) for v in metadata.values())):
             raise StoreError("native owner projection requires the exact supported string metadata keys")
         native = workspace["native_provenance"]
         if not isinstance(native, dict) or type(native.get("schema_version")) is not int or native["schema_version"] != 2:
             raise StoreError("native owner projection requires explicit mode/placement provenance schema 2")
-        exact = {"gc.root_bead_id": workspace["workflow_root_id"], "gc.root_store_ref": self.store_ref,
+        exact = {"gc.root_bead_id": native_root_id or workspace["workflow_root_id"], "gc.root_store_ref": self.store_ref,
                  "gc.work_dir": workspace["work_dir"], "gc.work_branch": workspace["work_branch"] or "",
                  "gc.worktree_owner": workspace["workspace_owner_id"], "gc.worktree_generation": str(workspace["generation"])}
         for name in ("base_ref", "base_sha", "creator", "lifecycle", "mode", "placement"):
@@ -1069,17 +1386,17 @@ class WorkspaceStore:
         if not Path(workspace["work_dir"]).is_relative_to(metadata["gc.worktree_root"]):
             raise StoreError("native worktree path is outside its declared worktree root")
 
-    def _worktree_reference(self, workspace, projection, consumer):
+    def _worktree_reference(self, workspace, projection, consumer, *, native_root_id=None):
         reference = projection.reference
         expected = {"version": 1, "binding_step_id": projection.bead_id,
-                    "workflow_root_id": workspace["workflow_root_id"], "generation": workspace["generation"],
+                    "workflow_root_id": native_root_id or workspace["workflow_root_id"], "generation": workspace["generation"],
                     "workspace_owner_id": workspace["workspace_owner_id"], "workspace_bead_id": workspace["workspace_bead_id"],
                     "store_ref": self.store_ref, "native_attempt_id": workspace["native_attempt_id"]}
         if not isinstance(reference, dict) or canonical_bytes(reference) != canonical_bytes(expected) or workspace["native_provenance"] is None:
             raise StoreError("native worktree reference conflicts with its exact workspace/step/store/attempt binding")
         native = consumer["metadata"]
         root = next((native[k] for k in ("workflow_id", "molecule_id", "gc.root_bead_id") if native.get(k)), None)
-        if root != workspace["workflow_root_id"] or native.get("gc.root_store_ref") != self.store_ref:
+        if root != (native_root_id or workspace["workflow_root_id"]) or native.get("gc.root_store_ref") != self.store_ref:
             raise StoreError("native worktree consumer is outside the recorded workflow/store")
 
     @staticmethod
@@ -1093,8 +1410,8 @@ class WorkspaceStore:
             raise StoreError("unknown or conflicting write grant")
         Attempt(**grant["attempt"])
         occurrence = grant["writer_occurrence"]
-        if (not isinstance(occurrence, dict) or set(occurrence) != {"source_member_id", "expansion_root_id",
-                "formula_name", "formula_hash", "formula_source", "step_id", "step_ref"}
+        fields = {"source_member_id", "expansion_root_id", "formula_name", "formula_hash", "formula_source", "step_id", "step_ref"}
+        if (not isinstance(occurrence, dict) or set(occurrence) not in (fields, fields | {"continuation"})
                 or not _native_step_id(occurrence["step_id"]) or not isinstance(occurrence["step_ref"], str)
                 or not occurrence["step_ref"].strip()):
             raise StoreError("unknown retained physical writer occurrence")
@@ -1102,9 +1419,13 @@ class WorkspaceStore:
         _id(occurrence["expansion_root_id"], "retained expansion root")
         _formula_identity({"metadata": {"gc.formula_" + key: occurrence["formula_" + key]
                                        for key in ("name", "hash", "source")}})
+        if "continuation" in occurrence:
+            binding = NativeRunContinuation(canonical_bytes(occurrence["continuation"])).binding
+            require(binding["workflow_root_id"] == scope["workflow_root_id"] and binding["generation"] == scope["generation"]
+                    and binding["member_id"] == occurrence["source_member_id"], "retained grant continuation scope changed")
 
     @staticmethod
-    def _successor(grant, attempt, scope, relation, rows, declaration, map_sha256):
+    def _successor(grant, attempt, scope, relation, rows, declaration, map_sha256, continuation=None):
         old = Attempt(**grant["attempt"])
         if old.admission == attempt.admission:
             raise StoreError("replacement needs a proven new native incarnation or declared successor")
@@ -1115,11 +1436,14 @@ class WorkspaceStore:
         if rows[old.claimed_bead_id]["status"] != "closed":
             raise StoreError("different-step replacement requires a closed native predecessor")
         previous = grant["writer_occurrence"]
+        previous_binding = previous.get("continuation")
+        previous_root = previous_binding["child_root_id"] if previous_binding is not None else scope["workflow_root_id"]
         old_native = rows[old.claimed_bead_id]["metadata"]
-        old_member = old_native.get("gc.source_anchor_id", old_native.get("gc.drain_member_id", scope["workflow_root_id"]))
+        old_member = old_native.get("gc.source_anchor_id", old_native.get("gc.drain_member_id",
+            previous_binding["member_id"] if previous_binding is not None else scope["workflow_root_id"]))
         if (old_member != previous["source_member_id"] or old_native.get("gc.drain_member_id", old_member) != old_member
                 or old_native.get("gc.step_id") != previous["step_id"] or old_native.get("gc.step_ref") != previous["step_ref"]
-                or (old_native.get("gc.attach_root_id") or scope["workflow_root_id"]) != previous["expansion_root_id"]
+                or (old_native.get("gc.attach_root_id") or previous_root) != previous["expansion_root_id"]
                 or _formula_identity(rows[previous["expansion_root_id"]]) != tuple(previous["formula_" + key] for key in ("name", "hash", "source"))
                 or scope["record_kind"] not in _kinds(old_native, previous["step_ref"])):
             raise StoreError("predecessor differs from its retained native cooked writer occurrence")
@@ -1160,10 +1484,13 @@ class WorkspaceStore:
             raise StoreError("successor plan lacks its exact declared physical reference")
         def member(claimed_id):
             metadata = rows[claimed_id]["metadata"]
+            binding = previous_binding if claimed_id == old.claimed_bead_id else continuation.binding if continuation is not None else None
+            physical_root = binding["child_root_id"] if binding is not None else scope["workflow_root_id"]
             root = next((metadata[k] for k in ("workflow_id", "molecule_id", "gc.root_bead_id") if metadata.get(k)), None)
-            if root != scope["workflow_root_id"] or metadata.get("gc.root_store_ref") != rows[attempt.claimed_bead_id]["metadata"].get("gc.root_store_ref"):
+            if root != physical_root or metadata.get("gc.root_store_ref") != rows[attempt.claimed_bead_id]["metadata"].get("gc.root_store_ref"):
                 raise StoreError("successor claimed step is outside the recorded native workflow")
-            source = metadata.get("gc.source_anchor_id", metadata.get("gc.drain_member_id", scope["workflow_root_id"]))
+            source = metadata.get("gc.source_anchor_id", metadata.get("gc.drain_member_id",
+                binding["member_id"] if binding is not None else scope["workflow_root_id"]))
             if metadata.get("gc.source_anchor_id", source) != metadata.get("gc.drain_member_id", source):
                 raise StoreError("successor claimed step has conflicting source member bindings")
             return _id(source, "successor member")
@@ -1216,7 +1543,8 @@ class WorkspaceStore:
         except StoreError as exc:
             return {"outcome": "unknown", "request_sha256": prepared.sha256, "error": str(exc), "retry_allowed": False}
         def state(rows):
-            return {i: {k: r[k] for k in ("status", "assignee", "type", "labels", "metadata")} for i, r in rows.items()}
+            return {i: {**{k: r[k] for k in ("status", "assignee", "type", "labels", "metadata")},
+                        **{k: r.get(k, "") for k in ("close_reason", "closed_by_session")}} for i, r in rows.items()}
         if canonical_bytes(state(actual)) == canonical_bytes(state(after)):
             outcome = "replayed" if prepared.replay else "committed"
         elif canonical_bytes(actual) == canonical_bytes(before):

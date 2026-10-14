@@ -88,7 +88,8 @@ uses ordered members and `single_lane: true`.
 ```sh
 python3 "{{pack_root}}/assets/scripts/create_beads_from_tasks.py" "$TASKS_PATH" \
   --city "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --workflow-root "$ROOT_ID" \
-  --claimed-step "$CLAIMED_BEAD_ID" --worktree-lifecycle new --generation 1
+  --claimed-step "$CLAIMED_BEAD_ID" --worktree-lifecycle new --generation 1 \
+  --evidence-dir '<existing-evidence-directory-outside-worktrees>'
 ```
 
 The helper creates native members and their implementation convoy, then

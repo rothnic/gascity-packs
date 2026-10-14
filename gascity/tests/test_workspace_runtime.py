@@ -18,7 +18,9 @@ import workspace_runtime as runtime
 import workspace_outputs as outputs
 from workspace_records import RecordError, canonical_bytes, contracts, record_identity, record_sha256
 from workspace_run import capture_check_policy
-from workspace_store import Attempt, WorkspaceStore, TOPOLOGY
+from workspace_store import (Attempt, CONTINUATION_KEY, GRANT_KEY, InheritedRunReference,
+                             NativeOwnerProjection, NativeWorktreeReference, OWNER_PROJECTION_KEYS,
+                             RecordWrite, ReferenceWrite, SuccessorRelation, WorkspaceStore, TOPOLOGY)
 
 
 PORT = r'''#!/usr/bin/env python3
@@ -40,6 +42,7 @@ if 'guarded-metadata-batch' in args:
     store = option('store-ref')
     rows = data['stores'][store]
     if option('snapshot'):
+        if data.get('block_readback'): sys.exit('fixture readback unavailable')
         result = [rows[i] for i in option('snapshot').split(',')]
     else:
         request = json.loads(pathlib.Path(option('request')).read_text())
@@ -56,6 +59,10 @@ if 'guarded-metadata-batch' in args:
             for key in item.get('delete', []): row['metadata'].pop(key, None)
             if changed: row['revision'] = str(int(row['revision']) + 1)
             result.append(dict(id=item['id'], revision=row['revision'], changed=changed))
+        if data.get('lose_write_ack'):
+            data['block_readback'] = True
+            state_path.write_text(json.dumps(data))
+            sys.exit('fixture committed write but lost acknowledgement')
         state_path.write_text(json.dumps(data))
     emit(dict(schema_version='1', ok=True, store_ref=store, rows=result))
 if 'list' in args and 'bd' in args:
@@ -242,6 +249,240 @@ class NativeRuntimeTests(unittest.TestCase):
                           GC_INSTANCE_TOKEN=self.attempts[selected].instance_token)
         self.save()
 
+    def native_child(self, child="child", member="member", *, roles=None, expansion="expansion", published=True):
+        roles = roles or tuple(self.attempts)
+        control, unit = child + "-control", child + "-unit"
+        self.rows["root"]["metadata"]["gc.build.implementation_convoy_id"] = "convoy"
+        self.rows["convoy"]["metadata"]["gc.source_plan_sha256"] = record_sha256(self.plan)
+        self.rows[control] = self.row(control, {"gc.kind": "drain"})
+        self.rows[unit] = self.row(unit, {"gc.synthetic_kind": "drain-unit-convoy", "gc.parent_convoy_id": "convoy",
+            "gc.drain_control_id": control, "gc.drain_member_id": member})
+        self.rows[unit]["type"] = "convoy"
+        self.rows[child] = self.row(child, {"gc.kind": "workflow", "gc.root_bead_id": child,
+            "gc.input_convoy_id": unit, "gc.drain_control_id": control, "gc.drain_member_id": member})
+        self.rows[expansion]["metadata"]["gc.root_bead_id"] = child
+        for role in roles:
+            self.rows[role]["metadata"].update({"gc.root_bead_id": child,
+                "gc.source_anchor_id": member, "gc.drain_member_id": member})
+            raw = self.rows[role]["metadata"].get("gc.worktree_ref")
+            if raw:
+                ref = json.loads(raw)
+                ref["workflow_root_id"] = child
+                self.rows[role]["metadata"]["gc.worktree_ref"] = canonical_bytes(ref).decode()
+        self.save()
+        from workspace_entry import read_native_continuation
+        continuation, _ = read_native_continuation(self.store, claimed_step_id=roles[0], requested_root_id="root")
+        if published:
+            self.rows[child]["metadata"].update({
+                "gc.implementation_run_ref": self.ref("run", "run-record", self.run),
+                CONTINUATION_KEY: continuation.binding_bytes.decode()})
+        self.save()
+        return continuation
+
+    def publish_child_workspace(self):
+        continuation = self.native_child(published=False)
+        owner = copy.deepcopy(self.rows["workspace-record"]["metadata"])
+        owner.pop(contracts()["workspace"]["metadata_key"])
+        owner["gc.root_bead_id"] = continuation.binding["child_root_id"]
+        self.rows["workspace-record"] = self.row("workspace-record", status="closed", scoped=False)
+        self.rows["workspace-authority"] = self.row("workspace-authority", status="closed", scoped=False)
+        self.rows["member"]["metadata"].pop("gc.workspace_ref")
+        launch = json.loads(self.rows["producer"]["metadata"].pop("gc.worktree_ref"))
+        self.select_role("producer")
+        adapter = self.adapter("producer")
+        writer_map = adapter.writer_map
+        adapter._fence.snapshot(["workspace-record", "workspace-authority"])
+        scope = dict(workflow_root_id="root", generation=1, writer_scope_id="member", record_kind="workspace")
+        writes = [RecordWrite("workspace", "workspace-record", self.workspace)]
+        refs = [ReferenceWrite("member", "gc.workspace_ref", json.loads(self.ref("workspace", "workspace-record", self.workspace)))]
+        projections = [InheritedRunReference(continuation), NativeOwnerProjection("workspace-record", owner),
+                       NativeWorktreeReference("producer", "workspace-record", launch)]
+        prepared = self.store.install_grant(self.attempts["producer"], scope, "workspace-authority", writes,
+            references=refs, projections=projections, writer_map=writer_map,
+            expected_rows=adapter.guard_rows, guards=adapter.guards)
+        intended = json.loads(prepared.after_bytes)
+        self.assertIn(CONTINUATION_KEY, intended["child"]["metadata"])
+        self.assertEqual(intended["workspace-record"]["metadata"]["gc.root_bead_id"], "child")
+        for key in continuation.row_ids:
+            self.assertIn(key, {row["id"] for row in prepared.request["rows"]})
+        self.assertEqual(self.store.execute(prepared)["outcome"], "committed")
+        resolved = self.store.resolve(prepared)
+        adapter.advance_written_rows(resolved["rows"], prepared=prepared)
+        state = json.loads((self.root / "port.json").read_text())
+        self.rows, self.sessions = state["stores"]["rig:fixture"], state["stores"]["city:fixture"]
+        adapter.recheck_continuation()
+        return continuation
+
+    def test_native_child_entry_preserves_logical_run_and_actual_physical_occurrences(self):
+        continuation = self.native_child()
+        self.rows["workspace-record"]["metadata"]["gc.root_bead_id"] = "child"
+        self.save()
+        adapter = self.adapter()
+        self.assertEqual(adapter.continuation, continuation)
+        self.assertEqual(adapter.native_workflow_root_id, "child")
+        self.assertEqual(adapter.native_input_convoy_id, "child-unit")
+        self.assertEqual(adapter.run["workflow_root_id"], "root")
+        self.assertEqual(adapter.plan["workflow_root_id"], "root")
+        self.assertEqual(adapter.writer_map.continuation, continuation)
+        self.assertEqual(adapter.retained_workspace_continuation(self.workspace), continuation)
+        self.assertEqual(adapter._fence.read_record("workspace", "workspace-record"), self.workspace)
+        self.assertEqual(adapter.guard_rows["producer"]["metadata"]["gc.root_bead_id"], "child")
+        adapter.recheck_continuation()
+
+    def test_native_child_initial_workspace_and_real_acceptance_pipeline(self):
+        self.publish_child_workspace()
+        result = self.run_acceptance_pipeline()
+        from workspace_flow import WorkspaceFlow
+        flow = WorkspaceFlow(self.adapter())
+        replay = flow.record_result("member", "member", self.oid, result["acceptance"]["project_checks"],
+            result["acceptance"]["independent_review"], result["acceptance"]["artifacts"])
+        self.assertEqual(replay["result"], result)
+        self.assertEqual(replay["checkpoint"]["outcome"], "replayed")
+        self.assertEqual(flow.runtime.writer_map.continuation.binding["child_root_id"], "child")
+
+    def next_child_workspace(self, result):
+        """Advance the actual writer grant and native owner through declared adjacency."""
+        self.rows["member-next"] = self.row("member-next", {"gc.source_root_id": "root", "gc.source_generation": "1"})
+        self.rows["next-expansion"] = copy.deepcopy(self.rows["expansion"])
+        self.rows["next-expansion"]["id"] = "next-expansion"
+        for role in ("producer", "reviewer", "recorder"):
+            key = "next-" + role
+            attempt = Attempt(key + "-session", key + "-private-instance", key)
+            self.attempts[key] = attempt
+            row = copy.deepcopy(self.rows[role])
+            row["id"] = key
+            row["metadata"].update({"gc.attach_root_id": "next-expansion", "gc.session_id": attempt.session_id,
+                                     "gc.session_name": key + "-runtime"})
+            row["metadata"].pop("gc.worktree_ref", None)
+            self.rows[key] = row
+            session = copy.deepcopy(self.sessions[role + "-session"])
+            session["id"] = attempt.session_id
+            session["metadata"].update(instance_token=attempt.instance_token, session_name=key + "-runtime")
+            self.sessions[session["id"]] = session
+        self.native_child("next-child", "member-next", roles=("next-producer", "next-reviewer", "next-recorder"),
+                          expansion="next-expansion", published=False)
+        self.select_role("next-producer")
+        adapter = self.adapter("next-producer")
+        adapter.qualify_native(result)
+        old_context = adapter.retained_workspace_continuation(self.workspace)
+        self.assertEqual(old_context.binding["child_root_id"], "child")
+        adapter._fence.read_record("workspace", "workspace-record", continuation=old_context)
+        with self.assertRaises(RecordError):
+            self.store.read_record("workspace", "workspace-record", continuation=adapter.continuation)
+        writer_map = adapter.writer_map
+        adapter._fence.snapshot(["workspace-authority"])
+        scope = dict(workflow_root_id="root", generation=1, writer_scope_id="member", record_kind="workspace")
+        owner = {key: self.rows["workspace-record"]["metadata"][key] for key in OWNER_PROJECTION_KEYS}
+        owner["gc.root_bead_id"] = "next-child"
+        workspace = dict(self.workspace, phase="entry", input_oid=self.oid, current_oid=self.oid, output_oid=None,
+            active_member_id="member-next", next_member_position=1,
+            writer_step_id="next-producer", writer_attempt_id=self.attempts["next-producer"].writer_attempt_id)
+        workspace["claim_binding"] = {key: workspace[key] for key in
+            ("workflow_root_id", "generation", "workspace_owner_id", "writer_step_id", "writer_attempt_id")}
+        launch = dict(version=1, binding_step_id="next-producer", workflow_root_id="next-child", generation=1,
+            workspace_owner_id="member", workspace_bead_id="workspace-record", store_ref="rig:fixture",
+            native_attempt_id=workspace["native_attempt_id"])
+        prepared = self.store.accept_replacement(self.attempts["next-producer"], scope, "workspace-authority",
+            [RecordWrite("workspace", "workspace-record", workspace)],
+            expected_grant=json.loads(self.rows["workspace-authority"]["metadata"][GRANT_KEY]),
+            successor_relation=SuccessorRelation("plan-record", "plan-owner"), writer_map=writer_map,
+            expected_rows=adapter.guard_rows, guards=adapter.guards,
+            projections=[InheritedRunReference(adapter.continuation), NativeOwnerProjection("workspace-record", owner),
+                         NativeWorktreeReference("next-producer", "workspace-record", launch)])
+
+        def commit(prepared, expected):
+            self.assertEqual(self.store.execute(prepared)["outcome"], "committed")
+            resolved = self.store.resolve(prepared)
+            adapter.advance_written_rows(resolved["rows"], prepared=prepared)
+            state = json.loads((self.root / "port.json").read_text())
+            self.rows, self.sessions = state["stores"]["rig:fixture"], state["stores"]["city:fixture"]
+            self.workspace = copy.deepcopy(expected)
+            adapter.recheck_continuation()
+
+        commit(prepared, workspace)
+        workspace = dict(self.workspace, phase="active")
+        prepared = self.store.write_records(self.attempts["next-producer"], scope, "workspace-authority",
+            [RecordWrite("workspace", "workspace-record", workspace)], writer_map=writer_map,
+            expected_rows=adapter.guard_rows, guards=adapter.guards)
+        commit(prepared, workspace)
+        (self.work / "next.py").write_text("NEXT = 1\n")
+        self.git(self.work, "add", "next.py")
+        self.git(self.work, "commit", "-qm", "next shared member")
+        head = self.git(self.work, "rev-parse", "HEAD")
+        adapter._checkout(self.workspace, head, advancing=True)
+        workspace = dict(self.workspace, phase="result", current_oid=head, output_oid=head)
+        prepared = self.store.write_records(self.attempts["next-producer"], scope, "workspace-authority",
+            [RecordWrite("workspace", "workspace-record", workspace)], writer_map=writer_map,
+            expected_rows=adapter.guard_rows, guards=adapter.guards)
+        commit(prepared, workspace)
+        return adapter, head
+
+    def test_native_child_historical_consumer_uses_retained_result_child_after_owner_handoff(self):
+        self.plan["nodes"][0].update(strategy="shared-chain", member_ids=["member", "member-next"], single_lane=True)
+        self.rows["plan-record"]["metadata"][contracts()["source-plan"]["metadata_key"]] = canonical_bytes(self.plan).decode()
+        self.rows["plan-owner"]["metadata"]["gc.source_plan_ref"] = self.ref("source-plan", "plan-record", self.plan)
+        self.rows["member-next"] = self.row("member-next", {"gc.source_root_id": "root", "gc.source_generation": "1"})
+        self.policy_binding["source_plan_sha256"] = record_sha256(self.plan)
+        self.workspace["strategy"] = "shared-chain"
+        self.publish_child_workspace()
+        result = self.run_acceptance_pipeline()
+        adapter, head = self.next_child_workspace(result)
+        self.rows["child"].update(status="closed", assignee="")
+        self.rows["child"]["metadata"]["gc.outcome"] = "pass"
+        self.save()
+        adapter = self.adapter("next-producer")
+        native = adapter.qualify_native(result)
+        self.assertTrue(native["historical_checkpoint"])
+        self.assertEqual(native["head_oid"], self.oid)
+        self.assertEqual(native["current_head_oid"], head)
+        self.assertEqual(adapter.native_workflow_root_id, "next-child")
+        self.assertEqual(native["producer_step_id"], "producer")
+        self.assertEqual(native["reviewer_step_id"], "reviewer")
+        self.assertEqual(native["guard_rows"]["workspace-record"]["metadata"]["gc.root_bead_id"], "next-child")
+        self.assertEqual(native["guard_rows"]["producer"]["metadata"]["gc.root_bead_id"], "child")
+        rows, sessions = copy.deepcopy(self.rows), copy.deepcopy(self.sessions)
+        for fault in ("chain", "store", "root", "attempt", "generation", "owner"):
+            with self.subTest(fault=fault):
+                self.rows, self.sessions = copy.deepcopy(rows), copy.deepcopy(sessions)
+                if fault == "chain":
+                    changed = dict(self.workspace, input_oid=self.base)
+                    self.rows["workspace-record"]["metadata"][contracts()["workspace"]["metadata_key"]] = canonical_bytes(changed).decode()
+                elif fault == "store": self.rows["child-control"]["metadata"]["gc.root_store_ref"] = "rig:foreign"
+                elif fault == "root": self.rows["producer"]["metadata"]["gc.root_bead_id"] = "next-child"
+                elif fault == "attempt": self.rows["producer"]["metadata"]["gc.session_attempt_id"] = "writer-" + "0" * 64
+                elif fault == "generation": self.rows["member"]["metadata"]["gc.source_generation"] = "2"
+                else: self.rows["workspace-record"]["metadata"]["gc.root_bead_id"] = "child"
+                self.save()
+                with self.assertRaises(RecordError): self.adapter("next-producer").qualify_native(result)
+
+    def test_native_child_chain_store_root_attempt_and_generation_changes_refuse(self):
+        self.native_child()
+        original_rows, original_sessions = copy.deepcopy(self.rows), copy.deepcopy(self.sessions)
+        cases = [("child", "gc.drain_control_id", "absent-control"),
+                 ("child-unit", "gc.parent_convoy_id", "absent-convoy"),
+                 ("child-control", "gc.root_store_ref", "rig:foreign"),
+                 ("producer", "gc.root_bead_id", "root"),
+                 ("member", "gc.source_generation", "2"),
+                 ("child", "status", "closed"),
+                 ("recorder", "gc.session_attempt_id", "writer-" + "0" * 64)]
+        for key, name, value in cases:
+            with self.subTest(key=key, name=name):
+                self.rows, self.sessions = copy.deepcopy(original_rows), copy.deepcopy(original_sessions)
+                if name == "status": self.rows[key][name] = value
+                else: self.rows[key]["metadata"][name] = value
+                self.save()
+                with self.assertRaises(RecordError):
+                    adapter = self.adapter()
+                    adapter.role_identities("recorder")
+        self.rows, self.sessions = original_rows, original_sessions
+        self.save()
+        adapter = self.adapter()
+        adapter.writer_map
+        self.rows["child-unit"]["revision"] = "2"
+        self.save()
+        with self.assertRaisesRegex(RecordError, "native row changed"):
+            adapter.recheck_continuation()
+
     def test_native_rows_and_real_git_qualify_with_opaque_attempts(self):
         adapter = self.adapter()
         native = adapter.qualify_native(self.result)
@@ -378,6 +619,9 @@ class NativeRuntimeTests(unittest.TestCase):
         with self.assertRaises(RecordError): adapter.qualify_native(bad)
 
     def test_native_producer_review_recorder_pipeline_and_proven_row_advancement(self):
+        self.run_acceptance_pipeline()
+
+    def run_acceptance_pipeline(self):
         self.select_role("producer")
         producer = self.adapter("producer")
         checks = producer.execute_checks("member", "member", self.oid)
@@ -399,10 +643,13 @@ class NativeRuntimeTests(unittest.TestCase):
         resolved = self.store.resolve(prepared)
         acknowledgement = recorder.advance_written_rows(resolved["rows"], prepared=prepared)
         self.assertEqual(acknowledgement["request_sha256"], prepared.sha256)
+        state = json.loads((self.root / "port.json").read_text())
+        self.rows, self.sessions = state["stores"]["rig:fixture"], state["stores"]["city:fixture"]
         recorder.recheck_continuation()
         self.assertTrue(recorder.qualify_native(result)["verified"])
         self.assertIn("gc.workspace_result_ref", recorder.guard_rows["member"]["metadata"])
         with self.assertRaises(RecordError): recorder.advance_written_rows({}, prepared=prepared)
+        return result
 
     def test_continuation_admits_actual_current_and_historical_instances_then_rechecks(self):
         adapter = self.adapter()
@@ -599,6 +846,61 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertTrue(public["verified"])
         self.assertIn("guard_revisions", public)
         self.assertNotIn("private-instance", run.stdout)
+
+    def test_cli_retains_unknown_result_and_resolves_without_resubmission(self):
+        from workspace_requests import journal_directory
+        self.rows["result-record"] = self.row("result-record", status="closed", scoped=False)
+        self.rows["authority"] = self.row("authority", status="closed", scoped=False)
+        self.save()
+        state_path = self.root / "port.json"
+        state = json.loads(state_path.read_text())
+        state["lose_write_ack"] = True
+        state_path.write_text(json.dumps(state))
+        result_path = self.artifacts / "result.json"
+        result_path.write_bytes(canonical_bytes(self.result))
+        command = [sys.executable, "-B", str(SCRIPTS / "workspace_runtime.py"), "record-result",
+            "--gc", str(self.port), "--city-root", str(self.city), "--store-ref", "rig:fixture",
+            "--rig-name", "fixture", "--workflow-root-id", "root", "--claimed-step-id", "recorder",
+            "--artifact-root", str(self.artifacts), "--evidence-dir", str(self.diagnostics),
+            "--generation", "1", "--result", str(result_path), "--record-id", "result-record",
+            "--authority-id", "authority", "--initial-write"]
+        failed = subprocess.run(command, text=True, capture_output=True, timeout=60)
+        self.assertNotEqual(failed.returncode, 0)
+        pending = list(journal_directory(self.store).glob("*.pending"))
+        self.assertEqual(len(pending), 1, failed.stderr)
+        request_path = Path(pending[0].read_text())
+        retained = request_path.read_bytes()
+        self.assertIn(str(request_path), failed.stderr)
+        self.assertNotIn("private-instance", failed.stdout + failed.stderr)
+        state = json.loads(state_path.read_text())
+        self.assertIn("gc.workspace_result_ref", state["stores"]["rig:fixture"]["member"]["metadata"])
+        state.pop("block_readback")
+        state.pop("lose_write_ack")
+        state_path.write_text(json.dumps(state))
+        other_diagnostics = self.root / "other-diagnostics"
+        other_diagnostics.mkdir()
+        command[command.index("--evidence-dir") + 1] = str(other_diagnostics)
+        refused = subprocess.run(command, text=True, capture_output=True, timeout=60)
+        self.assertNotEqual(refused.returncode, 0)
+        self.assertIn(str(request_path), refused.stderr)
+        resolver = """import json,sys
+from workspace_store import WorkspaceStore
+from workspace_requests import resolve_request
+store=WorkspaceStore('rig:fixture',gc=sys.argv[1],cwd=sys.argv[2],common_git_dir=sys.argv[3])
+print(json.dumps(resolve_request(store,sys.argv[4])))
+"""
+        resolved = subprocess.run([sys.executable, "-B", "-c", resolver, str(self.port), str(self.city),
+            str(self.repo / ".git"), str(request_path)], text=True, capture_output=True, timeout=30)
+        self.assertEqual(resolved.returncode, 0, resolved.stderr)
+        receipt = json.loads(resolved.stdout)
+        self.assertEqual(receipt["outcome"], "committed")
+        self.assertNotIn("rows", receipt)
+        self.assertEqual(request_path.read_bytes(), retained)
+        self.assertFalse(pending[0].exists())
+        commands = [json.loads(line) for line in state_path.with_suffix(".commands").read_text().splitlines()]
+        writes = [args for args in commands if "guarded-metadata-batch" in args
+                  and any(arg == "--request" or arg.startswith("--request=") for arg in args)]
+        self.assertEqual(len(writes), 1)
 
 
 class PolicyTests(unittest.TestCase):

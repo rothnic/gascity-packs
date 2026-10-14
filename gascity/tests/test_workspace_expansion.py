@@ -64,7 +64,10 @@ class ExpansionCompositionTests(unittest.TestCase):
         self.attempt = Attempt("session-1", "incarnation-1", "decompose-1")
         self.state = {"run": self.record, "run_reference": self.run_ref, "workflow_root_id": "root-1",
                       "generation": 1, "rig_name": "example", "store_ref": "rig:example"}
-        self.workspace = {"store": self.store, "state": self.state, "attempt": self.attempt}
+        evidence = self.city / "evidence"
+        evidence.mkdir(mode=0o700)
+        self.workspace = {"store": self.store, "state": self.state, "attempt": self.attempt,
+                          "evidence_dir": evidence}
         self.path = self.city / "tasks.md"
         self.path.write_text("---\nstatus: approved\n---\n# Task plan\n\n## Bead Creation Payload\n\n```yaml\n"
             + tasks.yaml.safe_dump(source_payload(), sort_keys=False) + "```\n")

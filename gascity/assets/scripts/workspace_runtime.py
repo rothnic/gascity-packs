@@ -14,8 +14,9 @@ from workspace_records import (RecordError, canonical_bytes, contracts, parse_re
                                record_sha256, validate_record, verify_replay)
 from workspace_run import (CHECKS_CONFIG_KEY, CHECKS_POLICY_KEY, capture_check_policy,
                            native_json, read_check_policy)
-from workspace_store import Attempt, GuardRead, PreparedWrite, WorkspaceStore
-from workspace_entry import healthy, native_root, read_entry, reference
+from workspace_store import (Attempt, CONTINUATION_KEY, ROOT_KEYS, GuardRead, NativeRunContinuation,
+                             PreparedWrite, WorkspaceStore, validate_native_continuation)
+from workspace_entry import healthy, native_root, read_entry, read_native_continuation, reference
 from workspace_cooked import read_cooked_writer_map
 from workspace_checkout import WorkspaceCheckout, load_workspace_context
 import workspace_outputs as outputs
@@ -58,8 +59,26 @@ class _ReadFence:
         require(set(rows) == set(ids), "native snapshot did not return the exact requested rows")
         return self.retain(rows)
 
-    def read_record(self, kind, bead_id, identity=None):
-        payload = self.store.read_record(kind, bead_id, identity)
+    def read_record(self, kind, bead_id, identity=None, *, continuation=None):
+        if kind == "workspace" and continuation is None:
+            row = self.snapshot([bead_id])[bead_id]
+            raw = row["metadata"].get(contracts()[kind]["metadata_key"])
+            if raw is not None:
+                workspace = validate_record(kind, parse_record(raw))
+                writer = self.snapshot([workspace["writer_step_id"]])[workspace["writer_step_id"]]
+                if native_root(writer) != workspace["workflow_root_id"]:
+                    continuation, rows = read_native_continuation(self, claimed_step_id=writer["id"],
+                        requested_root_id=workspace["workflow_root_id"])
+                    self.retain(rows)
+        if continuation is not None:
+            require(isinstance(continuation, NativeRunContinuation), "record read requires typed native inheritance")
+            self.snapshot(list(dict.fromkeys([bead_id, *continuation.row_ids])))
+            validate_native_continuation(continuation, self.rows, store_ref=self.store_ref,
+                workflow_root_id=continuation.binding["workflow_root_id"], require_reference=True)
+            payload = self.store.read_record(kind, bead_id, identity, continuation=continuation)
+            self.snapshot(list(dict.fromkeys([bead_id, *continuation.row_ids])))
+        else:
+            payload = self.store.read_record(kind, bead_id, identity)
         row = self.snapshot([bead_id])[bead_id]
         raw = row["metadata"].get(contracts()[kind]["metadata_key"])
         require((raw is None) == (payload is None), "record changed during native readback")
@@ -92,6 +111,9 @@ class NativeSourceRuntime:
         self._fence, self._sessions, self._qualified = _ReadFence(store), {}, {}
         self._written_requests = {}
         self._formula_sources = {}
+        self._continuations = {}
+        self.continuation = None
+        self._entry_initialized = False
         if native_rows is not None:
             self._fence.retain(native_rows)
         self._bound_workspace = None
@@ -114,12 +136,17 @@ class NativeSourceRuntime:
 
     @property
     def writer_map(self):
+        return self._writer_map(self.claimed_step_id, read_only=True, require_reference=False)[0]
+
+    def _writer_map(self, claimed_step_id, *, read_only=False, require_reference=True):
+        continuation = self._occurrence_continuation(claimed_step_id, require_reference=require_reference)
         writer_map, rows = read_cooked_writer_map(self._fence, workflow_root_id=self.run["workflow_root_id"],
-                                                 claimed_step_id=self.claimed_step_id, read_only=True)
+            claimed_step_id=claimed_step_id, read_only=read_only, continuation=continuation,
+            continuation_rows=self.guard_rows if continuation is not None else None)
         self._fence.retain(rows)
         declaration = writer_map.declaration
         self._formula_sources[declaration["formula_source"]] = declaration["formula_hash"]
-        return writer_map
+        return writer_map, rows
 
     @property
     def guards(self):
@@ -146,6 +173,21 @@ class NativeSourceRuntime:
             expected_run_sha256=record_sha256(self.run), expected_plan_sha256=record_sha256(self.plan))
         verify_replay("run", self.run, entry["run"])
         verify_replay("source-plan", self.plan, entry["source_plan"])
+        self._fence.retain(entry.get("_native_rows", {}))
+        context = entry.get("native_continuation")
+        continuation = NativeRunContinuation(canonical_bytes(context)) if context is not None else None
+        require(not self._entry_initialized or self.continuation == continuation,
+                "invoking native continuation changed after entry")
+        if continuation is not None:
+            validate_native_continuation(continuation, self._fence.rows, store_ref=self.store.store_ref,
+                workflow_root_id=self.run["workflow_root_id"], claimed_step_id=self.claimed_step_id)
+            self._continuations[continuation.sha256] = continuation
+        self.continuation = continuation
+        self.native_workflow_root_id = entry.get("native_workflow_root_id", self.run["workflow_root_id"])
+        self.native_input_convoy_id = entry.get("native_input_convoy_id", entry["input_convoy_id"])
+        require(self._fence.rows[self.native_workflow_root_id]["status"] != "closed",
+                "invoking native workflow root is no longer active")
+        self._entry_initialized = True
         require(str(self.store.common_git_dir) == self.run["common_git_dir"], "store lock repository changed")
         if self.plan["generation"] == 1:
             require(self.plan["base_oid"] == self.run["base_oid"], "source plan changed the initial run base")
@@ -161,6 +203,41 @@ class NativeSourceRuntime:
                                              root["metadata"].get(CHECKS_CONFIG_KEY))
         require(entry.get("check_policy") == self._policy, "entry and frozen policy readback differ")
         return entry
+
+    def _occurrence_continuation(self, claimed_step_id, *, require_reference=True):
+        step = self._fence.snapshot([claimed_step_id])[claimed_step_id]
+        require(step["metadata"].get("gc.root_store_ref") == self.store.store_ref
+                and all(step["metadata"][key] == native_root(step) for key in ROOT_KEYS if key in step["metadata"]),
+                "retained native occurrence has conflicting root/store authority")
+        if native_root(step) == self.run["workflow_root_id"]:
+            return None
+        continuation, rows = read_native_continuation(self._fence, claimed_step_id=claimed_step_id,
+            requested_root_id=self.run["workflow_root_id"])
+        self._fence.retain(rows)
+        binding = validate_native_continuation(continuation, self._fence.rows, store_ref=self.store.store_ref,
+            workflow_root_id=self.run["workflow_root_id"], claimed_step_id=claimed_step_id,
+            require_reference=require_reference)
+        require(binding["generation"] == self.plan["generation"]
+                and binding["run_sha256"] == record_sha256(self.run)
+                and binding["source_plan_sha256"] == record_sha256(self.plan)
+                and binding["run_ref"]["bead_id"] == self.run_record_id
+                and binding["source_plan_ref"]["bead_id"] == self.plan_record_id
+                and binding["check_policy_sha256"] == hashlib.sha256(canonical_bytes(self._policy)).hexdigest(),
+                "retained native occurrence differs from the original run/plan/policy")
+        self._continuations[continuation.sha256] = continuation
+        return continuation
+
+    def retained_workspace_continuation(self, workspace):
+        """Resolve the workspace writer's child, independently of the current caller."""
+        validate_record("workspace", workspace)
+        require(all(workspace[key] == self.plan[key] for key in
+                    ("workflow_root_id", "generation", "source_plan_owner_id")),
+                "retained workspace belongs to another selected generation")
+        continuation = self._occurrence_continuation(workspace["writer_step_id"])
+        if continuation is not None:
+            require(continuation.binding["member_id"] == workspace["active_member_id"],
+                    "workspace retained child belongs to another active member")
+        return continuation
 
     def _session(self, step, *, live=False):
         metadata = step["metadata"]
@@ -207,7 +284,8 @@ class NativeSourceRuntime:
 
     def _admitted(self):
         step = self._fence.snapshot([self.claimed_step_id])[self.claimed_step_id]
-        require(native_root(step) == self.run["workflow_root_id"]
+        require(native_root(step) == self.native_workflow_root_id
+                and all(step["metadata"][key] == self.native_workflow_root_id for key in ROOT_KEYS if key in step["metadata"])
                 and step["metadata"].get("gc.root_store_ref") == self.store.store_ref,
                 "invoking step belongs to another root/store")
         identity, attempt = self._session(step, live=True)
@@ -215,9 +293,7 @@ class NativeSourceRuntime:
         return identity, attempt
 
     def _roles(self, recorder_step_id=None):
-        writer_map, rows = read_cooked_writer_map(self._fence, workflow_root_id=self.run["workflow_root_id"],
-                                                 claimed_step_id=recorder_step_id or self.claimed_step_id)
-        self._fence.retain(rows)
+        writer_map, rows = self._writer_map(recorder_step_id or self.claimed_step_id)
         declaration = writer_map.declaration
         self._formula_sources[declaration["formula_source"]] = declaration["formula_hash"]
         entries = declaration["steps"]
@@ -259,11 +335,18 @@ class NativeSourceRuntime:
     def _workspace(self, owner_id):
         owner = self._fence.snapshot([owner_id])[owner_id]
         ref = reference(owner["metadata"].get("gc.workspace_ref"), "workspace")
+        row = self._fence.snapshot([ref["bead_id"]])[ref["bead_id"]]
+        raw = row["metadata"].get(contracts()["workspace"]["metadata_key"])
+        require(isinstance(raw, str), "workspace reference points to an empty native record")
+        retained = parse_record(raw)
+        continuation = self.retained_workspace_continuation(retained)
+        observed = self._fence.read_record("workspace", ref["bead_id"], ref["identity"], continuation=continuation)
+        verify_replay("workspace", retained, observed)
         run, plan, workspace, rows = load_workspace_context(self._fence, gc=self.gc, city_root=self.city_root,
             rig_name=self.rig_name, workflow_root_id=self.run["workflow_root_id"],
             input_convoy_id=self.input_convoy_id, run_record_id=self.run_record_id,
             plan_record_id=self.plan_record_id, workspace_record_id=ref["bead_id"],
-            claimed_step_id=self.claimed_step_id, record_kind=None)
+            claimed_step_id=self.claimed_step_id, record_kind=None, source_rows=self.guard_rows)
         verify_replay("run", run, self.run)
         verify_replay("source-plan", plan, self.plan)
         self._fence.retain(rows)
@@ -297,13 +380,15 @@ class NativeSourceRuntime:
                 require(all(output[key] == self.plan[key] for key in ("workflow_root_id", "generation", "source_plan_owner_id")),
                         "shared checkpoint initial source belongs to another generation")
                 input_oid = output["output_oid"]
-            for member_id in node["member_ids"][:position + 1]:
+            for member_id in node["member_ids"][:workspace["next_member_position"]]:
                 checkpoint = self._record("member-result", member_id)
                 require(all(checkpoint[key] == result[key] for key in ("workflow_root_id", "generation", "source_plan_owner_id", "workspace_owner_id"))
                         and checkpoint["member_id"] == member_id and checkpoint["input_oid"] == input_oid
                         and checkpoint["acceptance"]["status"] == "accepted", "retained shared checkpoint chain changed")
                 input_oid = checkpoint["output_oid"]
-            verify_replay("member-result", checkpoint, result)
+                if member_id == result["member_id"]:
+                    verify_replay("member-result", checkpoint, result)
+            require(workspace["input_oid"] == input_oid, "current shared input differs from its retained accepted chain")
             head = outputs.git_value(workspace["work_dir"], "rev-parse", "--verify", "HEAD^{commit}")
             require(head == workspace["current_oid"], "current shared workspace HEAD differs from its native record")
             self._checkout(workspace, head)
@@ -329,9 +414,11 @@ class NativeSourceRuntime:
         # No record is changed while an implementation/integration awaits publication.
         expected = copy.deepcopy(workspace)
         expected.update(phase="active", current_oid=output_oid)
+        continuation = self.retained_workspace_continuation(workspace)
+        inherited = {"continuation": continuation, "native_rows": self.guard_rows} if continuation is not None else {}
         checkout = WorkspaceCheckout(self.run, expected, store_ref=self.store.store_ref,
             evidence_dir=self.evidence_dir, gc=self.gc, city_root=self.city_root,
-            parent=str(Path(workspace["work_dir"]).parent), allow_external_parent=True)
+            parent=str(Path(workspace["work_dir"]).parent), allow_external_parent=True, **inherited)
         observed = checkout.verify()
         row = self._fence.snapshot([workspace["workspace_bead_id"]])[workspace["workspace_bead_id"]]
         require(all(row["metadata"].get(key) == value for key, value in observed["owner_metadata"].items()),
@@ -351,6 +438,9 @@ class NativeSourceRuntime:
         self._fence.snapshot(list(self._fence.rows))
         self._entry()
         self._admitted()
+        for continuation in self._continuations.values():
+            validate_native_continuation(continuation, self._fence.rows, store_ref=self.store.store_ref,
+                workflow_root_id=self.run["workflow_root_id"])
         if self._sessions:
             rows = self._session_store.snapshot(list(self._sessions))
             for key, row in rows.items():
@@ -377,7 +467,7 @@ class NativeSourceRuntime:
                 "native producer occurrence belongs to another source member")
         raw = producer["metadata"].get("gc.worktree_ref")
         expected_ref = {"version": 1, "binding_step_id": producer["id"],
-            "workflow_root_id": result["workflow_root_id"], "generation": result["generation"],
+            "workflow_root_id": native_root(producer), "generation": result["generation"],
             "workspace_owner_id": result["workspace_owner_id"], "workspace_bead_id": binding["workspace_bead_id"],
             "store_ref": self.store.store_ref, "native_attempt_id": binding["native_attempt_id"]}
         require(isinstance(raw, str) and parse_record(raw) == expected_ref,
@@ -396,6 +486,9 @@ class NativeSourceRuntime:
             "work_dir": binding["work_dir"], "common_git_dir": binding["common_git_dir"],
             "native_attempt_id": binding["native_attempt_id"], "result_binding": binding,
             "historical_checkpoint": historical, "current_head_oid": current_head,
+            "native_workflow_root_id": self.native_workflow_root_id,
+            "native_input_convoy_id": self.native_input_convoy_id,
+            "producer_native_workflow_root_id": native_root(producer),
             "policy_binding": self.policy_binding, "session_atomicity": "separate_native_readback"}
         for role, identity in identities.items():
             native.update({role + "_" + key: value for key, value in identity.items()})
@@ -433,7 +526,8 @@ class NativeSourceRuntime:
                 "row advancement lacks exact native request/row readback")
         before = parse_record(prepared.before_bytes.decode())
         after = parse_record(prepared.after_bytes.decode())
-        require(all(key not in self._fence.rows or self._fence.rows[key] == row for key, row in before.items()),
+        require(set(self._fence.rows).issubset(before)
+                and all(before[key] == row for key, row in self._fence.rows.items()),
                 "write did not guard the originally qualified rows")
         protected = {self.run_record_id: (contracts()["run"]["metadata_key"], CHECKS_POLICY_KEY),
                      self.plan_record_id: (contracts()["source-plan"]["metadata_key"],),
@@ -442,6 +536,19 @@ class NativeSourceRuntime:
             if key in before:
                 require(all(before[key]["metadata"].get(name) == after[key]["metadata"].get(name) for name in names),
                         "acknowledged write changed immutable source/policy authority")
+        relationship_keys = ("workflow_id", "molecule_id", "gc.root_bead_id", "gc.root_store_ref",
+            "gc.kind", "gc.input_convoy_id", "gc.build.implementation_convoy_id", "gc.parent_convoy_id",
+            "gc.drain_control_id", "gc.drain_member_id", "gc.source_root_id", "gc.source_generation",
+            "gc.source_plan_owner_id", "gc.source_plan_sha256")
+        for continuation in self._continuations.values():
+            for key in continuation.row_ids:
+                require(all(before[key]["metadata"].get(name) == after[key]["metadata"].get(name)
+                            for name in relationship_keys), "acknowledged write changed native inheritance authority")
+            child = continuation.binding["child_root_id"]
+            expected = {"gc.implementation_run_ref": canonical_bytes(continuation.binding["run_ref"]).decode(),
+                        CONTINUATION_KEY: continuation.binding_bytes.decode()}
+            require(all(after[child]["metadata"].get(name) == value for name, value in expected.items()),
+                    "acknowledged write lost its exact inherited run reference")
         self._written_requests[prepared.sha256] = prepared
         self._fence.rows.update(copy.deepcopy(resolved_rows))
         self._qualified.clear()
@@ -572,7 +679,7 @@ class NativeSourceRuntime:
         _, attempt = self._admitted()
         roles, writer_map = self._roles(result["writer_step_id"])
         require(roles["recorder"]["bead_id"] == self.claimed_step_id, "result publication requires its actual cooked recorder")
-        return outputs.prepare_member_result(self.store, attempt, result, run_owner_id=self.run["workflow_root_id"],
+        return outputs.prepare_member_result(self._fence, attempt, result, run_owner_id=self.run["workflow_root_id"],
             plan_owner_id=self.plan["source_plan_owner_id"], workspace_owner_id=result["workspace_owner_id"],
             record_id=record_id, authority_id=authority_id, required_checks=self.required_checks,
             artifact_root=self.artifact_root, qualify_native=self.qualify_native, writer_map=writer_map,
@@ -626,13 +733,27 @@ def main(argv=None):
             result["guard_revisions"] = {key: row["revision"] for key, row in rows.items()}
         else:
             require(args.record_id and args.authority_id, "publication requires exact allocated record and authority IDs")
-            prepared = runtime.prepare_member_result(read(args.result), record_id=args.record_id,
+            from workspace_requests import require_resolved_scope, retain_request, resolve_request
+            from workspace_store import SCOPE_OWNER
+            member_result = read(args.result)
+            validate_record("member-result", member_result)
+            require_resolved_scope(store, {
+                "workflow_root_id": member_result["workflow_root_id"], "generation": member_result["generation"],
+                "writer_scope_id": member_result[SCOPE_OWNER["member-result"]], "record_kind": "member-result",
+            })
+            prepared = runtime.prepare_member_result(member_result, record_id=args.record_id,
                 authority_id=args.authority_id, initial_write=args.initial_write, operation_nonce=args.operation_nonce)
             runtime._fresh()
-            store.execute(prepared)
-            resolved = store.resolve(prepared)
-            result = {key: value for key, value in resolved.items() if key != "rows"}
-            require(result.get("outcome") in ("committed", "replayed"), "result publication outcome unknown; retain the original request")
+            request_path, _ = retain_request(store, prepared)
+            recovery = "resolve the original retained request: " + str(request_path)
+            try:
+                store.execute(prepared)
+                result = resolve_request(store, request_path)
+            except (RecordError, OSError) as exc:
+                raise RecordError(str(exc) + "; " + recovery) from exc
+            require(result.get("outcome") in ("committed", "replayed"),
+                    "result publication outcome unknown; " + recovery)
+            result["request_path"] = str(request_path)
         print(json.dumps(result, sort_keys=True))
         return 0
     except (RecordError, OSError, UnicodeError, KeyError, TypeError, ValueError) as exc:

@@ -57,7 +57,7 @@ fall through to the legacy preparation below after a failure or missing input:
   `workspace_checkout.py continue` with the retained native claim, current owner
   authority, original run/plan/workspace references and artifact directory.
   Continuation checks the cooked dependency path, sessions, native provisioning,
-  current generation, policy, HEAD ancestry and Git operation/reflog state.
+  current generation, policy, HEAD ancestry and Git operation state.
   It can return an owned path with partial edits. The member still requires its
   result and checkpoint before logical advancement.
 - Preserve known partial state and external blocker evidence. `recover` requires

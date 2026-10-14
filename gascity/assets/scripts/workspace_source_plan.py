@@ -250,14 +250,24 @@ def declare_plan(store, attempt, plan: dict[str, Any], *, run_record_id: str,
                                expected_rows=rows, operation_nonce=operation_nonce)
 
 
-def publish_plan(store, prepared) -> dict[str, Any]:
-    """Submit once and classify the exact native readback without exposing grants."""
+def publish_plan(store, prepared, *, evidence_dir) -> dict[str, Any]:
+    """Retain exact intent, submit once, and classify its native readback."""
+    from workspace_requests import require_resolved_scope, retain_request
+    directory = Path(evidence_dir).resolve(strict=True)
+    if not directory.is_dir() or str(directory) != str(evidence_dir):
+        raise RecordError("source-plan evidence directory must exist at its canonical absolute path")
+    require_resolved_scope(store, parse_record(prepared.scope_bytes.decode()))
+    request_path, pending = retain_request(store, prepared)
     submitted = store.execute(prepared)
     observed = store.resolve(prepared)
     result = {"outcome": observed["outcome"], "request_sha256": observed["request_sha256"],
-              "submission_outcome": submitted["outcome"], "retry_allowed": False}
+              "submission_outcome": submitted["outcome"], "retry_allowed": False, "request_path": str(request_path)}
     if result["outcome"] not in ("committed", "replayed"):
         result["error"] = observed.get("error", submitted.get("error", "exact native intent readback did not prove publication"))
+    else:
+        if pending.read_text() != str(request_path):
+            raise RecordError("source-plan pending request changed after acknowledgement")
+        pending.unlink()
     return result
 
 
@@ -275,6 +285,7 @@ def main(argv: list[str] | None = None) -> int:
     declare.add_argument("--implementation-convoy-id")
     declare.add_argument("--gc", default="gc")
     declare.add_argument("--cwd", required=True, type=Path)
+    declare.add_argument("--evidence-dir", required=True, type=Path)
     for child in (validate, declare):
         child.add_argument("--plan", required=True, type=Path)
         child.add_argument("--store-ref", required=True)
@@ -297,7 +308,7 @@ def main(argv: list[str] | None = None) -> int:
                                     run_record_id=args.run_record_id, record_bead_id=args.record_id,
                                     authority_id=args.authority_id, implementation_convoy_id=args.implementation_convoy_id,
                                     operation_nonce=args.operation_nonce, writer_map=writer_map, writer_rows=writer_rows)
-            result = publish_plan(store, prepared)
+            result = publish_plan(store, prepared, evidence_dir=args.evidence_dir)
         print(json.dumps(result, sort_keys=True))
         return 0 if args.action == "validate" or result.get("outcome") in ("committed", "replayed") else 1
     except (RecordError, OSError, UnicodeError, ValueError) as exc:

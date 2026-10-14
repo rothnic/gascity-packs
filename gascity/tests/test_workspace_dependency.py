@@ -220,8 +220,12 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         self.addCleanup(self.fixture.doCleanups)
         self.helper = module()
         self.port_source = PORT[:PORT.index("if 'worktree' in args:")] + WORKTREE_PORT + "\nsys.exit('unsupported command ' + repr(args))\n"
+        self.port_source = self.port_source.replace(
+            "        request = json.loads(pathlib.Path(option('request')).read_text())\n",
+            "        request = json.loads(pathlib.Path(option('request')).read_text())\n"
+            "        data.setdefault('requests', []).append(copy.deepcopy(request))\n")
 
-    def prepare_fixture(self, *, integration=False, conflict=False):
+    def prepare_fixture(self, *, integration=False, conflict=False, shared=False):
         from workspace_records import canonical_bytes, contracts, record_sha256
         from workspace_store import Attempt, TOPOLOGY
         import workspace_outputs as outputs
@@ -235,6 +239,8 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         if integration:
             f.plan['nodes'].append(node('B'))
         f.plan['nodes'].append(node('C', ['member', 'B'] if integration else ['member']))
+        if shared:
+            f.plan['nodes'][-1].update(strategy='shared-chain', member_ids=['C', 'D'], single_lane=True)
         f.plan['terminal_owner_id'] = 'C'
         f.formula['steps'].insert(0, dict(id='do-work.prepare-worktree', metadata={'gc.run_target':'gc.run-operator'}))
         f.formula['deps'].append(dict(step_id='do-work.implement', depends_on_id='do-work.prepare-worktree', type='blocks'))
@@ -243,7 +249,7 @@ class DependencyNativeCompositionTests(unittest.TestCase):
             'gc.step_id':'do-work.prepare-worktree','gc.step_ref':'do-work.prepare-worktree',
             'gc.run_target':'gc.run-operator','gc.attach_root_id':'expansion',
             'gc.source_anchor_id':'member','gc.drain_member_id':'member', TOPOLOGY:'[]','gc.outcome':'pass'}, status='closed')
-        for member in ('C', *(['B'] if integration else [])):
+        for member in ('C', *(['B'] if integration else []), *(['D'] if shared else [])):
             f.rows[member] = f.row(member, {'gc.source_root_id':'root','gc.source_generation':'1'})
             expansion = 'expansion-' + member
             f.rows[expansion] = f.row(expansion, {key:value for key,value in f.rows['expansion']['metadata'].items()
@@ -276,7 +282,7 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         f.rows['convoy']['metadata']['gc.source_plan_sha256'] = record_sha256(f.plan)
         self.provenances = {str(f.work):f.provenance}
 
-        def accepted(member, work, workspace, producer, reviewer, recorder):
+        def accepted(member, work, workspace, producer, reviewer, recorder, *, publish_owner=True):
             binding = outputs.result_binding(f.run,f.plan,workspace,store_ref='rig:fixture',member_id=member,
                                              output_oid=workspace['output_oid'])
             identities = {}
@@ -299,14 +305,18 @@ class DependencyNativeCompositionTests(unittest.TestCase):
             result=outputs.make_member_result(binding,writer_step_id=recorder,
                 commit_oids=f.git(work,'rev-list','--reverse',binding['input_oid']+'..'+binding['output_oid']).splitlines(),
                 checks=checks,review=review,artifacts=artifacts,required_checks=f.requirements,artifact_root=f.artifacts,work_dir=work)
-            owner_output=outputs.make_owner_output(f.plan,[result],artifact_root=f.artifacts,
-                qualifications={member:{'binding':binding,'required_checks':f.requirements}})
-            for kind,key,payload in (('member-result','result-'+member,result),('owner-output','output-'+member,owner_output)):
+            owner_output=(outputs.make_owner_output(f.plan,[result],artifact_root=f.artifacts,
+                qualifications={member:{'binding':binding,'required_checks':f.requirements}}) if publish_owner else None)
+            payloads=[('member-result','result-'+member,result)]
+            if owner_output is not None:payloads.append(('owner-output','output-'+member,owner_output))
+            for kind,key,payload in payloads:
                 f.rows[key]=f.row(key,{contracts()[kind]['metadata_key']:canonical_bytes(payload).decode()},status='closed',scoped=False)
-            f.rows[member]['metadata'].update({'gc.workspace_result_ref':f.ref('member-result','result-'+member,result),
-                                             'gc.workspace_output_ref':f.ref('owner-output','output-'+member,owner_output)})
+            f.rows[member]['metadata']['gc.workspace_result_ref']=f.ref('member-result','result-'+member,result)
+            if owner_output is not None:
+                f.rows[member]['metadata']['gc.workspace_output_ref']=f.ref('owner-output','output-'+member,owner_output)
             return result,owner_output
 
+        self.accepted = accepted
         accepted('member',f.work,f.workspace,'producer','reviewer','recorder')
         if integration:
             work=f.work.parent/'B';f.git(f.repo,'worktree','add','--detach',str(work),f.base)
@@ -342,13 +352,212 @@ class DependencyNativeCompositionTests(unittest.TestCase):
 
     def prepare(self, **options):
         f=self.fixture
-        return self.helper.prepare_dependency_workspace(f.store,f.attempts['prepare-C'],gc=str(f.port),city_root=str(f.city),
-            rig_name='fixture',workflow_root_id='root',input_convoy_id='convoy',generation=1,
-            workspace_owner_id='C',member_id='C',artifact_root=f.artifacts,evidence_dir=f.diagnostics,
+        member = options.pop('member_id', 'C')
+        return self.helper.prepare_dependency_workspace(f.store,f.attempts['prepare-'+member],gc=str(f.port),city_root=str(f.city),
+            rig_name='fixture',workflow_root_id=options.pop('workflow_root_id', 'root'),
+            input_convoy_id=options.pop('input_convoy_id', 'convoy'),generation=1,
+            workspace_owner_id=options.pop('workspace_owner_id', 'C'),member_id=member,artifact_root=f.artifacts,evidence_dir=f.diagnostics,
             parent=str(f.work.parent),allow_external_parent=True, **options)
 
     def state(self):
         return json.loads((self.fixture.root/'port.json').read_text())
+
+    def child_fixture(self, *, integration=False):
+        self.prepare_fixture(integration=integration)
+        f = self.fixture
+        f.provenances = self.provenances
+        return f.native_child('child-C', 'C',
+            roles=('prepare-C', 'producer-C', 'reviewer-C', 'recorder-C'),
+            expansion='expansion-C', published=False)
+
+    def test_native_child_prepares_exact_dependency_and_inherits_original_run_atomically(self):
+        from workspace_store import CONTINUATION_KEY
+        self.child_fixture(); f = self.fixture
+        before = self.state()
+        result = self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        rows = self.state()['stores']['rig:fixture']
+        workspace = result['workspace']
+        self.assertEqual(f.oid, result['input_oid'])
+        self.assertEqual('root', workspace['workflow_root_id'])
+        self.assertEqual('child-C', rows[workspace['workspace_bead_id']]['metadata']['gc.root_bead_id'])
+        self.assertEqual('root', rows['C']['metadata']['gc.root_bead_id'])
+        self.assertEqual(before['stores']['rig:fixture']['run-record']['metadata']['gc.implementation_run'],
+                         rows['run-record']['metadata']['gc.implementation_run'])
+        self.assertIn(CONTINUATION_KEY, rows['child-C']['metadata'])
+        for step_id in result['launch_step_ids']:
+            reference = json.loads(rows[step_id]['metadata']['gc.worktree_ref'])
+            self.assertEqual('child-C', reference['workflow_root_id'])
+            self.assertEqual(step_id, reference['binding_step_id'])
+        first = self.state()['requests'][0]
+        changed = {row['id']: row.get('set', {}) for row in first['rows']}
+        self.assertIn(CONTINUATION_KEY, changed['child-C'])
+        self.assertIn('gc.workspace', changed[workspace['workspace_bead_id']])
+
+    def test_native_child_ordered_integration_and_readonly_dirty_continuation(self):
+        self.child_fixture(integration=True); f = self.fixture
+        first = self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        work = Path(first['path'])
+        self.assertEqual('FLAG = 7\n', (work/'other.py').read_text())
+        (work/'partial.py').write_text('PARTIAL = 1\n')
+        f.git(work, 'add', 'partial.py'); f.git(work, 'commit', '-qm', 'child partial implementation')
+        head = f.git(work, 'rev-parse', 'HEAD')
+        (work/'notes.txt').write_text('unfinished child work\n')
+        before = self.state()
+        continued = self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        self.assertEqual('continuation', continued['state'])
+        self.assertEqual(first['input_oid'], continued['input_oid'])
+        self.assertEqual(head, continued['head'])
+        self.assertFalse(continued['accepted'])
+        self.assertEqual(before, self.state())
+        self.assertEqual('unfinished child work\n', (work/'notes.txt').read_text())
+
+    def test_changed_native_child_relationship_refuses_before_allocating_or_creating_git(self):
+        self.child_fixture(); f = self.fixture
+        original = self.state()
+        for bead_id, key, value in (('child-C-unit', 'gc.parent_convoy_id', 'foreign'),
+                                   ('child-C-control', 'gc.root_store_ref', 'rig:foreign'),
+                                   ('C', 'gc.source_generation', '2')):
+            with self.subTest(bead_id=bead_id, key=key):
+                changed = copy.deepcopy(original)
+                changed['stores']['rig:fixture'][bead_id]['metadata'][key] = value
+                (f.root/'port.json').write_text(json.dumps(changed))
+                with self.assertRaises(self.helper.RecordError):
+                    self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+                self.assertEqual(changed, self.state())
+                self.assertFalse((f.work.parent/'C-g1').exists())
+        (f.root/'port.json').write_text(json.dumps(original))
+
+    def test_unknown_child_write_survives_new_process_and_blocks_new_intent(self):
+        self.child_fixture(); f = self.fixture
+        script = self.port_source.replace(
+            "    if option('snapshot'):\n",
+            "    if option('snapshot'):\n"
+            "        if data.get('block_snapshots'): sys.exit('native readback unavailable')\n")
+        script = script.replace("        state_path.write_text(json.dumps(data))\n    emit(dict(schema_version=",
+            "        if data.pop('lose_next_reply', False):\n"
+            "            data['block_snapshots'] = True\n"
+            "            state_path.write_text(json.dumps(data))\n"
+            "            sys.exit('lost native acknowledgement')\n"
+            "        state_path.write_text(json.dumps(data))\n    emit(dict(schema_version=")
+        f.port.write_text(script)
+        state = self.state(); state['lose_next_reply'] = True
+        (f.root/'port.json').write_text(json.dumps(state))
+        with self.assertRaises(self.helper.DependencyError) as caught:
+            self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        path = Path(caught.exception.request_path)
+        self.assertTrue(path.is_file())
+        packet = json.loads(path.read_text())
+        self.assertEqual(packet['request_sha256']+'.json', path.name)
+        self.assertEqual({'request_bytes','before_bytes','after_bytes','scope_bytes','binding_bytes',
+                          'replay','request_sha256'}, set(packet))
+        before = self.state()
+        self.assertEqual(1, len(before['requests']))
+        self.assertFalse((f.work.parent/'C-g1').exists())
+        command = [sys.executable, str(SCRIPTS/'workspace_dependency.py'), '--gc', str(f.port),
+            '--city-root', str(f.city), '--store-ref', 'rig:fixture', '--resolve-request', str(path)]
+        unresolved = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        self.assertEqual(1, unresolved.returncode, unresolved.stderr)
+        self.assertEqual('unknown', json.loads(unresolved.stdout)['outcome'])
+        self.assertEqual(before, self.state())
+        before.pop('block_snapshots')
+        (f.root/'port.json').write_text(json.dumps(before))
+        with self.assertRaisesRegex(self.helper.DependencyError, 'unresolved'):
+            self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        self.assertEqual(before, self.state())
+        resolved = subprocess.run(command, capture_output=True, text=True, timeout=30)
+        self.assertEqual(0, resolved.returncode, resolved.stderr)
+        self.assertEqual('committed', json.loads(resolved.stdout)['outcome'])
+        self.assertEqual(before, self.state())
+        self.assertEqual([], list(path.parent.glob('*.pending')))
+        self.assertNotIn('private-instance', resolved.stdout)
+
+    def shared_successor_fixture(self):
+        from workspace_store import Attempt
+        from workspace_runtime import NativeSourceRuntime
+        self.prepare_fixture(shared=True); f = self.fixture
+        f.provenances = self.provenances
+        f.native_child('child-C', 'C', roles=('prepare-C','producer-C','reviewer-C','recorder-C'),
+                       expansion='expansion-C', published=False)
+        first = self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        work = Path(first['path'])
+        (work/'c.py').write_text('C = 1\n')
+        f.git(work,'add','c.py'); f.git(work,'commit','-qm','completed C')
+        head = f.git(work,'rev-parse','HEAD')
+        state = self.state(); f.rows = state['stores']['rig:fixture']; f.sessions = state['stores']['city:fixture']
+        f.provenances = state['provenances']
+        for role, target in (('producer','gc.implementation-worker'),('reviewer','gc.implementation-reviewer'),
+                             ('recorder','gc.run-operator')):
+            key = role+'-C'; attempt = Attempt(key+'-session', key+'-private-instance', key)
+            f.attempts[key] = attempt
+            f.rows[key]['metadata'].update({'gc.session_id':attempt.session_id, 'gc.session_name':key+'-runtime'})
+            session = f.row(attempt.session_id, {'template':'fixture/'+target,'session_name':key+'-runtime',
+                'instance_token':attempt.instance_token,'session_origin':'ephemeral','state':'asleep',
+                'current_claim_bead_id':''}, scoped=False)
+            session['type']='session'; f.sessions[session['id']]=session
+        f.rows['prepare-C'].update(status='closed',assignee=''); f.rows['prepare-C']['metadata']['gc.outcome']='pass'
+        f.sessions['prepare-C-session']['metadata'].update(state='asleep',current_claim_bead_id='')
+        f.rows['producer-C'].update(status='in_progress',assignee='producer-C-session')
+        f.sessions['producer-C-session']['metadata'].update(state='active',current_claim_bead_id='producer-C')
+        (f.root/'port.json').write_text(json.dumps(state))
+        os.environ.update(GC_SESSION_ID=f.attempts['producer-C'].session_id,
+                          GC_INSTANCE_TOKEN=f.attempts['producer-C'].instance_token)
+        runtime = NativeSourceRuntime(f.store,gc=str(f.port),city_root=str(f.city),rig_name='fixture',run=f.run,plan=f.plan,
+            artifact_root=f.artifacts,evidence_dir=f.diagnostics,claimed_step_id='producer-C')
+        writer_map = runtime.writer_map
+        frozen = self.helper.FrozenRecords(f.store, runtime.guard_rows)
+        frozen.ensure([first['workspace_record_id'],first['authority_id']])
+        checkpoint = self.helper.writer_checkpoint(dict(first['workspace'], phase='result',
+            current_oid=head, output_oid=head), f.attempts['producer-C'])
+        self.helper.publish_checkpoint(frozen,f.attempts['producer-C'],checkpoint,authority_id=first['authority_id'],
+            writer_map=writer_map,plan_record_id='plan-record',native_runtime=runtime)
+        state = self.state(); f.rows=state['stores']['rig:fixture']; f.sessions=state['stores']['city:fixture']
+        for role in ('producer','reviewer','recorder'):
+            key=role+'-C'; f.rows[key].update(status='closed',assignee=''); f.rows[key]['metadata']['gc.outcome']='pass'
+            f.sessions[key+'-session']['metadata'].update(state='asleep',current_claim_bead_id='')
+        self.accepted('C',work,checkpoint,'producer-C','reviewer-C','recorder-C',publish_owner=False)
+        # Native fixture expansion supplies a separate actual child and unit;
+        # authority transfer itself goes through the production guarded writer.
+        f.native_child('child-D','D',roles=('prepare-D','producer-D','reviewer-D','recorder-D'),
+                       expansion='expansion-D',published=False)
+        state['stores']={'rig:fixture':f.rows,'city:fixture':f.sessions}
+        f.rows['prepare-D'].update(status='in_progress',assignee='prepare-D-session')
+        f.sessions['prepare-D-session']['metadata'].update(state='active',current_claim_bead_id='prepare-D')
+        (f.root/'port.json').write_text(json.dumps(state))
+        os.environ.update(GC_SESSION_ID=f.attempts['prepare-D'].session_id,
+                          GC_INSTANCE_TOKEN=f.attempts['prepare-D'].instance_token)
+        return first, head
+
+    def test_shared_child_successor_keeps_git_identity_and_atomically_moves_native_owner(self):
+        from workspace_store import CONTINUATION_KEY
+        first, head = self.shared_successor_fixture(); before = self.state(); f = self.fixture
+        continued = self.prepare(workflow_root_id='child-D',input_convoy_id='child-D-unit',member_id='D')
+        workspace = continued['workspace']; rows = self.state()['stores']['rig:fixture']
+        self.assertEqual(head, continued['input_oid'])
+        self.assertEqual('D',workspace['active_member_id'])
+        self.assertEqual(1,workspace['next_member_position'])
+        for key in ('workspace_bead_id','work_dir','work_branch','native_attempt_id','native_provenance'):
+            self.assertEqual(first['workspace'][key],workspace[key])
+        self.assertEqual('child-D',rows[workspace['workspace_bead_id']]['metadata']['gc.root_bead_id'])
+        self.assertEqual(before['stores']['rig:fixture']['child-C']['metadata'][CONTINUATION_KEY],
+                         rows['child-C']['metadata'][CONTINUATION_KEY])
+        request = self.state()['requests'][len(before['requests'])]
+        changed = {item['id']:item.get('set',{}) for item in request['rows']}
+        self.assertIn(CONTINUATION_KEY,changed['child-D'])
+        self.assertEqual('child-D',changed[workspace['workspace_bead_id']]['gc.root_bead_id'])
+        self.assertEqual('D',json.loads(changed[workspace['workspace_bead_id']]['gc.workspace'])['active_member_id'])
+        for step_id in continued['launch_step_ids']:
+            reference=json.loads(changed[step_id]['gc.worktree_ref'])
+            self.assertEqual('child-D',reference['workflow_root_id'])
+            self.assertEqual(step_id,reference['binding_step_id'])
+
+    def test_shared_child_successor_rejects_changed_old_published_relationship(self):
+        self.shared_successor_fixture(); f = self.fixture
+        changed=self.state()
+        changed['stores']['rig:fixture']['child-C-control']['metadata']['gc.root_store_ref']='rig:foreign'
+        (f.root/'port.json').write_text(json.dumps(changed))
+        with self.assertRaises(self.helper.RecordError):
+            self.prepare(workflow_root_id='child-D',input_convoy_id='child-D-unit',member_id='D')
+        self.assertEqual(changed,self.state())
 
     def test_actual_runtime_selects_accepted_output_and_prepares_native_checkout(self):
         self.prepare_fixture()

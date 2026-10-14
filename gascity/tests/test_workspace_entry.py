@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "assets" / "scripts
 
 import create_beads_from_tasks as tasks
 import workspace_entry as entry
-from workspace_records import canonical_bytes, record_identity, record_sha256
+from workspace_records import canonical_bytes, contracts, record_identity, record_sha256
 import workspace_run as run
 
 
@@ -113,10 +113,12 @@ class EntryTests(unittest.TestCase):
             cwd = str(self.root)
             gc = "gc"
             common_git_dir = str(self.repo / ".git")
+            from workspace_store import WorkspaceStore
+            _binding = WorkspaceStore._binding
             def snapshot(self, ids):
                 return {bead_id: copy.deepcopy(rows[bead_id]) for bead_id in ids}
             def read_record(self, kind, bead_id, identity=None):
-                data = json.loads(rows[bead_id]["metadata"]["gc.implementation_run"])
+                data = json.loads(rows[bead_id]["metadata"][contracts()[kind]["metadata_key"]])
                 if identity is not None and list(record_identity(kind, data)) != identity:
                     raise entry.EntryError("record identity mismatch")
                 return data
@@ -137,6 +139,87 @@ class EntryTests(unittest.TestCase):
         args.update(changes)
         with patch.object(entry, "registered_rig", return_value=str(self.repo)):
             return entry.read_entry(self.store, **args)
+
+    def drain_child(self):
+        self.rows["root-1"]["metadata"]["gc.build.implementation_convoy_id"] = "implementation-1"
+        self.plan = {"version": 1, "workflow_root_id": "root-1", "generation": 1,
+            "writer_step_id": "declare-1", "source_plan_owner_id": "plan-owner",
+            "base_oid": self.record["base_oid"], "parent_canonical_generation": None,
+            "parent_canonical_oid": None, "nodes": [{"owner_id": "member-1", "strategy": "isolated",
+                "member_ids": ["member-1"], "source_predecessor_owner_ids": [], "single_lane": False}],
+            "terminal_owner_id": "member-1"}
+        plan_ref = {"kind": "source-plan", "identity": list(record_identity("source-plan", self.plan)),
+                    "bead_id": "plan-record"}
+        membership = {"gc.root_bead_id": "root-1", "gc.root_store_ref": "rig:example",
+                      "gc.source_root_id": "root-1", "gc.source_generation": "1"}
+        self.rows["implementation-1"]["metadata"].update({"gc.source_plan_owner_id": "plan-owner",
+                                                          "gc.source_plan_sha256": record_sha256(self.plan)})
+        self.rows.update({
+            "plan-owner": self.row("plan-owner", metadata={**membership, entry.PLAN_REF: canonical_bytes(plan_ref).decode()}),
+            "plan-record": self.row("plan-record", status="closed", metadata={
+                contracts()["source-plan"]["metadata_key"]: canonical_bytes(self.plan).decode()}),
+            "member-1": self.row("member-1", metadata=membership),
+            "control-1": self.row("control-1", metadata={"gc.kind": "drain", "gc.root_bead_id": "root-1",
+                "gc.root_store_ref": "rig:example"}),
+            "unit-1": self.row("unit-1", kind="convoy", metadata={"gc.synthetic": "true",
+                "gc.synthetic_kind": "drain-unit-convoy", "gc.parent_convoy_id": "implementation-1",
+                "gc.drain_control_id": "control-1", "gc.drain_member_id": "member-1"}),
+            "child-1": self.row("child-1", metadata={"gc.kind": "workflow", "gc.root_store_ref": "rig:example",
+                "gc.input_convoy_id": "unit-1", "gc.drain_control_id": "control-1", "gc.drain_member_id": "member-1",
+                "gc.var.worktree_lifecycle": "new"}),
+        })
+        self.rows["step-1"]["metadata"].update({"gc.root_bead_id": "child-1", "gc.step_ref": "do-work.prepare-worktree"})
+
+    def test_native_drain_child_inherits_original_run_plan_policy_and_preserves_physical_root(self):
+        self.drain_child()
+        (self.repo / "file").write_text("moving default after original capture\n")
+        self.git("commit", "-am", "advance default")
+        for requested in ("root-1", "child-1"):
+            with self.subTest(requested=requested):
+                result = self.read(workflow_root_id=requested, input_convoy_id="unit-1", require_plan=True)
+                self.assertEqual(result["run"], self.record)
+                self.assertEqual(result["source_plan"], self.plan)
+                self.assertEqual(result["workflow_root_id"], "root-1")
+                self.assertEqual(result["native_workflow_root_id"], "child-1")
+                self.assertEqual(result["input_convoy_id"], "implementation-1")
+                self.assertEqual(result["native_input_convoy_id"], "unit-1")
+                self.assertEqual(result["native_continuation"]["member_id"], "member-1")
+                self.assertIn("control-1", result["_native_rows"])
+                self.assertEqual(self.rows["step-1"]["metadata"]["gc.root_bead_id"], "child-1")
+                self.assertNotIn(entry.RUN_REF, self.rows["child-1"]["metadata"])
+
+    def test_child_continuation_rejects_wrong_native_chain_store_generation_and_ref(self):
+        self.drain_child()
+        original = copy.deepcopy(self.rows)
+        for bead, key, value in (("unit-1", "gc.drain_control_id", "wrong-control"),
+                ("unit-1", "gc.drain_member_id", "wrong-member"),
+                ("unit-1", "gc.parent_convoy_id", "initial-1"),
+                ("control-1", "gc.root_bead_id", "child-1"),
+                ("control-1", "gc.root_store_ref", "rig:other"),
+                ("member-1", "gc.source_generation", "2"),
+                ("member-1", "gc.root_bead_id", "child-1"),
+                ("child-1", entry.RUN_REF, canonical_bytes(self.reference).decode())):
+            with self.subTest(bead=bead, key=key):
+                self.rows.clear()
+                self.rows.update(copy.deepcopy(original))
+                self.rows[bead]["metadata"][key] = value
+                with self.assertRaises(entry.EntryError):
+                    self.read(workflow_root_id="child-1", require_plan=True)
+
+    def test_child_gate_uses_retained_mode_before_legacy_and_never_allocates_a_run(self):
+        from workspace_store import Attempt
+        self.drain_child()
+        attempt = Attempt("session-1", "instance-1", "step-1")
+        args = dict(gc="gc", city_root=str(self.root), rig_name="example", workflow_root_id="child-1",
+                    entrypoint="convoy", require_plan=True)
+        with patch.object(entry, "registered_rig", return_value=str(self.repo)), \
+             patch.object(entry, "allocate_placeholder") as allocate:
+            result = entry.gate_entry(self.store, attempt, **args)
+            self.assertEqual(result["run"], self.record)
+            allocate.assert_not_called()
+            self.rows["child-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
+            with self.assertRaises(entry.EntryError):
+                entry.gate_entry(self.store, attempt, **args)
 
     def test_changed_implementation_convoy_and_default_do_not_recapture(self):
         before = copy.deepcopy(self.record)
@@ -229,6 +312,75 @@ class EntryTests(unittest.TestCase):
         self.assertIn("closed", native.call_args.args[2])
         self.assertIn("{}", native.call_args.args[2])
         self.assertNotIn("--id", native.call_args.args[2])
+
+    def test_pending_run_blocks_initial_allocation_and_visible_reference_continuation(self):
+        import hashlib
+        from workspace_requests import journal_directory
+        from workspace_store import Attempt
+        original = journal_directory(self.store) / "original-request.json"
+        pending = original.parent / (hashlib.sha256(canonical_bytes(run.run_scope("root-1"))).hexdigest() + ".pending")
+        pending.write_text(str(original))
+        args = dict(gc="gc", city_root=str(self.root), rig_name="example", workflow_root_id="root-1",
+                    entrypoint="build", worktree_lifecycle="new")
+        with patch.object(entry, "registered_rig", return_value=str(self.repo)), \
+             patch.object(entry, "source_context", return_value=("implementation-1", copy.deepcopy(self.rows))), \
+             patch.object(entry, "allocate_placeholder") as allocate:
+            with self.assertRaisesRegex(run.RecordError, "original retained request"):
+                entry.prepare_entry(self.store, Attempt("session-1", "instance-1", "step-1"), **args)
+            self.rows["root-1"]["metadata"].pop(entry.RUN_REF)
+            self.rows["step-1"]["metadata"]["gc.session_id"] = "session-1"
+            with self.assertRaisesRegex(run.RecordError, "original retained request"):
+                entry.prepare_entry(self.store, Attempt("session-1", "instance-1", "step-1"), **args)
+            allocate.assert_not_called()
+
+    def test_legacy_recorded_run_pending_scope_cannot_bypass_entry_gate(self):
+        import hashlib
+        from workspace_requests import journal_directory
+        from workspace_store import Attempt
+        self.record["worktree_lifecycle"] = "legacy"
+        self.rows["record-1"]["metadata"][contracts()["run"]["metadata_key"]] = canonical_bytes(self.record).decode()
+        self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
+        self.reference["identity"] = list(record_identity("run", self.record))
+        self.rows["root-1"]["metadata"][entry.RUN_REF] = canonical_bytes(self.reference).decode()
+        directory = journal_directory(self.store)
+        pending = directory / (hashlib.sha256(canonical_bytes(run.run_scope("root-1"))).hexdigest() + ".pending")
+        pending.write_text(str(directory / "original-legacy-request.json"))
+        with patch.object(entry, "registered_rig", return_value=str(self.repo)), \
+             self.assertRaisesRegex(run.RecordError, "original retained request"):
+            entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), gc="gc",
+                city_root=str(self.root), rig_name="example", workflow_root_id="root-1", entrypoint="convoy")
+
+    def test_unrecorded_native_legacy_child_stays_legacy_and_cannot_downgrade_new_original_root(self):
+        from workspace_store import Attempt
+        self.drain_child()
+        self.rows["root-1"]["metadata"].pop(entry.RUN_REF)
+        self.rows["child-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
+        args = dict(gc="gc", city_root=str(self.root), rig_name="example", workflow_root_id="child-1", entrypoint="convoy")
+        with patch.object(entry, "allocate_placeholder") as create:
+            self.assertEqual(entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), **args)["state"], "legacy")
+            create.assert_not_called()
+        self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "new"
+        with self.assertRaisesRegex(entry.EntryError, "cannot bypass"):
+            entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), **args)
+
+    def test_claimed_new_lifecycle_cannot_bypass_required_capture_through_legacy_root_mode(self):
+        from workspace_store import Attempt
+        self.rows["root-1"]["metadata"].pop(entry.RUN_REF, None)
+        self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
+        self.rows["step-1"]["metadata"]["gc.lifecycle"] = "new"
+        with patch.object(entry, "prepare_entry", side_effect=AssertionError("recapture")), \
+             self.assertRaisesRegex(entry.EntryError, "claimed native lifecycle conflicts"):
+            entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), gc="gc",
+                city_root=str(self.root), rig_name="example", workflow_root_id="root-1", entrypoint="build")
+
+    def test_standalone_allocation_cli_cannot_create_an_unjournaled_native_record(self):
+        import contextlib
+        import io
+        with patch.object(entry, "native_json") as native, contextlib.redirect_stderr(io.StringIO()) as stderr:
+            code = entry.main(["allocate", "--city-root", str(self.root), "--store-ref", "rig:example", "--rig", "example"])
+        self.assertEqual(code, 1)
+        self.assertIn("admitted workflow entry", stderr.getvalue())
+        native.assert_not_called()
 
     def test_allocation_unknown_or_nonempty_blocks_without_duplicate_retry(self):
         with patch.object(entry, "native_json", side_effect=run.RunError("timeout")) as native:

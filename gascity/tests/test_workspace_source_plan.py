@@ -249,6 +249,8 @@ class SourcePlanWriterTests(unittest.TestCase):
         self.root = pathlib.Path(self.tmp.name)
         self.common = self.root / "common.git"
         self.common.mkdir()
+        self.evidence = self.root / "evidence"
+        self.evidence.mkdir(mode=0o700)
         self.plan = plan_record()
         run = run_record()
         run["rig_root"], run["common_git_dir"] = str(self.root), str(self.common)
@@ -285,6 +287,8 @@ class SourcePlanWriterTests(unittest.TestCase):
 
     def command(self, arguments, attempt=None):
         if arguments[0].startswith("--snapshot="):
+            if getattr(self, "block_readback", False):
+                raise self.adapter.StoreError("native readback unavailable")
             ids = arguments[0].partition("=")[2].split(",")
             rows = [copy.deepcopy(self.rows[bead_id]) for bead_id in ids]
         else:
@@ -304,6 +308,9 @@ class SourcePlanWriterTests(unittest.TestCase):
                 row["metadata"].update(patch["set"])
                 row["revision"] = str(int(row["revision"]) + 1)
                 rows.append({"id": row["id"], "revision": row["revision"], "changed": changed})
+            if getattr(self, "lose_reply", False):
+                self.block_readback = True
+                raise self.adapter.StoreError("native acknowledgement lost")
         return {"schema_version": "1", "ok": True, "store_ref": "rig:project", "rows": rows}
 
     def writer_map(self):
@@ -326,6 +333,32 @@ class SourcePlanWriterTests(unittest.TestCase):
                                         authority_id="authority-1", implementation_convoy_id=implementation_convoy_id,
                                         operation_nonce=nonce, writer_map=self.writer_map(), writer_rows=writer_rows)
 
+    def publish(self, prepared):
+        return self.helper.publish_plan(self.store, prepared, evidence_dir=self.evidence)
+
+    def test_initial_plan_unknown_reply_retains_exact_intent_for_a_fresh_store_instance(self):
+        from workspace_requests import require_resolved_scope, resolve_request
+        prepared = self.prepare()
+        self.lose_reply = True
+        result = self.publish(prepared)
+        self.assertEqual("unknown", result["outcome"])
+        path = pathlib.Path(result["request_path"])
+        original = path.read_bytes()
+        before = copy.deepcopy(self.rows)
+        with self.assertRaisesRegex(self.helper.RecordError, "unresolved"):
+            require_resolved_scope(self.store, json.loads(prepared.scope_bytes))
+        self.assertEqual(len(self.requests), 1)
+        self.block_readback = False
+        fresh = self.adapter.WorkspaceStore("rig:project", cwd=self.root, common_git_dir=self.common)
+        fresh._command = self.command
+        resolved = resolve_request(fresh, path)
+        self.assertEqual("committed", resolved["outcome"])
+        self.assertEqual(prepared.sha256, resolved["request_sha256"])
+        self.assertEqual(path.read_bytes(), original)
+        self.assertEqual(self.rows, before)
+        self.assertEqual(len(self.requests), 1)
+        self.assertEqual([], list(path.parent.glob("*.pending")))
+
     def test_first_publication_joins_grant_payload_reference_and_membership_in_one_native_batch(self):
         prepared = self.prepare()
         request = prepared.request
@@ -344,7 +377,7 @@ class SourcePlanWriterTests(unittest.TestCase):
                                "bead_id": "plan-record"})
 
     def test_publication_requires_exact_readback_and_receipt_excludes_native_grant_tokens(self):
-        receipt = self.helper.publish_plan(self.store, self.prepare())
+        receipt = self.publish(self.prepare())
         self.assertEqual(receipt["outcome"], "committed")
         self.assertEqual(receipt["submission_outcome"], "committed")
         self.assertNotIn("instance-1", json.dumps(receipt))
@@ -359,7 +392,7 @@ class SourcePlanWriterTests(unittest.TestCase):
                 result["rows"] = []
             return result
         self.store._command = lose_reply
-        receipt = self.helper.publish_plan(self.store, self.prepare())
+        receipt = self.publish(self.prepare())
         self.assertEqual(receipt["submission_outcome"], "unknown")
         self.assertEqual(receipt["outcome"], "committed")
         self.assertFalse(receipt["retry_allowed"])
@@ -445,7 +478,7 @@ class SourcePlanWriterTests(unittest.TestCase):
 
     def prepare_fix_with_prior_convoy(self):
         self.implementation_convoy()
-        self.assertEqual(self.helper.publish_plan(self.store, self.prepare(
+        self.assertEqual(self.publish(self.prepare(
             implementation_convoy_id="implementation-convoy"))["outcome"], "committed")
         self.plan = plan_record()
         self.plan.update(generation=2, writer_step_id="declare-fix", source_plan_owner_id="declare-fix",
@@ -495,7 +528,7 @@ class SourcePlanWriterTests(unittest.TestCase):
         self.assertEqual(rows["implementation-convoy"]["expected_revision"], self.rows["implementation-convoy"]["revision"])
         self.assertEqual(rows["implementation-convoy"]["set"], {"gc.workspace_transition_nonce": "4" * 64})
         self.assertLessEqual(len(rows), 100)
-        self.assertEqual(self.helper.publish_plan(self.store, prepared)["outcome"], "committed")
+        self.assertEqual(self.publish(prepared)["outcome"], "committed")
         self.assertEqual(self.rows["root-1"]["metadata"]["gc.input_convoy_id"], "implementation-convoy-fix")
         self.assertEqual(self.rows["root-1"]["metadata"]["gc.build.implementation_convoy_id"], "implementation-convoy-fix")
         self.assertEqual(self.store.read_record("run", "run-record"), original_run)
@@ -511,7 +544,7 @@ class SourcePlanWriterTests(unittest.TestCase):
         prepared = self.prepare(writer_rows=original)
         request = {row["id"]: row for row in prepared.request["rows"]}
         self.assertEqual(request["declare-1"]["expected_revision"], "17")
-        self.assertEqual(self.helper.publish_plan(self.store, prepared)["outcome"], "unknown")
+        self.assertEqual(self.publish(prepared)["outcome"], "unknown")
         self.assertNotIn("gc.source_plan", self.rows["plan-record"]["metadata"])
 
     def test_prior_convoy_race_cannot_partially_replace_the_generation(self):
@@ -519,7 +552,7 @@ class SourcePlanWriterTests(unittest.TestCase):
         prepared = self.prepare_fix()
         self.rows["implementation-convoy"]["metadata"]["gc.source_generation"] = "2"
         self.rows["implementation-convoy"]["revision"] = "19"
-        receipt = self.helper.publish_plan(self.store, prepared)
+        receipt = self.publish(prepared)
         self.assertEqual(receipt["outcome"], "unknown")
         self.assertFalse(receipt["retry_allowed"])
         self.assertEqual(self.rows["root-1"]["metadata"]["gc.input_convoy_id"], "implementation-convoy")

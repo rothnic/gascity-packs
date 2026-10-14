@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import copy
 import json
 import os
 from pathlib import Path
@@ -44,20 +45,42 @@ def _native_list(store, key, value):
     return [row["id"] for row in rows]
 
 
-def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_only=False):
+def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_only=False,
+                          continuation=None, continuation_rows=None):
     """Read an exact native occurrence; writing still requires its designated kind."""
     require(type(read_only) is bool, "read_only requires an explicit boolean")
-    claim = store.snapshot([claimed_step_id])[claimed_step_id]
-    require(_root(claim) == workflow_root_id and claim["metadata"].get("gc.root_store_ref") == store.store_ref,
+    retained = copy.deepcopy(continuation_rows or {})
+    require(isinstance(retained, dict) and (continuation is not None or not retained),
+            "continuation rows require their typed native binding")
+
+    def snapshot(ids):
+        missing = [bead_id for bead_id in ids if bead_id not in retained]
+        if missing:
+            retained.update(store.snapshot(missing))
+        require(all(bead_id in retained and retained[bead_id].get("id") == bead_id for bead_id in ids),
+                "native cooked readback has a different physical ID")
+        return {bead_id: retained[bead_id] for bead_id in ids}
+
+    claim = snapshot([claimed_step_id])[claimed_step_id]
+    physical_root_id = workflow_root_id
+    if continuation is not None:
+        from workspace_store import NativeRunContinuation, validate_native_continuation
+        require(isinstance(continuation, NativeRunContinuation), "typed native continuation is required")
+        snapshot(continuation.row_ids)
+        validate_native_continuation(continuation, retained, store_ref=store.store_ref,
+            workflow_root_id=workflow_root_id, claimed_step_id=claimed_step_id)
+        physical_root_id = continuation.binding["child_root_id"]
+    require(_root(claim) == physical_root_id and claim["metadata"].get("gc.root_store_ref") == store.store_ref,
             "claimed step belongs to another root/store")
-    expansion_id = claim["metadata"].get("gc.attach_root_id") or workflow_root_id
-    expansion = store.snapshot([expansion_id])[expansion_id]
+    expansion_id = claim["metadata"].get("gc.attach_root_id") or physical_root_id
+    expansion = snapshot([expansion_id])[expansion_id]
     name, digest, source = _formula(expansion)
-    key = "gc.attach_root_id" if expansion_id != workflow_root_id else "gc.root_bead_id"
+    key = "gc.attach_root_id" if expansion_id != physical_root_id else "gc.root_bead_id"
     ids = _native_list(store, key, expansion_id)
     ids = list(dict.fromkeys([expansion_id, claimed_step_id, *ids]))
     require(len(ids) <= 98, "cooked chain exceeds the complete guarded row bound")
-    rows = store.snapshot(ids)
+    snapshot(ids)
+    rows = retained
     rig = store.store_ref.split(":", 1)[1] if store.store_ref.startswith("rig:") else None
     arguments = ["formula", "show", name, "--json"]
     for key, value in expansion["metadata"].items():
@@ -82,15 +105,16 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
         if child != parent:
             compiled_dependencies[child].add(parent)
     entries, physical_refs = [], set()
-    member = claim["metadata"].get("gc.source_anchor_id", claim["metadata"].get("gc.drain_member_id", workflow_root_id))
+    default_member = continuation.binding["member_id"] if continuation is not None else workflow_root_id
+    member = claim["metadata"].get("gc.source_anchor_id", claim["metadata"].get("gc.drain_member_id", default_member))
     require(claim["metadata"].get("gc.drain_member_id", member) == member, "claimed step has conflicting source membership")
     for bead_id, row in rows.items():
         if bead_id == expansion_id:
             continue
         metadata = row["metadata"]
-        if expansion_id == workflow_root_id and metadata.get("gc.attach_root_id"):
+        if expansion_id == physical_root_id and metadata.get("gc.attach_root_id"):
             continue  # A sibling attached occurrence is never this expansion.
-        if not any(key in metadata for key in ("gc.step_ref", "gc.step_id", TOPOLOGY)):
+        if bead_id not in ids or not any(key in metadata for key in ("gc.step_ref", "gc.step_id", TOPOLOGY)):
             continue  # Ordinary source work belongs to the root, not its cooked chain.
         ref = metadata.get("gc.step_ref")
         require(isinstance(ref, str) and ref in compiled and ref not in physical_refs,
@@ -106,11 +130,13 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
                         "dependencies": _dependencies(metadata), "record_kinds": _kinds(metadata, ref)})
     require(any(item["bead_id"] == claimed_step_id for item in entries), "claimed writer has no exact cooked occurrence")
     if member not in rows:
-        rows.update(store.snapshot([member]))
+        snapshot([member])
+    require(len(rows) <= 98, "native context and cooked chain exceed the complete guarded row bound")
     declaration = {"version": 1, "workflow_root_id": workflow_root_id, "store_ref": store.store_ref,
         "source_member_id": member, "expansion_root_id": expansion_id, "formula_name": name,
         "formula_hash": digest, "formula_source": source, "steps": sorted(entries, key=lambda item: item["step_ref"])}
-    writer_map = CookedWriterMap(canonical_bytes(declaration))
+    writer_map = (CookedWriterMap(canonical_bytes(declaration), continuation=continuation)
+                  if continuation is not None else CookedWriterMap(canonical_bytes(declaration)))
     kind = None if read_only else next(iter(_kinds(claim["metadata"], claim["metadata"].get("gc.step_ref", ""))), "")
     validate_cooked_writer_map(writer_map, rows, store_ref=store.store_ref,
         workflow_root_id=workflow_root_id, record_kind=kind,

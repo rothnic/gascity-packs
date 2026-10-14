@@ -118,6 +118,43 @@ class CookedReaderTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(RecordError):
                 self.read(read_only=value)
 
+    def test_native_child_map_keeps_physical_occurrences_and_original_proof_rows(self):
+        from test_workspace_entry import EntryTests
+        import workspace_entry as entry
+        fixture = EntryTests(methodName="runTest")
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.drain_child()
+        fixture.rows["child-1"]["metadata"].update({"gc.formula_name": "do-work",
+            "gc.formula_hash": hashlib.sha256(self.path.read_bytes()).hexdigest(), "gc.formula_source": str(self.path)})
+        native_ids = []
+        for old_id in ("prepare-worktree", "implement", "independent-acceptance", "record-result", "close-source-anchor"):
+            bead_id = "step-1" if old_id == "prepare-worktree" else old_id
+            native = copy.deepcopy(self.rows[old_id])
+            native["id"] = bead_id
+            native["metadata"]["gc.root_bead_id"] = "child-1"
+            for key in ("gc.attach_root_id", "gc.source_anchor_id", "gc.drain_member_id"):
+                native["metadata"].pop(key)
+            if bead_id == "step-1":
+                native.update(status="in_progress", assignee="worker")
+            fixture.rows[bead_id] = native
+            native_ids.append(bead_id)
+        continuation, original_rows = entry.read_native_continuation(fixture.store, claimed_step_id="step-1",
+                                                                    requested_root_id="child-1")
+        with patch.object(cooked, "_native_list", return_value=native_ids) as listing, \
+             patch.object(cooked, "native_json", return_value=self.formula):
+            writer_map, rows = cooked.read_cooked_writer_map(fixture.store, workflow_root_id="root-1",
+                claimed_step_id="step-1", continuation=continuation, continuation_rows=original_rows)
+        self.assertEqual(listing.call_args.args[1:], ("gc.root_bead_id", "child-1"))
+        self.assertEqual(writer_map.declaration["expansion_root_id"], "child-1")
+        self.assertEqual(writer_map.declaration["workflow_root_id"], "root-1")
+        self.assertEqual(writer_map.declaration["source_member_id"], "member-1")
+        self.assertEqual(writer_map.continuation.binding, continuation.binding)
+        self.assertEqual(rows["step-1"]["metadata"]["gc.root_bead_id"], "child-1")
+        for bead_id, row in original_rows.items():
+            self.assertEqual(rows[bead_id], row)
+        self.assertIn("control-1", rows)
+
     def test_actual_stage_graph_resolves_exact_physical_writer_responsibilities(self):
         writer_map, rows = self.read()
         kinds = {item["bead_id"]: item["record_kinds"] for item in writer_map.declaration["steps"]}

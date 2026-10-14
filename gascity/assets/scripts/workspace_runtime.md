@@ -5,6 +5,12 @@ session and checkout readback. We use the compiled physical producer, independen
 reviewer and recorder occurrences. The adapter runs the captured project checks
 and preserves the original work-store rows for the next guarded write.
 
+Native drain children retain their physical workflow root. The adapter proves
+the child, drain control, unit convoy and source member against the original
+run, source plan and check policy. Lifecycle records retain the logical original
+root. Native workspace owners and launch references use the physical child root
+and the exact physical cooked step.
+
 The run writer captures `gc.var.worktree_checks` once with the initial run:
 
 ```json
@@ -23,7 +29,7 @@ runtime = NativeSourceRuntime(
     store, gc=gc, city_root=city_root, rig_name=rig_name,
     run=entry["run"], plan=entry["source_plan"],
     artifact_root=artifact_root, evidence_dir=evidence_dir,
-    claimed_step_id=claimed_step_id, native_rows=original_rows,
+    claimed_step_id=claimed_step_id, native_rows=entry.get("_native_rows"),
 )
 ```
 
@@ -42,6 +48,7 @@ native session and instance environment. `native_rows` is optional.
 | `bind_workspace(workspace, native_rows)` | Exact provisioned integration workspace binding. |
 | `verify_integration(work_dir, bundle, head_oid)` | Current owner/attempt, accepted predecessor and clean Git verification. |
 | `admit_continuation(workspace, original_rows, attempt)` | Current and retained prior writer identity. Checkout owns dependency, dirty-state and grant checks. |
+| `retained_workspace_continuation(workspace)` | Typed context from the workspace writer's own native child. |
 | `recheck_continuation()` | Recheck original work rows, policy, retained sessions and discovered formula bytes. |
 
 `attempt` and `writer_map` expose the admitted native `Attempt` and typed
@@ -49,10 +56,24 @@ native session and instance environment. `native_rows` is optional.
 expose the frozen authority and same-store read guards. Result, canonical,
 review and publication writers receive `qualify_native=runtime.qualify_native`.
 
+`continuation` exposes the typed `NativeRunContinuation`, or `None` for an
+original-root occurrence. `native_workflow_root_id` and `native_input_convoy_id`
+identify the invoking physical root and unit convoy. `input_convoy_id` retains
+the logical implementation convoy. `writer_map` includes the admitted context.
+
+For a provisioned workspace, join `InheritedRunReference(continuation)` with
+the workspace payload, native owner and launch projections in one transaction.
+Every write guards the complete original authority union. A later shared-chain writer reads
+the existing workspace through its retained prior child until the handoff
+transaction commits. Historical result checks discover the completed recorder's
+own child, independently of the current consumer.
+
 After an exact successful native write, call
 `advance_written_rows(resolved["rows"], prepared=prepared)`. The adapter resolves
 the original `PreparedWrite` again and checks its original rows and immutable
-authority before it acknowledges the written rows. Arbitrary newer snapshots
+authority before it acknowledges the written rows. The original request must
+guard every retained row. Inherited relationships and published context remain
+exact. Arbitrary newer snapshots
 cannot replace the qualification basis.
 
 ## CLI
@@ -60,6 +81,8 @@ cannot replace the qualification basis.
 Every action requires `--city-root`, `--store-ref`, `--rig-name`,
 `--workflow-root-id`, `--claimed-step-id`, `--generation`, `--artifact-root`
 and `--evidence-dir`. Use `--gc` to select the native executable.
+`--workflow-root-id` may name the original root or its actual native child.
+Entry readback resolves the original recorded run in both cases.
 
 | Action | Additional arguments |
 | --- | --- |
@@ -74,6 +97,12 @@ CLI output is JSON. `qualify` emits original revision summaries and opaque
 attempt IDs. Allocate physical record/grant placeholders through
 `workspace_entry.allocate_placeholder`, or use existing exact native references.
 
+`record-result` saves its exact write request in the repository's private,
+store-bound journal before submission. If the reply is lost, the error names
+that request. Resolve it with `workspace_flow.py resolve-write`; do not submit
+a replacement. Selecting another diagnostics directory does not bypass an
+unresolved request for the same result.
+
 ## Evidence limits
 
 For an earlier shared checkpoint, `historical_checkpoint` is true and
@@ -81,6 +110,9 @@ For an earlier shared checkpoint, `historical_checkpoint` is true and
 accepted retained commit. Consumers validate the historical artifact and commit
 proof with `work_dir=None` after native qualification. The terminal member still
 requires its exact current HEAD.
+Historical qualification verifies every completed shared checkpoint through
+the current member's input. Changed chains, stores, roots, attempts, generations
+and physical owner projections refuse acceptance.
 
 Session beads retain the instance authority that the session list omits.
 The adapter hashes that authority with the same `Attempt.writer_attempt_id`
@@ -88,8 +120,12 @@ derivation used by the writers. A completed role can use its native
 `gc.session_attempt_id` claim stamp after the current pool token rotates.
 Without that native stamp, the retained session instance must still match.
 The opaque stamp requires the matching native core implementation.
+Native core must derive the stamp from a verified admitted session fence.
+An environment token alone supplies no historical authority. Consumer tests
+do not establish native stamp issuance.
 Session-store revocation can race a work-store
 transaction. Separate readback does not make both stores atomic.
 
 The full guarded row set is bounded to 100 physical rows. Component tests use
-a native command port and real Git. Native workflow acceptance remains separate.
+actual helper modules, a native command port and real Git. Native session and
+full workflow acceptance remain separate.

@@ -271,6 +271,21 @@ class RunCaptureTests(unittest.TestCase):
                 with self.assertRaises(run.RunError):
                     self.context(store)
 
+    def test_native_physical_row_read_accepts_singleton_and_refuses_ambiguous_or_duplicate_json(self):
+        details = {"id": "native-1", "title": "Run", "description": "retained intent"}
+        for output in (json.dumps(details), json.dumps([details])):
+            with self.subTest(output=output), patch.object(run.subprocess, "run", return_value=
+                    subprocess.CompletedProcess([], 0, output, "")) as command:
+                self.assertEqual(run.native_json("gc", str(self.root), ["bd", "show", "native-1", "--json"],
+                    "example", unwrap_singleton=True), details)
+                self.assertEqual(command.call_args.args[0],
+                    ["gc", "--city", str(self.root), "--rig", "example", "bd", "show", "native-1", "--json"])
+        for output in ('[]', '[{"id":"one"},{"id":"two"}]', '[{"id":"one","id":"two"}]'):
+            with self.subTest(output=output), patch.object(run.subprocess, "run", return_value=
+                    subprocess.CompletedProcess([], 0, output, "")), self.assertRaises(RecordError):
+                run.native_json("gc", str(self.root), ["bd", "show", "native-1", "--json"],
+                    "example", unwrap_singleton=True)
+
     def test_registered_rig_refuses_wrong_city_store_and_ambiguous_name(self):
         data = {"city_path": str(self.root), "city_name": "fixture",
                 "rigs": [{"name": "example", "path": str(self.repo)}]}
@@ -372,6 +387,23 @@ class RunStoreTests(unittest.TestCase):
         self.assertEqual(self.port.rows["authority-1"]["metadata"], {})
         self.assertNotIn(run.RUN_REFERENCE_KEY, self.port.rows["root-1"]["metadata"])
 
+    def test_changed_native_wrapper_pin_cannot_publish_a_run_or_grant(self):
+        self.port.rows["convoy-1"]["metadata"] = {"gc.synthetic": "true", "gc.source_bead_id": "source-1"}
+        execute = self.store.execute
+
+        def changed_wrapper(prepared):
+            wrapper = self.port.rows["convoy-1"]
+            wrapper["revision"] = "2"
+            wrapper["metadata"]["gc.source_bead_id"] = "different-source"
+            return execute(prepared)
+
+        with patch.object(self.store, "execute", side_effect=changed_wrapper):
+            result = run.capture_run(self.store, self.attempt, **self.kwargs)
+        self.assertEqual(result["receipt"]["outcome"], "unknown")
+        self.assertEqual(self.port.rows["record-1"]["metadata"], {})
+        self.assertEqual(self.port.rows["authority-1"]["metadata"], {})
+        self.assertNotIn(run.RUN_REFERENCE_KEY, self.port.rows["root-1"]["metadata"])
+
     def test_competing_mode_capture_keeps_one_immutable_payload(self):
         from workspace_store import GuardRead, RecordWrite, ReferenceWrite, RunCheckPolicyProjection
         execute = self.store.execute
@@ -455,6 +487,170 @@ class RunStoreTests(unittest.TestCase):
             argv.extend(["--" + key.replace("_", "-"), str(value)])
         return argv
 
+    def allocation_args(self):
+        return dict(workflow_root_id="root-1", input_convoy_id="convoy-1", source_anchor_id="source-1",
+            rig_root=str(self.repo), worktree_lifecycle="new", base_ref="@default",
+            checks_config=self.port.rows["root-1"]["metadata"][run.CHECKS_CONFIG_KEY])
+
+    def native_allocator(self, *, lose_reply_at=None, change_on_show=False):
+        import workspace_entry as entry
+        from test_workspace_store import row
+        created = {}
+        calls = []
+        def native(gc, city, args, rig=None, **kwargs):
+            self.assertEqual(city, str(self.root))
+            self.assertEqual(rig, "example")
+            calls.append(list(args))
+            if args[:2] == ["bd", "create"]:
+                bead_id = "native-allocation-" + str(len(created) + 1)
+                created[bead_id] = {"id": bead_id, "title": args[2],
+                    "description": args[args.index("--description") + 1]}
+                self.port.rows[bead_id] = row(bead_id)
+                if len(created) == lose_reply_at:
+                    raise run.RunError("native create committed; acknowledgement lost")
+                return {"id": bead_id}
+            self.assertEqual(args[:2], ["bd", "show"])
+            self.assertTrue(kwargs["unwrap_singleton"])
+            value = copy.deepcopy(created[args[2]])
+            if change_on_show:
+                self.port.rows[args[2]]["revision"] = "2"
+            return value
+        return entry, created, calls, native
+
+    def test_unknown_allocation_blocks_new_process_and_recovers_only_its_native_id_without_recapturing_base(self):
+        entry, created, calls, native = self.native_allocator(lose_reply_at=1)
+        args = self.allocation_args()
+        with patch.object(entry, "native_json", side_effect=native):
+            with self.assertRaisesRegex(RecordError, "retained intent"):
+                entry.allocate_run_placeholders(self.store, self.attempt, **args)
+        journal = next((self.repo / ".git" / "gc-workspace-locks").rglob("*.intent.json"))
+        original = journal.read_bytes()
+        self.assertEqual(json.loads(original)["captured_run"]["base_oid"], self.base)
+        (self.repo / "file").write_text("moving default while allocation is unresolved\n")
+        self.git("commit", "-am", "move default")
+        state = self.root / "allocation-fixture.json"
+        state.write_text(json.dumps({"rows": self.port.rows, "cwd": self.store.cwd,
+            "common": str(self.store.common_git_dir), "sys_path": sys.path, "args": args,
+            "entry_source": entry.__file__, "run_source": run.__file__}))
+        script = '''import importlib.util,json,sys
+from pathlib import Path
+from unittest.mock import patch
+data=json.loads(Path(sys.argv[1]).read_text());sys.path[:0]=data['sys_path']
+for name,key in [('workspace_run','run_source'),('workspace_entry','entry_source')]:
+ spec=importlib.util.spec_from_file_location(name,data[key]);module=importlib.util.module_from_spec(spec)
+ sys.modules[name]=module;spec.loader.exec_module(module)
+from workspace_store import WorkspaceStore,Attempt
+from test_workspace_store import MemoryPort
+from workspace_entry import allocate_run_placeholders,EntryError
+store=WorkspaceStore('rig:example',cwd=data['cwd'],common_git_dir=data['common'])
+port=MemoryPort(data['rows']);store._command=port
+with patch('workspace_entry.native_json',side_effect=AssertionError('duplicate native create')):
+ try:allocate_run_placeholders(store,Attempt('session-1','incarnation-1','writer-1'),**data['args'])
+ except EntryError as exc:
+  assert 'no known physical ID' in str(exc), str(exc)
+  assert port.requests==[]
+  print('refused-original-unknown-allocation')
+ else:raise AssertionError('unknown allocation was accepted')
+'''
+        other = self.root / "other-allocation-diagnostics"
+        other.mkdir()
+        child = subprocess.run([sys.executable, "-c", script, str(state)], cwd=other,
+            text=True, capture_output=True, timeout=10)
+        self.assertEqual(child.returncode, 0, child.stderr)
+        self.assertEqual(child.stdout.strip(), "refused-original-unknown-allocation")
+        with patch.object(entry, "native_json", side_effect=native):
+            recovered = entry.allocate_run_placeholders(self.store, self.attempt,
+                run_record_id=next(iter(created)), **args)
+        self.assertEqual(len(created), 2)
+        self.assertEqual(recovered["captured_run"]["base_oid"], self.base)
+        self.assertEqual(journal.read_bytes(), original)
+        captured = run.capture_run(self.store, self.attempt, **dict(self.kwargs,
+            record_bead_id=recovered["run_record_id"], authority_id=recovered["authority_id"]),
+            allocation_rows=recovered["allocation_rows"], captured_run=recovered["captured_run"],
+            captured_checks_config=args["checks_config"])
+        self.assertEqual(captured["receipt"]["outcome"], "committed")
+        self.assertEqual(captured["record"]["base_oid"], self.base)
+        self.assertEqual(sum(c[:2] == ["bd", "create"] for c in calls), 2)
+        self.assertEqual(len(self.port.requests), 1)
+
+    def test_authority_lost_reply_reuses_known_record_and_rejects_foreign_recovery_id(self):
+        entry, created, calls, native = self.native_allocator(lose_reply_at=2)
+        args = self.allocation_args()
+        with patch.object(entry, "native_json", side_effect=native):
+            with self.assertRaisesRegex(RecordError, "authority allocation unresolved"):
+                entry.allocate_run_placeholders(self.store, self.attempt, **args)
+            with self.assertRaisesRegex(RecordError, "no known physical ID"):
+                entry.allocate_run_placeholders(self.store, self.attempt, **args)
+            with self.assertRaisesRegex(RecordError, "retained allocation intent"):
+                entry.allocate_run_placeholders(self.store, self.attempt,
+                    authority_id="native-allocation-1", **args)
+            recovered = entry.allocate_run_placeholders(self.store, self.attempt,
+                authority_id="native-allocation-2", **args)
+        self.assertEqual(recovered["run_record_id"], "native-allocation-1")
+        self.assertEqual(recovered["authority_id"], "native-allocation-2")
+        self.assertEqual(len(created), 2)
+        self.assertEqual(sum(c[:2] == ["bd", "create"] for c in calls), 2)
+
+    def test_changed_native_allocation_or_retained_attempt_configuration_refuses_without_recreation(self):
+        from workspace_store import Attempt
+        entry, created, calls, native = self.native_allocator(change_on_show=True)
+        args = self.allocation_args()
+        with patch.object(entry, "native_json", side_effect=native):
+            with self.assertRaisesRegex(RecordError, "changed while reading"):
+                entry.allocate_run_placeholders(self.store, self.attempt, **args)
+            for change in ({"base_ref": "refs/heads/main"}, {"source_anchor_id": "foreign-source"},
+                           {"worktree_lifecycle": "legacy"}, {"checks_config": '{"required_checks":[]}'}):
+                with self.subTest(change=change), self.assertRaises(RecordError):
+                    entry.allocate_run_placeholders(self.store, self.attempt, **dict(args, **change))
+            with self.assertRaisesRegex(RecordError, "different source configuration or attempt"):
+                entry.allocate_run_placeholders(self.store, Attempt("session-1", "different-token", "writer-1"), **args)
+        self.assertEqual(len(created), 1)
+        self.assertEqual(sum(c[:2] == ["bd", "create"] for c in calls), 1)
+
+    def test_successful_role_receipt_retains_original_revision_across_lost_authority_reply(self):
+        entry, created, calls, native = self.native_allocator(lose_reply_at=2)
+        args = self.allocation_args()
+        with patch.object(entry, "native_json", side_effect=native):
+            with self.assertRaisesRegex(RecordError, "authority allocation unresolved"):
+                entry.allocate_run_placeholders(self.store, self.attempt, **args)
+            first_id, authority_id = list(created)
+            original = copy.deepcopy(self.port.rows[first_id])
+            self.port.rows[first_id]["revision"] = "2"
+            with self.assertRaisesRegex(RecordError, "changed since its original receipt"):
+                entry.allocate_run_placeholders(self.store, self.attempt, authority_id=authority_id, **args)
+        self.assertEqual(len(created), 2)
+        self.assertEqual(sum(c[:2] == ["bd", "create"] for c in calls), 2)
+        self.assertEqual(self.port.requests, [])
+        self.assertEqual(original["metadata"], self.port.rows[first_id]["metadata"])
+
+    def test_native_allocation_revision_remains_fenced_through_run_publication(self):
+        entry, created, calls, native = self.native_allocator()
+        args = self.allocation_args()
+        with patch.object(entry, "native_json", side_effect=native):
+            allocated = entry.allocate_run_placeholders(self.store, self.attempt, **args)
+        self.port.rows[allocated["run_record_id"]]["revision"] = "2"
+        with self.assertRaisesRegex(RecordError, "allocation changed"):
+            run.capture_run(self.store, self.attempt, **dict(self.kwargs,
+                record_bead_id=allocated["run_record_id"], authority_id=allocated["authority_id"]),
+                allocation_rows=allocated["allocation_rows"], captured_run=allocated["captured_run"],
+                captured_checks_config=args["checks_config"])
+        self.assertEqual(self.port.requests, [])
+
+    def test_real_entry_calls_native_allocator_and_publishes_its_captured_base(self):
+        entry, created, calls, native = self.native_allocator()
+        import workspace_cooked
+        with patch.object(entry, "native_json", side_effect=native), \
+             patch.object(entry, "registered_rig", return_value=str(self.repo)), \
+             patch("workspace_run.registered_rig", return_value=str(self.repo)), \
+             patch.object(workspace_cooked, "read_cooked_writer_map", side_effect=lambda *a, **k:
+                 (self.writer_map, self.store.snapshot(["root-1", "writer-1"]))):
+            result = entry.prepare_entry(self.store, self.attempt, gc="gc", city_root=str(self.root),
+                rig_name="example", workflow_root_id="root-1", entrypoint="build", worktree_lifecycle="new")
+        self.assertEqual(result["run"]["base_oid"], self.base)
+        self.assertEqual(result["receipt"]["outcome"], "committed")
+        self.assertEqual(len(created), 2)
+        self.assertTrue(Path(result["allocation_journal"]).is_file())
+
     def test_capture_cli_prints_verified_result_without_retained_token(self):
         import workspace_store
         import workspace_cooked
@@ -483,6 +679,53 @@ class RunStoreTests(unittest.TestCase):
             code = run.main(self.command())
         self.assertEqual(code, 1)
         self.assertEqual(json.loads(stdout.getvalue())["receipt"]["outcome"], "unknown")
+
+    def test_lost_cli_reply_retains_original_request_and_new_process_resolves_without_write(self):
+        import workspace_store
+        import workspace_cooked
+        from workspace_requests import require_resolved_scope
+        self.port.lose_ack = True
+        stdout = io.StringIO()
+        with patch.object(workspace_store, "WorkspaceStore", return_value=self.store), \
+             patch.object(workspace_cooked, "read_cooked_writer_map", side_effect=lambda *a, **k: (self.writer_map, self.store.snapshot(["root-1", "writer-1"]))), \
+             patch.dict(os.environ, {"GC_SESSION_ID": "session-1", "GC_INSTANCE_TOKEN": "incarnation-1"}), \
+             patch.object(self.store, "resolve", side_effect=lambda prepared: {
+                 "outcome": "unknown", "request_sha256": prepared.sha256, "retry_allowed": False}), \
+             contextlib.redirect_stdout(stdout):
+            self.assertEqual(run.main(self.command()), 1)
+        result = json.loads(stdout.getvalue())
+        packet = Path(result["receipt"]["request_path"])
+        self.assertTrue(packet.is_file())
+        self.assertEqual(packet.stat().st_mode & 0o777, 0o600)
+        self.assertNotIn("incarnation-1", stdout.getvalue())
+        diagnostic = self.root / "different diagnostics"
+        diagnostic.mkdir()
+        with patch.dict(os.environ, {"TMPDIR": str(diagnostic)}), \
+             self.assertRaisesRegex(RecordError, "original retained request"):
+            run.capture_run(self.store, self.attempt, **self.kwargs)
+        self.assertEqual(len(self.port.requests), 1)
+        state = self.root / "resolution-fixture.json"
+        state.write_text(json.dumps({"rows": self.port.rows, "cwd": self.store.cwd,
+            "common": str(self.store.common_git_dir), "path": str(packet), "sys_path": sys.path}))
+        script = '''import json,sys
+from pathlib import Path
+data=json.loads(Path(sys.argv[1]).read_text());sys.path[:0]=data['sys_path']
+from workspace_store import WorkspaceStore
+from workspace_requests import resolve_request
+from test_workspace_store import MemoryPort
+store=WorkspaceStore('rig:example',cwd=data['cwd'],common_git_dir=data['common'])
+port=MemoryPort(data['rows']);store._command=port
+receipt=resolve_request(store,data['path'])
+assert port.requests==[], 'resolution submitted another write'
+print(json.dumps(receipt))
+'''
+        child = subprocess.run([sys.executable, "-c", script, str(state)], cwd=diagnostic,
+            text=True, capture_output=True, timeout=10)
+        self.assertEqual(child.returncode, 0, child.stderr)
+        self.assertEqual(json.loads(child.stdout)["outcome"], "committed")
+        require_resolved_scope(self.store, run.run_scope("root-1"))
+        self.assertTrue(packet.is_file())
+        self.assertEqual(len(self.port.requests), 1)
 
 
 if __name__ == "__main__":

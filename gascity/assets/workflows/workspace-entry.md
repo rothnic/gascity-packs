@@ -1,5 +1,10 @@
 Use the recorded workspace lifecycle at each build entry and continuation.
 
+Launch the workflow with a real task or convoy in the selected store. The native
+graph invocation requires that input; a requirements or plan artifact does not
+replace it. A task launch uses the native singleton input convoy and its recorded
+source task. A convoy launch uses the convoy itself as its source.
+
 Read the claimed step and workflow root from the native claim output. Keep the
 selected city, root store and registered rig explicit:
 
@@ -31,19 +36,31 @@ Run capture freezes these commands with the exact initial base in
 that policy. Missing, empty, malformed or changed configuration refuses capture
 or replay; a result artifact cannot select easier checks.
 
-- **Legacy:** the existing workflow continues with its legacy lifecycle.
+- **Legacy:** the existing workflow continues with its legacy lifecycle. A run
+  already captured in new mode cannot switch to legacy mode.
 - **Recorded:** the native run retains its original input, base commit and
   lifecycle. Changing the implementation convoy or default branch does not
   select another base.
-- **Awaiting source:** initial build or requirements planning may proceed only
-  with `--allow-pending-source`. Implementation remains prohibited until a
-  valid native source convoy is supplied and the run is captured.
+- **Awaiting source:** `--allow-pending-source` permits planning when source
+  capture is not yet possible. It does not enable a targetless native launch.
+  Implementation requires a valid source convoy and recorded run.
 - **Refused:** missing records, a different root/store/generation, changed
   lifecycle, or artifact-only input require repair or explicit migration.
 
-Attached continuations consume the original workflow's run. A standalone
-suffix without a proven native relationship must not recapture the base or
-adopt a run from an artifact. For implementation-convoy handoff, pass
+Attached continuations consume the original workflow's run. Native drain items
+retain their own workflow roots and physical steps. The helper follows the
+item's unit convoy and drain control to the original workflow, then verifies its
+run, source plan, member and captured checks. It keeps the original base even if
+the repository's default branch has advanced.
+
+The first workspace publication records that inherited relationship in the
+same guarded operation as its workspace record and references. Native worktree
+ownership names the item's actual workflow root; the run and source-plan records
+continue to name the original workflow. Do not rewrite either identity to make a
+continuation pass.
+
+A standalone suffix without a proven native relationship must not recapture the
+base or adopt a run from an artifact. For implementation-convoy handoff, pass
 `--require-plan` so that the current convoy's exact source-plan reference and
 generation are verified as well.
 

@@ -78,6 +78,14 @@ class ComposedFormulaTests(unittest.TestCase):
                              env=dict(os.environ, GC_PACK_DIR=str(REPO / "gascity")), timeout=10)
         self.assertEqual(bad.returncode, 2)
 
+    def test_compiled_fix_planner_keeps_its_actual_source_writer_role(self):
+        from workspace_store import _kinds
+        steps = {step["id"]: step for step in self.resolve("fix-loop-base")["steps"]}
+        actual = steps["plan-fixes"]["metadata"]
+        self.assertEqual(actual["gc.run_target"], "gc.review-synthesizer")
+        self.assertEqual(_kinds(dict(actual, **{"gc.step_id": "fix-loop-base.plan-fixes"}), "fix-loop-base.plan-fixes"), ["source-plan"])
+        self.assertEqual(_kinds({"gc.run_target": "gc.publisher", "gc.step_id": "plan-fixes"}, "plan-fixes"), [])
+
 
 class ComposedFlowTests(unittest.TestCase):
     def setUp(self):
@@ -95,13 +103,156 @@ class ComposedFlowTests(unittest.TestCase):
         insert = '''if 'bd' in args and 'create' in args:
     data['allocation_counter'] = data.get('allocation_counter', 0) + 1
     key = 'allocated-' + str(data['allocation_counter'])
+    while key in data['stores']['rig:fixture']:
+        data['allocation_counter'] += 1
+        key = 'allocated-' + str(data['allocation_counter'])
     data['stores']['rig:fixture'][key] = dict(id=key, revision='1', status='closed',
         assignee='', type='task', labels=[], metadata={})
     state_path.write_text(json.dumps(data))
     emit(dict(id=key))
 '''
         text = text.replace("if 'list' in args and 'bd' in args:", insert + "if 'list' in args and 'bd' in args:")
+        text = text.replace("            for key in item.get('delete', []): row['metadata'].pop(key, None)",
+            "            for key in item.get('delete', []): row['metadata'].pop(key, None)\n"
+            "            if 'close_reason' in item:\n"
+            "                row.update(status='closed', close_reason=item['close_reason'], closed_by_session=request['admission']['session_id'])")
         port.write_text(text)
+
+    def source_closure_fixture(self):
+        import hashlib
+        from workspace_entry import allocate_placeholder
+        from workspace_cooked import read_cooked_writer_map
+        from workspace_records import canonical_bytes, contracts
+        from workspace_store import Attempt, RecordWrite, ReferenceWrite, record_reference
+        from workspace_dependency import FrozenRecords
+        f = self.fixture
+        f.attempts["closer"] = Attempt("closer-session", "closer-private-instance", "closer")
+        metadata = {"gc.run_target": "gc.run-operator"}
+        f.rows["closer"] = f.row("closer", dict(metadata, **{"gc.step_id": "do-work.close-source-anchor",
+            "gc.step_ref": "do-work.close-source-anchor", "gc.attach_root_id": "expansion",
+            "gc.source_anchor_id": "member", "gc.drain_member_id": "member", "gc.session_id": "closer-session",
+            "gc.session_name": "closer-runtime", "gc.native_step_dependencies.v1": '["do-work.record-result"]'}))
+        session = f.row("closer-session", {"template": "fixture/gc.run-operator", "session_name": "closer-runtime",
+            "instance_token": f.attempts["closer"].instance_token, "session_origin": "ephemeral", "state": "asleep",
+            "current_claim_bead_id": ""}, scoped=False)
+        session["type"] = "session"; f.sessions["closer-session"] = session
+        f.formula["steps"].append({"id": "do-work.close-source-anchor", "metadata": metadata})
+        f.formula["deps"].append({"step_id": "do-work.close-source-anchor", "depends_on_id": "do-work.record-result", "type": "blocks"})
+        # The fixture's provisioned native owner remains, while the first record
+        # and authority are published through the actual admitted writer.
+        f.rows["workspace-record"]["metadata"].pop(contracts()["workspace"]["metadata_key"])
+        f.select_role("producer")
+        authority = allocate_placeholder(f.store, title="Workspace writer")
+        writer_map, _ = read_cooked_writer_map(f.store, workflow_root_id="root", claimed_step_id="producer")
+        state = json.loads((f.root / "port.json").read_text())
+        rows = f.store.snapshot(list(state["stores"]["rig:fixture"]))
+        scope = dict(workflow_root_id="root", generation=1, writer_scope_id="member", record_kind="workspace")
+        prepared = f.store.install_grant(f.attempts["producer"], scope, authority,
+            [RecordWrite("workspace", "workspace-record", f.workspace)],
+            [ReferenceWrite("member", "gc.workspace_ref", record_reference("workspace", "workspace-record", f.workspace))],
+            writer_map=writer_map, expected_rows=rows, guards=FrozenRecords(f.store, rows).guards)
+        self.assertEqual(f.store.execute(prepared)["outcome"], "committed")
+        self.assertEqual(f.store.resolve(prepared)["outcome"], "committed")
+        state = json.loads((f.root / "port.json").read_text())
+        f.rows, f.sessions = state["stores"]["rig:fixture"], state["stores"]["city:fixture"]
+        return self.accepted_flow()
+
+    def accepted_flow(self):
+        from workspace_flow import WorkspaceFlow
+        from workspace_outputs import artifact
+        f = self.fixture
+        f.select_role("producer")
+        checks = f.adapter("producer").execute_checks("member", "member", f.oid)
+        f.select_role("reviewer")
+        reviewer = f.adapter("reviewer")
+        artifacts = [artifact(f.summary, f.artifacts)]
+        context = reviewer.begin_review("member", "member", f.oid, checks, artifacts)
+        independent = reviewer.complete_review(context, f.artifacts / "report.md", "passed", f.artifacts / "flow-review.json")
+        f.select_role("recorder")
+        flow = WorkspaceFlow(f.adapter())
+        recorded = flow.record_result("member", "member", f.oid, checks, independent, artifacts)
+        output = flow.owner_output("member")
+        state = json.loads((f.root / "port.json").read_text())
+        f.rows, f.sessions = state["stores"]["rig:fixture"], state["stores"]["city:fixture"]
+        return recorded, output
+
+    def close_flow(self):
+        from workspace_flow import WorkspaceFlow
+        f = self.fixture
+        f.select_role("closer")
+        return WorkspaceFlow(f.adapter("closer"))
+
+    def test_connected_accepted_result_closes_source_with_native_reason_and_session(self):
+        self.source_closure_fixture()
+        f = self.fixture
+        result = self.close_flow().close_source("member")
+        self.assertEqual(result["status"], "closed")
+        state = json.loads((f.root / "port.json").read_text())
+        member = state["stores"]["rig:fixture"]["member"]
+        self.assertEqual(member["metadata"]["gc.work_outcome"], "shipped")
+        self.assertEqual(member["metadata"]["gc.work_commit"], f.oid)
+        self.assertNotIn("gc.work_branch", member["metadata"])
+        self.assertEqual(member["close_reason"], "Accepted exact workspace result and checkpoint")
+        self.assertEqual(member["closed_by_session"], "closer-session")
+        commands = [json.loads(line) for line in (f.root / "port.commands").read_text().splitlines()]
+        self.assertFalse(any("bd" in command and ("close" in command or "update" in command) for command in commands))
+
+    def test_source_close_late_policy_race_has_no_partial_close_or_writer_transfer(self):
+        from workspace_records import RecordError
+        self.source_closure_fixture(); f = self.fixture
+        flow = self.close_flow()
+        before = json.loads((f.root / "port.json").read_text())
+        changed = json.loads(json.dumps(before))
+        changed["stores"]["rig:fixture"]["run-record"]["revision"] = "999"
+        (f.root / "port.json").write_text(json.dumps(changed))
+        with self.assertRaises(RecordError):
+            flow.close_source("member")
+        self.assertEqual(json.loads((f.root / "port.json").read_text()), changed)
+        self.assertEqual(changed["stores"]["rig:fixture"]["member"]["status"], "open")
+
+    def test_source_close_lost_reply_resolves_original_in_a_new_process(self):
+        from workspace_records import RecordError
+        from workspace_store import StoreError
+        from workspace_requests import journal_directory, require_resolved_scope
+        self.source_closure_fixture(); f = self.fixture
+        flow = self.close_flow()
+        original = f.store._command
+        lost_reply = False
+
+        def unavailable(arguments, attempt=None):
+            nonlocal lost_reply
+            if any(value.startswith("--request=") for value in arguments):
+                original(arguments, attempt)
+                lost_reply = True
+                raise StoreError("native close response lost after commit")
+            if lost_reply:
+                raise StoreError("native readback temporarily unavailable")
+            return original(arguments, attempt)
+
+        with patch.object(f.store, "_command", side_effect=unavailable):
+            with self.assertRaisesRegex(RecordError, "original request without another effect"):
+                flow.close_source("member")
+        pending = list(journal_directory(f.store).glob("*.pending"))
+        self.assertEqual(len(pending), 1)
+        path = Path(pending[0].read_text())
+        packet = path.read_bytes()
+        scope = json.loads(json.loads(packet)["scope_bytes"])
+        with self.assertRaises(RecordError):
+            require_resolved_scope(f.store, scope)
+        commands_before = (f.root / "port.commands").read_text().splitlines()
+        script = "from workspace_store import WorkspaceStore; from workspace_requests import resolve_request; import json,sys; store=WorkspaceStore(sys.argv[1],gc=sys.argv[2],cwd=sys.argv[3]); print(json.dumps(resolve_request(store,sys.argv[4])))"
+        resolved = subprocess.run([sys.executable, "-B", "-c", script, f.store.store_ref,
+            str(f.port), f.store.cwd, str(path)], capture_output=True, text=True, timeout=15)
+        self.assertEqual(resolved.returncode, 0, resolved.stderr)
+        self.assertEqual(json.loads(resolved.stdout)["outcome"], "committed")
+        self.assertFalse(pending[0].exists())
+        self.assertEqual(path.read_bytes(), packet)
+        commands_after = (f.root / "port.commands").read_text().splitlines()
+        writes = lambda lines: [line for line in lines if any(value.startswith("--request=") for value in json.loads(line))]
+        self.assertEqual(writes(commands_before), writes(commands_after))
+        member = json.loads((f.root / "port.json").read_text())["stores"]["rig:fixture"]["member"]
+        self.assertEqual(member["status"], "closed")
+        self.assertEqual(member["closed_by_session"], "closer-session")
 
     def test_actual_native_checks_review_allocation_result_and_owner_output(self):
         from workspace_flow import WorkspaceFlow

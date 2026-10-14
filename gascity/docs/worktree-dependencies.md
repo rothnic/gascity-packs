@@ -100,8 +100,10 @@ Ordinary scheduling dependencies transfer no commits. New mode requires an
 explicit source plan with one terminal output. A source owner is the task or
 task group whose workspace serves its listed members.
 
-For example, add this `sources` section to a task-creation payload that already
-defines runnable tasks named `api`, `ui`, and `site`:
+Add `sources` beside `convoys` and `beads` in the `tasks.md` creation payload.
+Keep that file separate from the approved decomposition artifact; see the
+[decomposition instructions](../assets/workflows/build-basic/decompose.md).
+This example assumes the same payload defines tasks named `api`, `ui`, and `site`:
 
 ```yaml
 sources:
@@ -165,8 +167,9 @@ commit used for whole-result review and publication.
   replacement commit needs fresh checks and review under the retained policy.
 - **Publication:** `push` and `open_pr` default to `false`. Authorized publication
   requires current approval and authority for the exact commit and remote
-  target. Remote changes refuse the update. An uncertain response requires
-  readback of the original operation before further action.
+  target. A new push requires the selected remote ref to match its authorized
+  expected commit. Readback can confirm an already completed update. An uncertain
+  response requires readback of the original operation before further action.
 
 Approval of one commit cannot approve another commit. A no-op publication or
 final report cannot convert blocked implementation or review into a pass.
@@ -177,7 +180,9 @@ checks and approval of the replacement commit.
 
 Keep the original run, base, source plan, and workspace when work continues.
 The [entrypoint guide](../README.md#choosing-an-entrypoint) identifies the
-artifacts needed for each `build-from-*` continuation.
+artifacts needed for each `build-from-*` continuation. Its artifact-only launch
+recipes apply to legacy work. New mode also requires the retained run under its
+original workflow or a verified native child.
 
 - **Recorded new work:** continue through the original workflow's verified
   native binding. A separate workflow must prove its relationship to the

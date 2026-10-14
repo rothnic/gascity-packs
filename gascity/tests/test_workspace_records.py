@@ -5,7 +5,6 @@ import hashlib
 import importlib.util
 import json
 import pathlib
-import tomllib
 import unittest
 
 import jsonschema
@@ -247,21 +246,21 @@ class WorkspaceRecordTests(unittest.TestCase):
 class WorkspaceSurfaceTests(unittest.TestCase):
     def test_review_and_fix_generation_owners_are_migration_surfaces(self):
         manifest = json.loads((CONTRACT_ROOT / "affected-surfaces.v1.json").read_text())
-        required = [("gascity", "build-base", "review", {"review", "source-writer"}),
-                    ("gascity", "build-basic", "review", {"review-delegator"}),
-                    ("gascity", "fix-loop-base", "re-review", {"review-delegator"}),
-                    ("gascity", "fix-convoy", "create-fix-convoy", {"fix-generation"})]
-        required += [(pack, formula, "review", {"review-delegator"}) for pack, formula in
+        required = [("gascity", "build-base", "review", {"review", "source-writer"}, "new", "legacy"),
+                    ("gascity", "build-basic", "review", {"review-delegator"}, "new", "legacy"),
+                    ("gascity", "fix-loop-base", "re-review", {"review-delegator"}, "new", "new"),
+                    ("gascity", "fix-convoy", "create-fix-convoy", {"fix-generation"}, "legacy", "legacy")]
+        required += [(pack, formula, "review", {"review-delegator"}, "new", "new") for pack, formula in
                      (("compound-engineering", "compound-build"), ("superpowers", "superpowers-build"),
                       ("bmad", "bmad-build"), ("gstack", "gstack-build"))]
-        for pack, formula, step_id, roles in required:
+        for pack, formula, step_id, roles, formula_class, asset_class in required:
             path = f"{pack}/formulas/{formula}.formula.toml"
             with self.subTest(formula=formula, step_id=step_id):
                 matches = [b for b in manifest["owning_steps"] if b["formula"] == path and b["step_id"] == step_id]
                 self.assertEqual(len(matches), 1, "missing concrete lifecycle owner")
                 self.assertLessEqual(roles, set(matches[0]["roles"]))
-                self.assertEqual(manifest["inventory"][matches[0]["asset"]]["classification"], "legacy")
-                self.assertEqual(manifest["inventory"][path]["classification"], "legacy")
+                self.assertEqual(manifest["inventory"][matches[0]["asset"]]["classification"], asset_class)
+                self.assertEqual(manifest["inventory"][path]["classification"], formula_class)
 
     def test_closed_manifest_covers_every_supported_formula_and_workflow_asset(self):
         manifest = json.loads((CONTRACT_ROOT / "affected-surfaces.v1.json").read_text())
@@ -286,19 +285,23 @@ class WorkspaceSurfaceTests(unittest.TestCase):
             self.assertEqual(row["sha256"], hashlib.sha256((REPO_ROOT / path).read_bytes()).hexdigest())
 
     def test_manifest_step_and_delegation_bindings_match_current_formulas(self):
+        from test_formula_assets import resolve_formula_from_dirs
+        from workspace_discovery import source_asset, walk_steps
+
         manifest = json.loads((CONTRACT_ROOT / "affected-surfaces.v1.json").read_text())
         def declared_steps(path):
-            data = tomllib.loads((REPO_ROOT / path).read_text())
-            def walk(steps):
-                for step in steps:
-                    yield step
-                    yield from walk(step.get("children", []))
-            return {step["id"]: step for step in walk(data.get("steps", []) + data.get("template", []))}
+            pack = pathlib.Path(path).parts[0]
+            layers = [PACK_ROOT / "formulas"]
+            if pack != "gascity":
+                layers.append(REPO_ROOT / pack / "formulas")
+            name = pathlib.Path(path).name.removesuffix(".formula.toml")
+            data = resolve_formula_from_dirs(layers, name)
+            return {step["id"]: step for step in walk_steps(data.get("steps", []) + data.get("template", []))}
         for binding in manifest["owning_steps"]:
             with self.subTest(binding=binding):
                 step = declared_steps(binding["formula"])[binding["step_id"]]
-                asset = (REPO_ROOT / binding["formula"]).parent / step["description_file"]
-                self.assertEqual(str(asset.resolve().relative_to(REPO_ROOT)), binding["asset"])
+                asset = source_asset(REPO_ROOT, binding["formula"], step["description_file"])
+                self.assertEqual(asset, binding["asset"])
         for owner in manifest["source_owners"]:
             self.assertEqual(owner["final_source_step"], next(binding for binding in manifest["owning_steps"]
                              if binding["formula"] == owner["formula"] and binding["step_id"] == owner["final_source_step"]["step_id"]))

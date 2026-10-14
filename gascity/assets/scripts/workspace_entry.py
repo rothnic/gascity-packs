@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 from pathlib import Path
+import secrets
+import stat
 import sys
 from typing import Any
 
 from workspace_records import (RecordError, canonical_bytes, contracts, parse_record,
                                record_identity, record_sha256, validate_record)
 from workspace_run import (RunError, canonical_path, capture_payload, capture_run,
-                           native_json, read_check_policy, registered_rig, repository_identity, source_context)
+                           native_json, read_check_policy, registered_rig, repository_identity, source_context, run_scope)
 
 
 RUN_REF = "gc.implementation_run_ref"
@@ -54,7 +58,9 @@ def healthy(row: dict[str, Any]) -> None:
             "native entry is failed, canceled or held")
 
 
-def allocate_placeholder(store, *, title: str, existing_id: str | None = None) -> str:
+def allocate_placeholder(store, *, title: str, existing_id: str | None = None,
+                         allocation_description: str | None = None,
+                         verified_rows: dict[str, Any] | None = None) -> str:
     """Allocate one native closed record without publishing any lifecycle state.
 
     A lost create acknowledgement is not retried. An operator may pass the exact
@@ -63,9 +69,11 @@ def allocate_placeholder(store, *, title: str, existing_id: str | None = None) -
     if existing_id is None:
         rig = store.store_ref.split(":", 1)[1] if store.store_ref.startswith("rig:") else None
         try:
-            response = native_json(store.gc, store.cwd,
-                ["bd", "create", title, "--type", "task", "--status", "closed",
-                 "--assignee", "", "--metadata", "{}", "--json"], rig)
+            args = ["bd", "create", title, "--type", "task", "--status", "closed",
+                    "--assignee", "", "--metadata", "{}", "--json"]
+            if allocation_description is not None:
+                args += ["--description", allocation_description]
+            response = native_json(store.gc, store.cwd, args, rig)
         except (RunError, RecordError, OSError) as exc:
             raise EntryError("native allocation outcome is uncertain; inspect the original create response before retrying") from exc
         existing_id = response.get("id")
@@ -78,7 +86,106 @@ def allocate_placeholder(store, *, title: str, existing_id: str | None = None) -
     require(row["id"] == existing_id and row["status"] == "closed" and not row["assignee"]
             and not row["metadata"] and row["type"] == "task" and not row.get("labels"),
             f"native ID {existing_id} is not an empty closed, unassigned record allocation")
+    if allocation_description is not None:
+        rig = store.store_ref.split(":", 1)[1] if store.store_ref.startswith("rig:") else None
+        details = native_json(store.gc, store.cwd, ["bd", "show", existing_id, "--json"], rig,
+                              unwrap_singleton=True)
+        require(details.get("id") == existing_id and details.get("title") == title
+                and details.get("description") == allocation_description,
+                "native ID does not belong to the retained allocation intent")
+        require(store.snapshot([existing_id])[existing_id] == row,
+                "native allocation changed while reading its identity")
+    if verified_rows is not None:
+        verified_rows[existing_id] = row
     return existing_id
+
+
+def _allocation_packet(path: Path) -> dict[str, Any]:
+    info = path.lstat()
+    require(stat.S_ISREG(info.st_mode) and info.st_uid == os.geteuid()
+            and info.st_nlink == 1 and not stat.S_IMODE(info.st_mode) & 0o077,
+            "allocation journal has unknown ownership or permissions")
+    raw = path.read_text()
+    packet = parse_record(raw)
+    require(canonical_bytes(packet).decode() == raw, "allocation journal is not canonical")
+    return packet
+
+
+def allocate_run_placeholders(store, attempt, *, workflow_root_id: str, input_convoy_id: str,
+                              source_anchor_id: str, rig_root: str, worktree_lifecycle: str,
+                              base_ref: str = "@default", run_record_id: str | None = None,
+                              authority_id: str | None = None, checks_config: str | None = None) -> dict[str, Any]:
+    """Retain the source and each native create boundary before effects."""
+    from workspace_requests import allocation_directory, require_resolved_scope
+    from workspace_store import transition_locks
+    from workspace_outputs import immutable_json
+    scope = run_scope(workflow_root_id)
+    directory = allocation_directory(store)
+    prefix = "run-" + hashlib.sha256(canonical_bytes(scope)).hexdigest()
+    path = directory / (prefix + ".intent.json")
+    binding = {"store": parse_record(store._binding().decode()), "scope": scope,
+               "writer_attempt_id": attempt.writer_attempt_id, "base_ref": base_ref,
+               "checks_config": checks_config}
+    with transition_locks(store.common_git_dir, scope):
+        require_resolved_scope(store, scope)
+        original = _allocation_packet(path) if path.exists() else None
+        require(original is None or original.get("binding") == binding,
+                "run allocation belongs to a different source configuration or attempt; inspect " + str(path))
+        captured = capture_payload(workflow_root_id=workflow_root_id, input_convoy_id=input_convoy_id,
+            source_anchor_id=source_anchor_id, rig_root=rig_root, writer_step_id=attempt.claimed_bead_id,
+            worktree_lifecycle=worktree_lifecycle, base_ref=base_ref,
+            stored=original["captured_run"] if original else None)
+        if worktree_lifecycle == "new":
+            # Validate policy before the first native allocation, with its later
+            # physical record binding still owned by the publication adapter.
+            from workspace_outputs import check_scope
+            config = parse_record(checks_config) if isinstance(checks_config, str) else None
+            require(config is not None and set(config) == {"required_checks"}
+                    and canonical_bytes(config).decode() == checks_config,
+                    "new run allocation requires canonical native worktree_checks")
+            check_scope(config["required_checks"])
+        packet = original or {"version": 1, "binding": binding, "captured_run": captured,
+                              "nonce": secrets.token_hex(32)}
+        require(set(packet) == {"version", "binding", "captured_run", "nonce"}
+                and type(packet["version"]) is int and packet["version"] == 1
+                and isinstance(packet["nonce"], str) and len(packet["nonce"]) == 64,
+                "retained run allocation intent is malformed")
+        immutable_json(path, packet)
+        ids, rows = {}, {}
+        for role, title, supplied in (("run", "Immutable build run", run_record_id),
+                                     ("authority", "Build run writer grant", authority_id)):
+            pending = directory / (prefix + "." + role + ".pending.json")
+            receipt = directory / (prefix + "." + role + ".json")
+            description = "Gas City workspace allocation " + hashlib.sha256(
+                canonical_bytes({"intent": packet, "role": role})).hexdigest()
+            expected = {"intent_sha256": record_sha256(packet), "role": role,
+                        "title": title, "description": description}
+            saved = None
+            if receipt.exists():
+                saved = _allocation_packet(receipt)
+                require(set(saved) == {*expected, "bead_id", "snapshot"}
+                        and all(saved[key] == value for key, value in expected.items()),
+                        "native allocation receipt conflicts with its original intent")
+                require(supplied is None or supplied == saved["bead_id"], "supplied native allocation ID changed")
+                supplied = saved["bead_id"]
+            elif pending.exists():
+                require(_allocation_packet(pending) == expected, "native allocation pending intent changed")
+                require(supplied is not None,
+                        "native allocation has no known physical ID; reconcile its original creation before retrying: " + str(pending))
+            immutable_json(pending, expected)
+            try:
+                bead_id = allocate_placeholder(store, title=title, existing_id=supplied,
+                                                allocation_description=description, verified_rows=rows)
+            except (RecordError, OSError) as exc:
+                raise EntryError(f"native {role} allocation unresolved; retained intent {pending}: {exc}") from exc
+            require(bead_id not in ids.values(), "run and authority must be distinct native allocations")
+            if saved is not None:
+                require(rows[bead_id] == saved["snapshot"], "native allocation changed since its original receipt")
+                rows[bead_id] = saved["snapshot"]
+            immutable_json(receipt, {**expected, "bead_id": bead_id, "snapshot": rows[bead_id]})
+            ids[role] = bead_id
+        return {"run_record_id": ids["run"], "authority_id": ids["authority"],
+                "captured_run": captured, "allocation_rows": rows, "allocation_journal": str(path)}
 
 
 def _load(store, kind: str, ref: dict[str, Any]) -> dict[str, Any]:
@@ -89,6 +196,73 @@ def _load(store, kind: str, ref: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: str | None = None):
+    """Resolve a native drain child through its recorded control and unit convoy.
+
+    This reads native rows only. Publishing inherited references belongs in the
+    guarded workspace transaction that consumes these exact original rows.
+    """
+    from workspace_store import NativeRunContinuation, validate_native_continuation
+    rows = {}
+
+    def read(bead_id):
+        require(isinstance(bead_id, str) and bool(bead_id.strip()) and bead_id == bead_id.strip(),
+                "native continuation has no exact physical relationship ID")
+        if bead_id not in rows:
+            require(len(rows) < 100, "native continuation exceeds the guarded row bound")
+            snapshot = store.snapshot([bead_id])
+            require(set(snapshot) == {bead_id} and snapshot[bead_id]["id"] == bead_id,
+                    "native continuation readback has a different physical ID")
+            rows.update(snapshot)
+        healthy(rows[bead_id])
+        return rows[bead_id]
+
+    def payload(kind, ref):
+        row = read(ref["bead_id"])
+        raw = row["metadata"].get(contracts()[kind]["metadata_key"])
+        require(isinstance(raw, str), "native continuation reference points to an empty " + kind)
+        value = parse_record(raw)
+        validate_record(kind, value)
+        require(list(record_identity(kind, value)) == ref["identity"], "native continuation record identity changed")
+        return value
+
+    claim = read(claimed_step_id)
+    child_id = native_root(claim)
+    child = read(child_id)
+    control_id = child["metadata"].get("gc.drain_control_id")
+    control = read(control_id)
+    run_root_id = native_root(control)
+    require(run_root_id != child_id and requested_root_id in (None, run_root_id, child_id),
+            "native drain child does not continue the requested workflow")
+    root = read(run_root_id)
+    unit_id = child["metadata"].get("gc.input_convoy_id")
+    unit = read(unit_id)
+    implementation_id = unit["metadata"].get("gc.parent_convoy_id")
+    implementation = read(implementation_id)
+    member_id = child["metadata"].get("gc.drain_member_id")
+    read(member_id)
+    owner_id = implementation["metadata"].get("gc.source_plan_owner_id")
+    owner = read(owner_id)
+    run_ref = reference(root["metadata"].get(RUN_REF), "run")
+    plan_ref = reference(owner["metadata"].get(PLAN_REF), "source-plan")
+    run_payload = payload("run", run_ref)
+    plan = payload("source-plan", plan_ref)
+    raw_policy = rows[run_ref["bead_id"]]["metadata"].get("gc.workspace_required_checks.v1")
+    require(isinstance(raw_policy, str), "native continuation has no captured check policy")
+    policy = parse_record(raw_policy)
+    require(canonical_bytes(policy).decode() == raw_policy, "captured check policy is noncanonical")
+    binding = {"version": 1, "workflow_root_id": run_root_id, "store_ref": store.store_ref,
+        "generation": plan["generation"], "child_root_id": child_id, "unit_convoy_id": unit_id,
+        "implementation_convoy_id": implementation_id, "drain_control_id": control_id,
+        "member_id": member_id, "run_ref": run_ref, "source_plan_ref": plan_ref,
+        "run_sha256": record_sha256(run_payload), "source_plan_sha256": record_sha256(plan),
+        "check_policy_sha256": hashlib.sha256(canonical_bytes(policy)).hexdigest()}
+    continuation = NativeRunContinuation(canonical_bytes(binding))
+    validate_native_continuation(continuation, rows, store_ref=store.store_ref,
+        workflow_root_id=run_root_id, claimed_step_id=claimed_step_id)
+    return continuation, rows
+
+
 def read_entry(store, *, gc: str, city_root: str, rig_name: str,
                workflow_root_id: str, claimed_step_id: str, worktree_lifecycle: str,
                generation: int, input_convoy_id: str | None = None,
@@ -96,8 +270,8 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
                expected_plan_sha256: str | None = None) -> dict[str, Any]:
     """Read immutable provenance separately from the mutable current convoy.
 
-    Native attached suffixes keep the original root. A separate root without
-    the same native root binding is refused; artifacts never establish lineage.
+    Native attached suffixes retain the original root. Drain children retain
+    their own native root and inherit the original run through their control.
     The caller must fence this state again in the operation that uses it.
     """
     try:
@@ -107,28 +281,49 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
         rig_root = registered_rig(gc, city_root, rig_name, store.store_ref)
         rows = store.snapshot(list(dict.fromkeys([workflow_root_id, claimed_step_id])))
         root, step = rows[workflow_root_id], rows[claimed_step_id]
+        continuation = None
+        physical_root_id = native_root(step)
+        physical_root = root if physical_root_id == workflow_root_id else store.snapshot([physical_root_id])[physical_root_id]
+        if physical_root["metadata"].get("gc.drain_control_id"):
+            continuation, continuation_rows = read_native_continuation(store, claimed_step_id=claimed_step_id,
+                                                                       requested_root_id=workflow_root_id)
+            require(all(bead_id not in rows or rows[bead_id] == row for bead_id, row in continuation_rows.items()),
+                    "native continuation changed after its original entry snapshot")
+            rows.update(continuation_rows)
+            workflow_root_id = continuation.binding["workflow_root_id"]
+            require(generation == continuation.binding["generation"],
+                    "requested generation differs from the native child source plan")
+            root = rows[workflow_root_id]
+            physical_root = rows[physical_root_id]
         healthy(root)
         healthy(step)
         require(root["metadata"].get("gc.kind") == "workflow"
                 and root["metadata"].get("gc.root_store_ref") == store.store_ref,
                 "workflow root belongs to another native store")
-        require(native_root(step) == workflow_root_id and step["metadata"].get("gc.root_store_ref") == store.store_ref
+        require(native_root(step) == (continuation.binding["child_root_id"] if continuation else workflow_root_id)
+                and step["metadata"].get("gc.root_store_ref") == store.store_ref
                 and step["status"] == "in_progress" and bool(step["assignee"]),
                 "claimed entry step belongs to another native root/store or is no longer claimed")
         ref = reference(root["metadata"].get(RUN_REF), "run")
         captured = _load(store, "run", ref)
         require(captured["workflow_root_id"] == workflow_root_id,
-                "cross-root continuation has no supported native inheritance; attach to the original workflow")
+                "recorded run belongs to another workflow")
         # Reuse the capture validator without selecting HEAD or any current ref.
         replay = capture_payload(workflow_root_id=workflow_root_id,
             input_convoy_id=captured["input_convoy_id"], source_anchor_id=captured["source_anchor_id"],
             rig_root=rig_root, writer_step_id=captured["writer_step_id"],
             worktree_lifecycle=worktree_lifecycle, stored=captured)
         digest = record_sha256(replay)
+        if continuation:
+            require(ref == continuation.binding["run_ref"] and digest == continuation.binding["run_sha256"],
+                    "inherited run changed after its original native snapshot")
         pin = expected_run_sha256 or root["metadata"].get("gc.implementation_run_sha256")
         require(pin is None or pin == digest, "recorded run hash differs from the continuation binding")
         original_ids = list(dict.fromkeys([captured["input_convoy_id"], captured["source_anchor_id"]]))
         original = store.snapshot(original_ids)
+        require(all(bead_id not in rows or rows[bead_id] == row for bead_id, row in original.items()),
+                "original source changed after continuation admission")
+        rows.update(original)
         require(original[captured["input_convoy_id"]]["type"] == "convoy", "original run input is no longer a native convoy")
         for row in original.values():
             healthy(row)
@@ -140,8 +335,12 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
                 "original source anchor became synthetic")
         current_id = root["metadata"].get("gc.input_convoy_id")
         require(isinstance(current_id, str) and bool(current_id), "current workflow has no native input convoy")
-        require(input_convoy_id is None or input_convoy_id == current_id, "rendered input differs from the current native convoy")
+        rendered_id = continuation.binding["unit_convoy_id"] if continuation else current_id
+        require(input_convoy_id is None or input_convoy_id == rendered_id, "rendered input differs from the current native convoy")
         convoy = store.snapshot([current_id])[current_id]
+        require(current_id not in rows or rows[current_id] == convoy,
+                "current convoy changed after continuation admission")
+        rows[current_id] = convoy
         healthy(convoy)
         require(convoy["type"] == "convoy", "continuation input is not a native convoy")
         if current_id != captured["input_convoy_id"] or require_plan:
@@ -153,8 +352,15 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
         result = {"state": "recorded", "run": replay, "run_reference": ref, "run_sha256": digest,
                   "workflow_root_id": workflow_root_id, "generation": generation,
                   "store_ref": store.store_ref, "rig_name": rig_name, "input_convoy_id": current_id}
+        if continuation:
+            result.update(native_workflow_root_id=physical_root_id, native_input_convoy_id=rendered_id,
+                          native_continuation=continuation.binding, _native_rows=rows)
         if worktree_lifecycle == "new":
             result["check_policy"] = read_check_policy(store, ref["bead_id"], replay)
+            if continuation:
+                require(hashlib.sha256(canonical_bytes(result["check_policy"])).hexdigest()
+                        == continuation.binding["check_policy_sha256"],
+                        "inherited check policy changed after its original native snapshot")
         if require_plan:
             from workspace_source_plan import source_node_ids, validate_source_plan
             owner_id = convoy["metadata"].get("gc.source_plan_owner_id")
@@ -165,9 +371,16 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
             require(plan["source_plan_owner_id"] == owner_id and plan["generation"] == generation,
                     "source plan has a different owner or generation")
             plan_digest = record_sha256(plan)
+            if continuation:
+                require(plan_ref == continuation.binding["source_plan_ref"]
+                        and plan_digest == continuation.binding["source_plan_sha256"],
+                        "inherited source plan changed after its original native snapshot")
             pin = expected_plan_sha256 or convoy["metadata"].get("gc.source_plan_sha256")
             require(pin is None or pin == plan_digest, "source-plan hash differs from the continuation binding")
             nodes = store.snapshot(list(dict.fromkeys([owner_id, *source_node_ids(plan)])))
+            require(all(bead_id not in rows or rows[bead_id] == row for bead_id, row in nodes.items()),
+                    "source membership changed after continuation admission")
+            rows.update(nodes)
             canonical = None
             if generation > 1:
                 canonical_ref = reference(root["metadata"].get("gc.canonical_ref"), "canonical")
@@ -194,11 +407,15 @@ def prepare_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
     require(canonical_path(city_root) == store.cwd, "selected city conflicts with the native store adapter")
     rows = store.snapshot([workflow_root_id, attempt.claimed_bead_id])
     root = rows[workflow_root_id]
-    if RUN_REF in root["metadata"]:
-        return read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
+    if RUN_REF in root["metadata"] or root["metadata"].get("gc.drain_control_id"):
+        result = read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
             workflow_root_id=workflow_root_id, claimed_step_id=attempt.claimed_bead_id,
             worktree_lifecycle=worktree_lifecycle, generation=generation,
             input_convoy_id=input_convoy_id, require_plan=require_plan)
+        from workspace_requests import require_resolved_scope
+        store.common_git_dir = result["run"]["common_git_dir"]
+        require_resolved_scope(store, run_scope(result["run"]["workflow_root_id"]))
+        return result
     require(entrypoint in ("build", "implement", "requirements"),
             "continuation has no recorded run; artifact-only legacy input requires explicit migration")
     require(generation == 1, "an initial run cannot begin at a later generation")
@@ -223,25 +440,34 @@ def prepare_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
                 "store_ref": store.store_ref, "implementation_allowed": False}
     require(input_convoy_id is None or current_id == input_convoy_id, "rendered input differs from native source convoy")
     # Validate the actual source boundary before allocating records or grants.
-    source_context(store, gc=gc, city_root=city_root, workflow_root_id=workflow_root_id,
-                   input_convoy_id=current_id, claimed_step_id=attempt.claimed_bead_id)
+    anchor, source_rows = source_context(store, gc=gc, city_root=city_root, workflow_root_id=workflow_root_id,
+                                        input_convoy_id=current_id, claimed_step_id=attempt.claimed_bead_id)
     rig_root = registered_rig(gc, canonical_path(city_root), rig_name, store.store_ref)
     store.common_git_dir = repository_identity(rig_root)[1]
+    from workspace_requests import require_resolved_scope
+    require_resolved_scope(store, run_scope(workflow_root_id))
     from workspace_cooked import read_cooked_writer_map
     writer_map, writer_rows = read_cooked_writer_map(store, workflow_root_id=workflow_root_id,
                                                     claimed_step_id=attempt.claimed_bead_id)
-    run_record_id = allocate_placeholder(store, title="Immutable build run", existing_id=run_record_id)
-    authority_id = allocate_placeholder(store, title="Build run writer grant", existing_id=authority_id)
+    checks_config = source_rows[workflow_root_id]["metadata"].get("gc.var.worktree_checks")
+    allocated = allocate_run_placeholders(store, attempt, workflow_root_id=workflow_root_id,
+        input_convoy_id=current_id, source_anchor_id=anchor, rig_root=rig_root,
+        worktree_lifecycle=worktree_lifecycle, base_ref=base_ref,
+        run_record_id=run_record_id, authority_id=authority_id, checks_config=checks_config)
+    run_record_id, authority_id = allocated["run_record_id"], allocated["authority_id"]
     captured = capture_run(store, attempt, gc=gc, city_root=city_root, rig_name=rig_name,
         workflow_root_id=workflow_root_id, input_convoy_id=current_id, record_bead_id=run_record_id,
         authority_id=authority_id, worktree_lifecycle=worktree_lifecycle, base_ref=base_ref,
-        writer_map=writer_map, writer_rows=writer_rows)
+        writer_map=writer_map, writer_rows=writer_rows, allocation_rows=allocated["allocation_rows"],
+        captured_run=allocated["captured_run"], captured_checks_config=checks_config)
     require(captured["receipt"].get("outcome") in ("committed", "replayed"),
-            "run publication is uncertain; resolve the original guarded request before continuing")
+            "run publication is uncertain; resolve the original guarded request before continuing: "
+            + str(captured["receipt"].get("request_path", "unavailable")))
     result = read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
         workflow_root_id=workflow_root_id, claimed_step_id=attempt.claimed_bead_id,
         worktree_lifecycle=worktree_lifecycle, generation=generation, require_plan=require_plan)
     result["receipt"] = captured["receipt"]
+    result["allocation_journal"] = allocated["allocation_journal"]
     return result
 
 
@@ -249,17 +475,53 @@ def gate_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
                workflow_root_id: str, entrypoint: str, generation: int = 1,
                worktree_lifecycle: str | None = None, **kwargs) -> dict[str, Any]:
     """Apply the mode recorded by native cooking at the real entry boundary."""
-    root = store.snapshot([workflow_root_id])[workflow_root_id]
+    observed = store.snapshot(list(dict.fromkeys([workflow_root_id, attempt.claimed_bead_id])))
+    root = observed[workflow_root_id]
     metadata = root["metadata"]
     mode = metadata.get("gc.var.worktree_lifecycle", "legacy")
+    claimed_mode = observed[attempt.claimed_bead_id]["metadata"].get("gc.lifecycle")
+    require(claimed_mode is None or claimed_mode == mode,
+            "claimed native lifecycle conflicts with the workflow mode")
     require(mode in ("legacy", "new"), "native workflow has an invalid worktree lifecycle")
     require(worktree_lifecycle is None or worktree_lifecycle == mode,
             "rendered lifecycle conflicts with the native workflow")
-    if RUN_REF in metadata:
+    if metadata.get("gc.drain_control_id"):
+        control = store.snapshot([metadata["gc.drain_control_id"]])[metadata["gc.drain_control_id"]]
+        original_root_id = native_root(control)
+        require(original_root_id and original_root_id != workflow_root_id
+                and control["metadata"].get("gc.kind") == "drain"
+                and control["metadata"].get("gc.root_store_ref") == store.store_ref,
+                "native legacy or inherited child has no exact original root/store")
+        original_root = store.snapshot([original_root_id])[original_root_id]
+        require(original_root["metadata"].get("gc.kind") == "workflow"
+                and original_root["metadata"].get("gc.root_store_ref") == store.store_ref,
+                "native child original root/store changed")
+        if RUN_REF in original_root["metadata"]:
+            continuation, inherited_rows = read_native_continuation(store, claimed_step_id=attempt.claimed_bead_id,
+                                                                  requested_root_id=workflow_root_id)
+            inherited = inherited_rows[continuation.binding["run_ref"]["bead_id"]]
+            retained = parse_record(inherited["metadata"][contracts()["run"]["metadata_key"]])
+            require(retained["worktree_lifecycle"] == mode,
+                    "native child mode conflicts with its immutable inherited run")
+        else:
+            require(mode == "legacy" and original_root["metadata"].get("gc.var.worktree_lifecycle", "legacy") == "legacy"
+                    and RUN_REF not in metadata,
+                    "native child cannot bypass an original managed run or its required capture")
+            retained = None
+    elif RUN_REF in metadata:
         retained = _load(store, "run", reference(metadata[RUN_REF], "run"))
         require(retained["workflow_root_id"] == workflow_root_id
                 and retained["worktree_lifecycle"] == mode,
                 "native workflow mode conflicts with its immutable recorded run")
+    else:
+        retained = None
+    if retained is not None:
+        from workspace_requests import require_resolved_scope
+        rig_root = registered_rig(gc, canonical_path(city_root), rig_name, store.store_ref)
+        common = repository_identity(rig_root)[1]
+        require(common == retained["common_git_dir"], "recorded run lock repository changed")
+        store.common_git_dir = common
+        require_resolved_scope(store, run_scope(retained["workflow_root_id"]))
     if mode == "legacy":
         return {"state": "legacy", "workflow_root_id": workflow_root_id, "store_ref": store.store_ref}
     base = metadata.get("gc.var.worktree_base_ref", "@default")
@@ -294,6 +556,8 @@ def main(argv: list[str] | None = None) -> int:
         from workspace_store import Attempt, WorkspaceStore
         store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city_root)
         if args.action == "allocate":
+            require(args.run_record_id is not None,
+                    "fresh native allocation requires an admitted workflow entry; allocate only verifies a known native ID")
             result = {"bead_id": allocate_placeholder(store, title=args.title, existing_id=args.run_record_id)}
         else:
             require(bool(args.workflow_root) and bool(args.claimed_step), "entry requires exact workflow root and claimed step")
@@ -312,7 +576,7 @@ def main(argv: list[str] | None = None) -> int:
                 result = prepare_entry(store, Attempt.from_env(args.claimed_step), entrypoint=args.entrypoint,
                     base_ref=args.base_ref, run_record_id=args.run_record_id, authority_id=args.authority_id,
                     allow_pending_source=args.allow_pending_source, **kwargs)
-        print(json.dumps(result, sort_keys=True))
+        print(json.dumps({key: value for key, value in result.items() if not key.startswith("_")}, sort_keys=True))
         return 0
     except (RecordError, RunError, OSError, ValueError) as exc:
         print(f"workspace entry: {exc}", file=sys.stderr)

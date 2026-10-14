@@ -907,6 +907,14 @@ def create_from_tasks(path: Path, *, city: str | None, dry_run: bool, force: boo
     if workspace is not None and plan.sources is None:
         raise PlanError("new lifecycle requires explicit ordered sources before native expansion")
     if workspace is not None:
+        if not dry_run:
+            from workspace_requests import require_resolved_scope
+            if not workspace.get("evidence_dir"):
+                raise PlanError("new source expansion requires its existing evidence directory")
+            require_resolved_scope(workspace["store"], {
+                "workflow_root_id": workspace["state"]["workflow_root_id"],
+                "generation": workspace["state"]["generation"],
+                "writer_scope_id": workspace["attempt"].claimed_bead_id, "record_kind": "source-plan"})
         if any(item.key not in {member for node in plan.sources["nodes"] for member in node["members"]} for item in plan.runnables):
             raise PlanError("every new-mode runnable must belong to a declared source owner; control work belongs in the workflow graph")
         if not plan.convoys:
@@ -1011,7 +1019,7 @@ def publish_source_expansion(runner: WorkspaceRunner, plan: Plan, mappings: dict
     prepared = declare_plan(store, attempt, source_plan, run_record_id=state["run_reference"]["bead_id"],
         record_bead_id=record_id, authority_id=authority_id, implementation_convoy_id=mappings[convoy_key],
         writer_map=workspace["writer_map"], writer_rows=workspace["writer_rows"])
-    receipt = publish_plan(store, prepared)
+    receipt = publish_plan(store, prepared, evidence_dir=workspace["evidence_dir"])
     if receipt.get("outcome") not in ("committed", "replayed"):
         raise PlanError("source-plan publication is uncertain; resolve the original guarded request before dispatch")
     # Creation assigns no worker or routing target. The existing native build
@@ -1032,6 +1040,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-plan-record-id")
     parser.add_argument("--authority-id")
     parser.add_argument("--implementation-convoy-key")
+    parser.add_argument("--evidence-dir", type=Path, help="Existing directory retaining exact new-mode write requests")
     parser.add_argument("--gc", default="gc")
     args = parser.parse_args(argv)
     try:
@@ -1039,8 +1048,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.worktree_lifecycle == "new":
             from workspace_entry import read_entry, reference
             from workspace_store import Attempt, WorkspaceStore
-            if not all((args.city, args.store_ref, args.workflow_root, args.claimed_step)):
-                raise PlanError("new source expansion requires explicit city, store, workflow root and claimed step")
+            if not all((args.city, args.store_ref, args.workflow_root, args.claimed_step)) or (not args.dry_run and args.evidence_dir is None):
+                raise PlanError("new source expansion requires explicit city, store, workflow root, claimed step and evidence directory")
+            if args.evidence_dir is not None and (not args.evidence_dir.is_absolute() or not args.evidence_dir.is_dir()
+                    or args.evidence_dir.resolve(strict=True) != args.evidence_dir):
+                raise PlanError("evidence directory must be an existing canonical absolute directory")
             rig_name = parse_plan(extract_payload(Path(args.tasks_md).read_text(encoding="utf-8"))).target_rig
             store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city)
             state = read_entry(store, gc=args.gc, city_root=args.city, rig_name=rig_name,
@@ -1057,7 +1069,8 @@ def main(argv: list[str] | None = None) -> int:
                     raise PlanError("new fix generation must follow the exact current canonical result")
             workspace = {"store": store, "state": state, "attempt": Attempt.from_env(args.claimed_step),
                 "record_id": args.source_plan_record_id, "authority_id": args.authority_id,
-                "implementation_convoy_key": args.implementation_convoy_key, "canonical": canonical}
+                "implementation_convoy_key": args.implementation_convoy_key, "canonical": canonical,
+                "evidence_dir": args.evidence_dir}
         return create_from_tasks(Path(args.tasks_md), city=args.city, dry_run=args.dry_run, force=args.force, workspace=workspace)
     except (PlanError, RecordError, OSError, ValueError) as exc:
         print(f"create_beads_from_tasks: {exc}", file=sys.stderr)

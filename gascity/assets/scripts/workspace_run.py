@@ -24,6 +24,11 @@ class RunError(RecordError):
     pass
 
 
+def run_scope(workflow_root_id: str) -> dict[str, Any]:
+    return {"workflow_root_id": workflow_root_id, "generation": 1,
+            "writer_scope_id": workflow_root_id, "record_kind": "run"}
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise RunError(message)
@@ -134,7 +139,8 @@ def capture_payload(*, workflow_root_id: str, input_convoy_id: str, source_ancho
     return validate_record("run", candidate)
 
 
-def native_json(gc: str, city_root: str, args: list[str], rig: str | None = None) -> dict[str, Any]:
+def native_json(gc: str, city_root: str, args: list[str], rig: str | None = None,
+                *, unwrap_singleton: bool = False) -> dict[str, Any]:
     command = [gc, "--city", city_root]
     if rig is not None:
         command += ["--rig", rig]
@@ -147,6 +153,13 @@ def native_json(gc: str, city_root: str, args: list[str], rig: str | None = None
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RunError(f"native source read failed: {exc}") from exc
     require(result.returncode == 0, "native source read failed: " + result.stderr.strip()[-1000:])
+    if unwrap_singleton:
+        value = parse_record('{"value":' + result.stdout + '}')["value"]
+        if isinstance(value, list):
+            require(len(value) == 1, "native bead read must return exactly one physical row")
+            value = value[0]
+        require(isinstance(value, dict), "native bead read must return an object")
+        return value
     return parse_record(result.stdout)
 
 
@@ -275,11 +288,18 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
                 workflow_root_id: str, input_convoy_id: str, record_bead_id: str,
                 authority_id: str, worktree_lifecycle: str, writer_map: Any, base_ref: str = "@default",
                 writer_rows: dict[str, Any] | None = None,
+                allocation_rows: dict[str, Any] | None = None,
+                captured_run: dict[str, Any] | None = None,
+                captured_checks_config: str | None = None,
                 expected_source_anchor_id: str | None = None, operation_nonce: str | None = None) -> dict[str, Any]:
     from workspace_store import GuardRead, MISSING, RecordWrite, ReferenceWrite, RunCheckPolicyProjection
+    from workspace_requests import require_resolved_scope, retain_request, resolve_request
 
     city_root = canonical_path(city_root)
     rig_root = registered_rig(gc, city_root, rig_name, store.store_ref)
+    require(canonical_path(str(store.common_git_dir)) == repository_identity(rig_root)[1],
+            "record lock repository identity changed")
+    require_resolved_scope(store, run_scope(workflow_root_id))
     anchor, rows = source_context(store, gc=gc, city_root=city_root, workflow_root_id=workflow_root_id,
                                   input_convoy_id=input_convoy_id, claimed_step_id=attempt.claimed_bead_id,
                                   expected_source_anchor_id=expected_source_anchor_id)
@@ -297,7 +317,8 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
         require(store.read_record("run", record_bead_id) is None, "unreferenced run record cannot be adopted")
     payload = capture_payload(workflow_root_id=workflow_root_id, input_convoy_id=input_convoy_id,
                               source_anchor_id=anchor, rig_root=rig_root, writer_step_id=attempt.claimed_bead_id,
-                              worktree_lifecycle=worktree_lifecycle, base_ref=base_ref, stored=stored)
+                              worktree_lifecycle=worktree_lifecycle, base_ref=base_ref, stored=stored or captured_run)
+    require(captured_run is None or payload == captured_run, "retained allocation run changed before publication")
     reference = dict(kind="run", identity=list(record_identity("run", payload)), bead_id=record_bead_id)
     require(raw_reference is MISSING or canonical_bytes(parse_record(raw_reference)) == canonical_bytes(reference),
             "run reference payload changed")
@@ -316,6 +337,11 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
         additional = store.snapshot(missing_ids)
         require(set(additional) == set(missing_ids), "native lifecycle placeholder read is incomplete")
         rows.update(additional)
+    if allocation_rows is not None:
+        require(set(allocation_rows) == {record_bead_id, authority_id}
+                and all(rows[bead_id] == row for bead_id, row in allocation_rows.items()),
+                "native run allocation changed after its original identity readback")
+        rows.update(allocation_rows)
     declaration = writer_map.declaration
     map_ids = list(dict.fromkeys([declaration["expansion_root_id"], declaration["source_member_id"],
                                 *(step["bead_id"] for step in declaration["steps"])]))
@@ -331,23 +357,30 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
     projections = []
     if worktree_lifecycle == "new":
         raw_checks = root_meta.get(CHECKS_CONFIG_KEY)
+        require(captured_run is None or raw_checks == captured_checks_config,
+                "native required-check configuration changed after retained allocation")
         policy = capture_check_policy(payload, record_bead_id, raw_checks)
         projections = [RunCheckPolicyProjection(record_bead_id, policy)]
         guards += (GuardRead(workflow_root_id, CHECKS_CONFIG_KEY, raw_checks),)
     method = store.install_grant if stored is None else store.write_records
-    prepared = method(attempt, {"workflow_root_id": workflow_root_id, "generation": 1,
-                               "writer_scope_id": workflow_root_id, "record_kind": "run"}, authority_id,
+    prepared = method(attempt, run_scope(workflow_root_id), authority_id,
                       [RecordWrite("run", record_bead_id, payload)],
                       references=[ReferenceWrite(workflow_root_id, RUN_REFERENCE_KEY, reference)],
                       guards=guards, expected_rows=rows, operation_nonce=operation_nonce, writer_map=writer_map,
                       projections=projections)
-    write_receipt = store.execute(prepared)
-    readback = store.resolve(prepared)
+    request_path, _ = retain_request(store, prepared)
+    try:
+        write_receipt = store.execute(prepared)
+        readback = resolve_request(store, request_path)
+    except (RecordError, OSError) as exc:
+        raise RunError(f"run publication is uncertain; resolve original request {request_path}: {exc}") from exc
     # Raw authority metadata contains the retained instance token. The public
     # receipt only needs the classification and exact request binding.
     receipt = {key: value for key, value in readback.items() if key != "rows"}
     receipt["write_outcome"] = write_receipt.get("outcome")
-    require(receipt.get("request_sha256") == prepared.sha256, "run publication readback request changed")
+    receipt["request_path"] = str(request_path)
+    require(receipt.get("request_sha256") == prepared.sha256,
+            f"run publication readback request changed; resolve original request {request_path}")
     return {"record": payload, "reference": reference, "receipt": receipt}
 
 
@@ -372,6 +405,8 @@ def main(argv: list[str] | None = None) -> int:
         store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=city_root, common_git_dir=common)
         if args.action == "capture":
             require(bool(args.claimed_step_id) and bool(args.authority_id), "capture requires claimed step and authority IDs")
+            from workspace_requests import require_resolved_scope
+            require_resolved_scope(store, run_scope(args.workflow_root_id))
             from workspace_cooked import read_cooked_writer_map
             writer_map, writer_rows = read_cooked_writer_map(store, workflow_root_id=args.workflow_root_id,
                                                             claimed_step_id=args.claimed_step_id)

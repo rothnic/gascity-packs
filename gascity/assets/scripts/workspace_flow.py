@@ -13,51 +13,14 @@ import tempfile
 from workspace_records import RecordError, canonical_bytes, contracts, parse_record, record_sha256
 from workspace_entry import allocate_placeholder, read_entry, reference
 from workspace_cooked import read_cooked_writer_map
-from workspace_store import GRANT_REFS_KEY, PreparedWrite, WorkspaceStore
+from workspace_store import (GRANT_REFS_KEY, GRANT_KEY, WorkspaceStore, validate_cooked_writer_map,
+                             NativeSourceClose, RecordWrite, ReferenceWrite, SuccessorRelation, record_reference)
+from workspace_requests import retain_request, resolve_request, require_resolved_scope, allocation_directory
 from workspace_runtime import NativeSourceRuntime
-from workspace_run import native_json
 import workspace_outputs as outputs
 import workspace_review as review
 import workspace_publish as publish
 import github_api
-
-
-def retain_request(directory, prepared):
-    directory = Path(directory) / "writes"
-    directory.mkdir(mode=0o700, exist_ok=True)
-    packet = {key: getattr(prepared, key).decode() for key in
-              ("request_bytes", "before_bytes", "after_bytes", "scope_bytes", "binding_bytes")}
-    packet["replay"] = prepared.replay
-    packet["request_sha256"] = prepared.sha256
-    path = directory / (prepared.sha256 + ".json")
-    outputs.immutable_json(path, packet)
-    pending = directory / (hashlib.sha256(prepared.scope_bytes).hexdigest() + ".pending")
-    try:
-        fd = os.open(pending, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    except FileExistsError as exc:
-        raise RecordError("a native write is unresolved; resolve the original retained request: " + pending.read_text()) from exc
-    with os.fdopen(fd, "w") as stream:
-        stream.write(str(path))
-        stream.flush()
-        os.fsync(stream.fileno())
-    return path, pending
-
-
-def resolve_request(store, path):
-    packet = parse_record(Path(path).read_text())
-    prepared = PreparedWrite(**{key: packet[key].encode() for key in
-        ("request_bytes", "before_bytes", "after_bytes", "scope_bytes", "binding_bytes")}, replay=packet["replay"])
-    outputs.require(prepared.sha256 == packet["request_sha256"], "retained native request hash changed")
-    binding = parse_record(prepared.binding_bytes.decode())
-    outputs.require(binding["city_root"] == store.cwd and binding["store_ref"] == store.store_ref,
-                    "retained request belongs to another city/store")
-    store.common_git_dir = binding["common_git_dir"]
-    receipt = store.resolve(prepared)
-    if receipt.get("outcome") in ("committed", "replayed"):
-        pending = Path(path).parent / (hashlib.sha256(prepared.scope_bytes).hexdigest() + ".pending")
-        if pending.exists() and pending.read_text() == str(path):
-            pending.unlink()
-    return {key: value for key, value in receipt.items() if key != "rows"}
 
 
 class WorkspaceFlow:
@@ -69,22 +32,25 @@ class WorkspaceFlow:
         self.run, self.plan = runtime.run, runtime.plan
         self.identity, self.attempt = runtime._admitted()
         self._writer_map = None
+        self._terminated = False
 
     @property
     def writer_map(self):
         if self._writer_map is None:
-            self._writer_map, rows = read_cooked_writer_map(self.runtime._fence,
-                workflow_root_id=self.run["workflow_root_id"], claimed_step_id=self.runtime.claimed_step_id)
-            self.runtime._fence.retain(rows)
+            self._writer_map = self.runtime.writer_map
         return self._writer_map
 
     def record(self, kind, owner):
         return outputs.referenced_record(self.runtime._fence, kind, owner)[0]
 
     def _allocation(self, kind, scope_owner, reference_owner, *, generation=None):
-        self.writer_map  # Prove native writer responsibility before allocating.
+        outputs.require(not self._terminated, "this transition ended the retained runtime; load the next source plan")
+        validate_cooked_writer_map(self.writer_map, self.runtime.guard_rows,
+            workflow_root_id=self.run["workflow_root_id"], store_ref=self.store.store_ref,
+            record_kind=kind, claimed_step_id=self.attempt.claimed_bead_id)
         scope = dict(workflow_root_id=self.run["workflow_root_id"], generation=generation or self.plan["generation"],
                      writer_scope_id=scope_owner, record_kind=kind)
+        require_resolved_scope(self.store, scope)
         root = self.store.snapshot([self.run["workflow_root_id"]])[self.run["workflow_root_id"]]
         raw = root["metadata"].get(GRANT_REFS_KEY)
         index = parse_record(raw) if raw else {"version": 1, "scopes": {}}
@@ -99,8 +65,7 @@ class WorkspaceFlow:
 
         # Persist an allocation boundary before each native create. A lost reply
         # leaves a pending journal; rerunning cannot allocate a duplicate.
-        directory = Path(self.runtime.evidence_dir).resolve(strict=True) / "allocations"
-        directory.mkdir(mode=0o700, exist_ok=True)
+        directory = allocation_directory(self.store)
         path = directory / (scope_hash + ".json")
         binding = dict(scope=scope, store_ref=self.store.store_ref,
                        attempt_id=self.attempt.writer_attempt_id)
@@ -133,17 +98,25 @@ class WorkspaceFlow:
                 save(receipt)
         return {key: receipt[key] for key in ("record_id", "authority_id")} | {"initial_write": grant is None}
 
-    def _commit(self, prepared, payload):
+    def _commit(self, prepared, payload, *, terminal=False):
+        outputs.require(not self._terminated, "this transition ended the retained runtime; load the next source plan")
+        if terminal:
+            scope = parse_record(prepared.scope_bytes.decode())
+            outputs.require(scope["record_kind"] == "source-plan"
+                            and payload["generation"] == self.plan["generation"] + 1,
+                            "only the next source plan can end this retained runtime")
         self.runtime._fresh()
-        path, pending = retain_request(self.runtime.evidence_dir, prepared)
+        path, pending = retain_request(self.store, prepared)
         self.store.execute(prepared)
         resolved = self.store.resolve(prepared)
         outputs.require(resolved.get("outcome") in ("committed", "replayed"),
-                        "native write is unresolved; preserve the original request and do not repeat effects")
-        self.runtime.advance_written_rows(resolved["rows"], prepared=prepared)
+                        "native write is unresolved; resolve the original request without another effect: " + str(path))
+        if not terminal:
+            self.runtime.advance_written_rows(resolved["rows"], prepared=prepared)
         outputs.immutable_json(path.with_suffix(".receipt.json"),
             dict(outcome=resolved["outcome"], request_sha256=prepared.sha256, record_sha256=record_sha256(payload)))
         pending.unlink()
+        self._terminated = terminal
         return dict(outcome=resolved["outcome"], request_sha256=prepared.sha256,
                     record_sha256=record_sha256(payload))
 
@@ -194,7 +167,11 @@ class WorkspaceFlow:
         return dict(outcome="committed", transfer=transfer, output_oid=result["output_oid"])
 
     def close_source(self, member_id):
+        from workspace_dependency import FrozenRecords, _authority, writer_checkpoint
         result = self.record("member-result", member_id)
+        scope = dict(workflow_root_id=self.run["workflow_root_id"], generation=self.plan["generation"],
+                     writer_scope_id=result["workspace_owner_id"], record_kind="workspace")
+        require_resolved_scope(self.store, scope)
         self.runtime.qualify_native(result)
         workspace = self.record("workspace", result["workspace_owner_id"])
         outputs.require(workspace["phase"] == "result" and workspace["active_member_id"] == member_id
@@ -208,19 +185,39 @@ class WorkspaceFlow:
         outputs.require(member_id not in (self.run["workflow_root_id"], self.runtime.input_convoy_id),
                         "a source close cannot close the workflow root or convoy")
         row = self.runtime._fence.snapshot([member_id])[member_id]
+        outcome = "no-op" if result["status"] == "no_change" else "shipped"
+        reason = "Accepted exact workspace result and checkpoint"
         if row["status"] == "closed":
-            outputs.require(row["metadata"].get("gc.outcome") == "pass", "source already closed without success")
+            outputs.require(row["metadata"].get("gc.outcome") == "pass"
+                            and row["metadata"].get("gc.work_outcome") == outcome
+                            and (outcome == "no-op" or row["metadata"].get("gc.work_commit") == result["output_oid"])
+                            and row.get("close_reason") == reason and bool(row.get("closed_by_session")),
+                            "source already closed without this accepted outcome and native closure receipt")
             return dict(outcome="replayed", member_id=member_id, status="closed")
         self.runtime._fresh()
-        rig = self.store.store_ref.split(":", 1)[1] if self.store.store_ref.startswith("rig:") else None
-        native_json(self.store.gc, self.store.cwd,
-            ["bd", "update", member_id, "--set-metadata", "gc.outcome=pass", "--json"], rig)
-        native_json(self.store.gc, self.store.cwd,
-            ["bd", "close", member_id, "--reason", "Accepted exact workspace result and checkpoint", "--json"], rig)
-        after = self.store.snapshot([member_id])[member_id]
-        outputs.require(after["status"] == "closed" and after["metadata"].get("gc.outcome") == "pass",
-                        "native source closure outcome is unknown; read back this member before proceeding")
-        return dict(outcome="committed", member_id=member_id, status="closed", revision=after["revision"])
+        frozen = FrozenRecords(self.store, self.runtime.guard_rows)
+        authority_id = _authority(frozen, scope)
+        outputs.require(authority_id, "source closure requires the existing exact workspace writer authority")
+        frozen.ensure([authority_id])
+        grant = parse_record(frozen.metadata(authority_id, GRANT_KEY))
+        frozen.ensure([grant["attempt"]["claimed_bead_id"], grant["writer_occurrence"]["expansion_root_id"]])
+        result_ref = reference(frozen.metadata(member_id, "gc.workspace_result_ref"), "member-result")
+        frozen.ensure([result_ref["bead_id"]])
+        checkpoint = writer_checkpoint(workspace, self.attempt)
+        arguments = dict(writer_map=self.writer_map, guards=frozen.guards, expected_rows=frozen.rows,
+            projections=[NativeSourceClose(member_id, result_ref["bead_id"], reason)])
+        if grant["attempt"] == self.attempt.admission:
+            method = self.store.write_records
+        else:
+            method = self.store.accept_replacement
+            arguments.update(expected_grant=grant, successor_relation=SuccessorRelation(
+                self.runtime.plan_record_id, self.plan["source_plan_owner_id"]))
+        prepared = method(self.attempt, scope, authority_id,
+            [RecordWrite("workspace", workspace["workspace_bead_id"], checkpoint)],
+            [ReferenceWrite(result["workspace_owner_id"], "gc.workspace_ref",
+                            record_reference("workspace", workspace["workspace_bead_id"], checkpoint))], **arguments)
+        receipt = self._commit(prepared, checkpoint)
+        return dict(outcome=receipt["outcome"], member_id=member_id, status="closed", request_sha256=prepared.sha256)
 
     def owner_output(self, owner_id, integration_evidence_path=None):
         nodes = [node for node in self.plan["nodes"] if node["owner_id"] == owner_id]
@@ -306,7 +303,7 @@ class WorkspaceFlow:
         return canonical, approval, result, context
 
     def fix_plan(self, nodes, owner_id, terminal_owner_id, implementation_convoy_id, max_iterations):
-        from workspace_source_plan import declare_plan, publish_plan
+        from workspace_source_plan import declare_plan
         self.subject()
         canonical = self.record("canonical", self.run["workflow_root_id"])
         findings = self.record("review", self.run["workflow_root_id"])
@@ -320,9 +317,7 @@ class WorkspaceFlow:
             run_record_id=self.runtime.run_record_id, record_bead_id=allocation["record_id"],
             authority_id=allocation["authority_id"], implementation_convoy_id=implementation_convoy_id,
             writer_map=self.writer_map, writer_rows=self.runtime.guard_rows)
-        receipt = publish_plan(self.store, prepared)
-        outputs.require(receipt.get("outcome") in ("committed", "replayed"),
-                        "fix publication is unresolved; retain the original native request")
+        receipt = self._commit(prepared, plan, terminal=True)
         return dict(source_plan=plan, receipt=receipt)
 
     def publication(self, review_owner_id, decision_path, *, title_path=None, body_path=None):
@@ -438,7 +433,8 @@ def main(argv=None):
         store.common_git_dir = entry["run"]["common_git_dir"]
         native = NativeSourceRuntime(store, gc=args.gc, city_root=args.city_root, rig_name=args.rig_name,
             run=entry["run"], plan=entry["source_plan"], artifact_root=args.artifact_root,
-            evidence_dir=args.evidence_dir, claimed_step_id=args.claimed_step_id)
+            evidence_dir=args.evidence_dir, claimed_step_id=args.claimed_step_id,
+            native_rows=entry["_native_rows"])
         flow = WorkspaceFlow(native)
         if args.action == "record-result":
             value = flow.record_result(args.owner_id, args.member_id, args.output_oid,

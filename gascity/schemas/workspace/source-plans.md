@@ -82,7 +82,8 @@ python3 gascity/assets/scripts/workspace_source_plan.py declare \
   --record-id PLAN_RECORD_ID \
   --claimed-step-id CURRENT_STEP_ID \
   --authority-id AUTHORITY_ID \
-  --cwd /path/to/registered/rig
+  --cwd /path/to/registered/rig \
+  --evidence-dir /path/to/diagnostics
 ```
 
 The publisher checks the native run reference before the write.
@@ -91,6 +92,9 @@ The batch also checks the retained membership revisions and current canonical re
 A changed precondition refuses publication.
 The command checks exact native intent readback after one submission.
 An uncertain readback returns no success and permits no automatic resubmission.
+The publisher saves the exact request in the captured repository’s private city/store journal before submission.
+The returned `request_path` supports read-only resolution from another process.
+An unresolved request prevents another declaration in the same source-plan scope, including from another diagnostics directory.
 
 Native expansion may also pass `--implementation-convoy-id` after it creates the implementation convoy.
 The same guarded batch binds the convoy to the plan and updates the root's active implementation intake.

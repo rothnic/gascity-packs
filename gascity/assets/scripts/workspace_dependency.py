@@ -13,14 +13,17 @@ import sys
 from workspace_records import (RecordError, canonical_bytes, contracts, parse_record,
                                record_identity, record_sha256, validate_record)
 from workspace_store import (GRANT_KEY, GRANT_REFS_KEY, MISSING, TRANSITION_NONCE_KEY,
-                             GuardRead, RecordWrite, ReferenceWrite, SuccessorRelation,
+                             GuardRead, InheritedRunReference, NativeOwnerProjection,
+                             NativeRunContinuation, NativeWorktreeReference,
+                             RecordWrite, ReferenceWrite, SuccessorRelation,
                              record_reference, transition_locks)
 
 
 class DependencyError(RecordError):
-    def __init__(self, message, evidence_path=None):
+    def __init__(self, message, evidence_path=None, request_path=None):
         super().__init__(message)
         self.evidence_path = evidence_path
+        self.request_path = request_path
 
 
 def require(condition, message):
@@ -164,16 +167,54 @@ def _authority(frozen, scope):
     return entry['authority_id']
 
 
+def checkout_context(writer_map, rows):
+    context = writer_map.continuation
+    return dict(continuation=context, native_rows=rows) if context is not None else {}
+
+
 def publish_checkpoint(frozen, attempt, workspace, *, authority_id, writer_map, plan_record_id,
-                       extra_writes=(), extra_references=(), native_runtime=None):
+                       extra_writes=(), extra_references=(), native_runtime=None, launch_step_ids=()):
+    from workspace_requests import retain_request
+    from workspace_runtime import NativeSourceRuntime
     store = frozen.store
+    require(isinstance(native_runtime, NativeSourceRuntime) and native_runtime.store is store,
+            'checkpoint publication requires its actual runtime and durable request directory')
     scope = dict(workflow_root_id=workspace['workflow_root_id'], generation=workspace['generation'],
                  writer_scope_id=workspace['workspace_owner_id'], record_kind='workspace')
     raw = frozen.metadata(authority_id, GRANT_KEY)
     writes = [RecordWrite('workspace', workspace['workspace_bead_id'], workspace), *extra_writes]
     references = [ReferenceWrite(workspace['workspace_owner_id'], 'gc.workspace_ref',
                                  record_reference('workspace', workspace['workspace_bead_id'], workspace)), *extra_references]
-    arguments = dict(writer_map=writer_map, guards=frozen.guards, expected_rows=frozen.rows)
+    projections = []
+    context = writer_map.continuation
+    if context is not None:
+        projections.append(InheritedRunReference(context))
+        physical_root = context.binding['child_root_id']
+        owner_root = frozen.metadata(workspace['workspace_bead_id'], 'gc.root_bead_id')
+        if workspace['native_provenance'] is not None and owner_root != physical_root:
+            from workspace_checkout import WorkspaceCheckout
+            from workspace_runtime import NativeSourceRuntime
+            require(isinstance(native_runtime, NativeSourceRuntime) and native_runtime.store is store
+                    and launch_step_ids, 'inherited successor needs its actual runtime and launch occurrences')
+            # The saved Git provenance is unchanged. Only this proven child
+            # obtains the active native owner and per-occurrence references.
+            retained = frozen.payload('workspace', workspace['workspace_bead_id'])
+            old_context = native_runtime.retained_workspace_continuation(retained)
+            frozen.merge(native_runtime.guard_rows)
+            checkout = WorkspaceCheckout(native_runtime.run, retained, store_ref=store.store_ref,
+                evidence_dir=native_runtime.evidence_dir, parent=str(Path(retained['work_dir']).parent),
+                allow_external_parent=True, gc=native_runtime.gc, city_root=native_runtime.city_root,
+                **(dict(continuation=old_context, native_rows=frozen.rows) if old_context is not None else {}))
+            native = checkout.successor_projection(workspace, continuation=context,
+                native_rows=frozen.rows, writer_map=writer_map)
+            projections.append(NativeOwnerProjection(workspace['workspace_bead_id'], native['owner_metadata']))
+            admitted_steps = {step['bead_id'] for step in writer_map.declaration['steps']}
+            for step_id in launch_step_ids:
+                require(step_id in admitted_steps, 'successor launch step is outside its actual cooked map')
+                projections.append(NativeWorktreeReference(step_id, workspace['workspace_bead_id'],
+                    dict(native['launch_reference'], binding_step_id=step_id)))
+    arguments = dict(writer_map=writer_map, guards=frozen.guards, expected_rows=frozen.rows,
+                     projections=projections)
     if raw is MISSING:
         prepared = store.install_grant(attempt, scope, authority_id, writes, references, **arguments)
     else:
@@ -189,13 +230,19 @@ def publish_checkpoint(frozen, attempt, workspace, *, authority_id, writer_map, 
             arguments.update(guards=frozen.guards, expected_rows=frozen.rows, expected_grant=grant,
                 successor_relation=SuccessorRelation(plan_record_id, workspace['source_plan_owner_id']))
             prepared = store.accept_replacement(attempt, scope, authority_id, writes, references, **arguments)
-    submitted = store.execute(prepared)
-    resolved = store.resolve(prepared)
-    frozen.acknowledge(prepared, resolved)
-    if native_runtime is not None:
+    request_path, pending = retain_request(store, prepared)
+    try:
+        submitted = store.execute(prepared)
+        resolved = store.resolve(prepared)
+        frozen.acknowledge(prepared, resolved)
         native_runtime.advance_written_rows(resolved['rows'], prepared=prepared)
+    except (RecordError, OSError) as exc:
+        raise DependencyError(str(exc) + '; resolve the original retained request: ' + str(request_path),
+                              request_path=str(request_path)) from exc
+    require(pending.read_text() == str(request_path), 'pending request reference changed after acknowledgement')
+    pending.unlink()
     return dict(outcome=resolved['outcome'], request_sha256=prepared.sha256,
-                submission_outcome=submitted.get('outcome'), retry_allowed=False)
+                submission_outcome=submitted.get('outcome'), retry_allowed=False, request_path=str(request_path))
 
 
 def integration_receipt_path(artifact_root, bundle):
@@ -268,7 +315,7 @@ def _resume_integration(frozen, attempt, workspace, bundle, *, decision_path, ar
     expected_workspace = dict(workspace, phase='active', current_oid=head)
     checkout = WorkspaceCheckout(run, expected_workspace, store_ref=frozen.store.store_ref,
         evidence_dir=str(evidence_dir), parent=parent, allow_external_parent=allow_external_parent,
-        gc=gc, city_root=city_root)
+        gc=gc, city_root=city_root, **checkout_context(writer_map, frozen.rows))
     observed = checkout.verify()
     owner_row = frozen.rows[workspace['workspace_bead_id']]['metadata']
     require(all(owner_row.get(key) == value for key, value in observed['owner_metadata'].items()),
@@ -296,7 +343,8 @@ def _resume_integration(frozen, attempt, workspace, bundle, *, decision_path, ar
         writer_map=writer_map, plan_record_id=plan_record_id, native_runtime=native_runtime))
     native_runtime.bind_workspace(workspace, frozen.rows)
     WorkspaceCheckout(run, workspace, store_ref=frozen.store.store_ref, evidence_dir=str(evidence_dir),
-        parent=parent, allow_external_parent=allow_external_parent, gc=gc, city_root=city_root).verify()
+        parent=parent, allow_external_parent=allow_external_parent, gc=gc, city_root=city_root,
+        **checkout_context(writer_map, frozen.rows)).verify()
     native_runtime.recheck_continuation()
     read_artifact(reference, artifact_root)
     return workspace, integration_evidence, receipts
@@ -347,20 +395,28 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
     from workspace_entry import allocate_placeholder, healthy, read_entry
     from workspace_inputs import materialize_integration, resolve_member_input
     from workspace_outputs import immutable_json
-    from workspace_runtime import NativeSourceRuntime
+    from workspace_runtime import NativeSourceRuntime, _ReadFence
     from workspace_source_plan import source_node_ids, validate_source_plan
 
     directory = diagnostic_directory(str(evidence_dir))
     artifacts = diagnostic_directory(str(artifact_root))
     require(type(generation) is int and generation > 0, 'generation must be a positive integer')
     require(attempt.claimed_bead_id, 'dependency preparation requires the retained native claim')
-    writer_map, map_rows = read_cooked_writer_map(store, workflow_root_id=workflow_root_id,
-                                                claimed_step_id=attempt.claimed_bead_id)
-    frozen = FrozenRecords(store, map_rows)
-    entry = read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
+    entry_reads = _ReadFence(store)
+    entry = read_entry(entry_reads, gc=gc, city_root=city_root, rig_name=rig_name,
         workflow_root_id=workflow_root_id, claimed_step_id=attempt.claimed_bead_id,
         worktree_lifecycle='new', generation=generation, input_convoy_id=input_convoy_id, require_plan=True)
     run, plan = entry['run'], entry['source_plan']
+    # A native child keeps its physical claim while inheriting the original
+    # lifecycle tuple. Its drain unit is not a new source-plan convoy.
+    workflow_root_id, input_convoy_id = run['workflow_root_id'], entry['input_convoy_id']
+    context = (NativeRunContinuation(canonical_bytes(entry['native_continuation']))
+               if entry.get('native_continuation') is not None else None)
+    writer_map, map_rows = read_cooked_writer_map(entry_reads, workflow_root_id=workflow_root_id,
+        claimed_step_id=attempt.claimed_bead_id, continuation=context,
+        continuation_rows=entry_reads.rows if context is not None else None)
+    frozen = FrozenRecords(store, entry_reads.rows)
+    frozen.merge(map_rows)
     # Entry independently validates the registered rig and replays its captured
     # repository identity. The CLI starts without a caller-supplied lock path.
     if store.common_git_dir is None:
@@ -380,7 +436,8 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
             and convoy['metadata'].get('gc.source_plan_sha256') == record_sha256(plan), 'current native plan/convoy selection is stale')
     validate_source_plan(plan, run, frozen.rows, store_ref=store.store_ref, stored=plan)
     runtime = NativeSourceRuntime(store, gc=gc, city_root=city_root, rig_name=rig_name, run=run, plan=plan,
-        artifact_root=artifacts, evidence_dir=directory, claimed_step_id=attempt.claimed_bead_id)
+        artifact_root=artifacts, evidence_dir=directory, claimed_step_id=attempt.claimed_bead_id,
+        native_rows=frozen.rows)
     frozen.merge(runtime.guard_rows)
     bundle = resolve_member_input(plan, workspace_owner_id, member_id,
         load_owner_output=lambda owner: frozen.read('owner-output', owner, 'gc.workspace_output_ref', required=False),
@@ -389,8 +446,24 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
         store_ref=store.store_ref, artifact_root=artifacts)
     frozen.merge(runtime.guard_rows)
     existing = frozen.read('workspace', workspace_owner_id, 'gc.workspace_ref', required=False)
+    if existing is not None and existing['generation'] == generation:
+        # Before a successor commits, the saved workspace still belongs to its
+        # previous writer's published child, independently of the invoking one.
+        retained_context = runtime.retained_workspace_continuation(existing)
+        frozen.merge(runtime.guard_rows)
+        ref = parse_record(frozen.metadata(workspace_owner_id, 'gc.workspace_ref'))
+        original_ids = [ref['bead_id'], *(retained_context.row_ids if retained_context is not None else ())]
+        frozen.merge(store.snapshot(list(dict.fromkeys(original_ids))))
+        observed = store.read_record('workspace', ref['bead_id'], ref['identity'], continuation=retained_context)
+        require(observed == existing, 'retained native workspace differs from its frozen reference')
+        frozen.merge(store.snapshot(list(dict.fromkeys(original_ids))))
     scope = dict(workflow_root_id=workflow_root_id, generation=generation, writer_scope_id=workspace_owner_id,
                  record_kind='workspace')
+    from workspace_requests import require_resolved_scope
+    try:
+        require_resolved_scope(store, scope)
+    except RecordError as exc:
+        raise DependencyError(str(exc)) from exc
     recorded_authority = _authority(frozen, scope)
     require(authority_id is None or recorded_authority is None or authority_id == recorded_authority,
             'supplied authority conflicts with the exact native root reference')
@@ -423,8 +496,12 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
         else:
             workspace = select_checkpoint(existing, bundle, attempt)
         require(work_branch is None or work_branch == workspace['work_branch'], 'existing workspace branch selection changed')
-        WorkspaceCheckout(run, workspace, store_ref=store.store_ref, evidence_dir=str(directory), parent=parent,
-                          allow_external_parent=allow_external_parent, gc=gc, city_root=city_root)
+        # Layout preflight inspects the retained workspace under its published
+        # writer. The successor's physical child is admitted atomically below.
+        WorkspaceCheckout(run, existing, store_ref=store.store_ref, evidence_dir=str(directory), parent=parent,
+                          allow_external_parent=allow_external_parent, gc=gc, city_root=city_root,
+                          **(dict(continuation=retained_context, native_rows=frozen.rows)
+                             if retained_context is not None else {}))
     else:
         require(resume_decision is None, 'recovery requires its existing recorded workspace and blocker')
         require(recorded_authority is None, 'owner authority exists without its published workspace; resolve its original intent')
@@ -441,7 +518,8 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
         workspace = initial_workspace(bundle, attempt, workspace_record_id=workspace_record_id, work_dir=work_dir,
                                       work_branch=work_branch)
         WorkspaceCheckout(run, workspace, store_ref=store.store_ref, evidence_dir=str(directory), parent=parent,
-                          allow_external_parent=allow_external_parent, gc=gc, city_root=city_root)
+                          allow_external_parent=allow_external_parent, gc=gc, city_root=city_root,
+                          **checkout_context(writer_map, frozen.rows))
     frozen.ensure([workspace_record_id, authority_id])
     if existing is not None and existing['phase'] == 'active' and resume_decision is None:
         with transition_locks(store.common_git_dir, scope, store.timeout):
@@ -477,14 +555,16 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
     with transition_locks(store.common_git_dir, scope, store.timeout):
         try:
             receipts.append(publish_checkpoint(frozen, attempt, workspace, authority_id=authority_id,
-                                              writer_map=writer_map, plan_record_id=plan_record_id, native_runtime=runtime))
+                writer_map=writer_map, plan_record_id=plan_record_id, native_runtime=runtime,
+                launch_step_ids=launch_step_ids))
         except (RecordError, OSError) as exc:
             from workspace_checkout import save_diagnostic
             evidence = save_diagnostic(directory, dict(version=1, state='unknown', reason=str(exc),
                 workflow_root_id=workflow_root_id, generation=generation, workspace_owner_id=workspace_owner_id,
                 workspace_record_id=workspace_record_id, authority_id=authority_id, blocker_record_id=blocker_record_id,
-                retry_allowed=False, next_action='Inspect the original request and these exact native allocations.'))
-            raise DependencyError(str(exc), evidence) from exc
+                request_path=getattr(exc, 'request_path', None), retry_allowed=False,
+                next_action='Resolve the original retained request without submitting another write.'))
+            raise DependencyError(str(exc), evidence, request_path=getattr(exc, 'request_path', None)) from exc
         prepared = manage_workspace(store, attempt, action='prepare', gc=gc, city_root=city_root, rig_name=rig_name,
             workflow_root_id=workflow_root_id, input_convoy_id=input_convoy_id, run_record_id=run_record_id,
             plan_record_id=plan_record_id, workspace_record_id=workspace_record_id, evidence_dir=str(directory),
@@ -521,7 +601,8 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
         # Verification at the final prepared input is independent of result
         # acceptance. Existing same-member work is checked by the checkout engine.
         final = WorkspaceCheckout(run, workspace, store_ref=store.store_ref, evidence_dir=str(directory), parent=parent,
-                                  allow_external_parent=allow_external_parent, gc=gc, city_root=city_root)
+            allow_external_parent=allow_external_parent, gc=gc, city_root=city_root,
+            **checkout_context(writer_map, frozen.rows))
         final.verify()
         return dict(ok=True, state='prepared', evidence_level='native-record-component', workspace=workspace,
             input_oid=workspace['input_oid'], path=workspace['work_dir'], authority_id=authority_id,
@@ -531,12 +612,17 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
 
 def main(argv=None):
     from workspace_store import Attempt, WorkspaceStore
-    parser = argparse.ArgumentParser(description=__doc__)
-    for name in ('store-ref', 'city-root', 'rig-name', 'workflow-root-id', 'input-convoy-id',
-                 'workspace-owner-id', 'member-id', 'claimed-step-id', 'artifact-root', 'evidence-dir'):
+    argv = sys.argv[1:] if argv is None else argv
+    resolving = any(value == '--resolve-request' or value.startswith('--resolve-request=') for value in argv)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    for name in ('store-ref', 'city-root'):
         parser.add_argument('--' + name, required=True)
-    parser.add_argument('--worktree-lifecycle', required=True, choices=['new'])
-    parser.add_argument('--generation', required=True, type=int)
+    for name in ('rig-name', 'workflow-root-id', 'input-convoy-id',
+                 'workspace-owner-id', 'member-id', 'claimed-step-id', 'artifact-root', 'evidence-dir'):
+        parser.add_argument('--' + name, required=not resolving)
+    parser.add_argument('--worktree-lifecycle', required=not resolving, choices=['new'])
+    parser.add_argument('--generation', required=not resolving, type=int)
+    parser.add_argument('--resolve-request')
     parser.add_argument('--gc', default='gc')
     for name in ('workspace-record-id', 'authority-id', 'parent', 'work-branch', 'blocker-record-id', 'blocker-id', 'resume-decision'):
         parser.add_argument('--' + name)
@@ -545,6 +631,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city_root)
+        if args.resolve_request:
+            from workspace_requests import resolve_request
+            result = resolve_request(store, args.resolve_request)
+            print(json.dumps(result, sort_keys=True))
+            return 0 if result.get('outcome') in ('committed', 'replayed') else 1
         result = prepare_dependency_workspace(store, Attempt.from_env(args.claimed_step_id), gc=args.gc,
             city_root=args.city_root, rig_name=args.rig_name, workflow_root_id=args.workflow_root_id,
             input_convoy_id=args.input_convoy_id, generation=args.generation, workspace_owner_id=args.workspace_owner_id,
@@ -557,7 +648,8 @@ def main(argv=None):
         return 0
     except (RecordError, OSError, KeyError, ValueError, TypeError) as exc:
         print(json.dumps(dict(ok=False, state='blocked', reason=str(exc),
-                              evidence_path=getattr(exc, 'evidence_path', None)), sort_keys=True), file=sys.stderr)
+            evidence_path=getattr(exc, 'evidence_path', None), request_path=getattr(exc, 'request_path', None)),
+            sort_keys=True), file=sys.stderr)
         return 1
 
 

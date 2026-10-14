@@ -38,10 +38,39 @@ First preparation qualifies accepted sources before allocating native records or
 The guarded write publishes the initial workspace and owner authority together.
 Each launch consumer receives a native reference to that exact workspace.
 
+Native drain children retain their own workflow root and unit convoy.
+Use that child and unit in the preparation command when they are supplied by the native workflow.
+The helper resolves the original run and current implementation convoy through the recorded drain relationship.
+The run, source plan, generation and source-task membership retain their original identities.
+
+For a shared chain, an immediate accepted successor reuses the same workspace path and native Git provenance.
+The guarded handoff advances its active child owner and actual launch references together.
+The previous child's published references remain available for validating its accepted result.
+
 For an active, unfinished member, another call observes continuation without rewriting records or transferring authority.
 Owned partial edits and linear descendant commits remain in place.
 The original input stays fixed; `accepted=false` and `checkpoint_required=true` identify unfinished work.
 Completing the member still requires project checks, independent review and its recorded result.
+
+## Resolve an uncertain write
+
+Each dependency checkpoint retains its exact native request in a private journal under the captured repository’s common Git directory before submission.
+The journal is shared by the same city and store, even when later runs use another diagnostics directory.
+If the native reply or readback is unavailable, the failure includes `request_path`.
+Further preparation in that workspace scope refuses allocation, Git changes and another submission until the original request is resolved.
+
+Use a read-only resolution call, including from a new process:
+
+```sh
+python3 <pack-root>/assets/scripts/workspace_dependency.py \
+  --gc gc --city-root /path/to/city --store-ref rig:project \
+  --resolve-request /path/from/request_path/REQUEST_SHA256.json
+```
+
+Resolution checks the original request's saved city, store, repository and exact before/after rows.
+It does not require a new task claim or resubmit the write.
+A confirmed committed or replayed request clears its matching pending marker.
+An unresolved or uncommitted request remains pending for inspection; ordinary preparation cannot replace it with a new intent.
 
 ## Resolve an accepted input
 

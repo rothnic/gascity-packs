@@ -15,9 +15,9 @@ import unittest
 
 SCRIPTS = Path(__file__).resolve().parents[1] / 'assets' / 'scripts'
 sys.path.insert(0, str(SCRIPTS))
-from workspace_store import (Attempt, GRANT_KEY, GuardRead, MISSING, NativeWorktreeReference,
+from workspace_store import (Attempt, GRANT_KEY, GuardRead, InheritedRunReference, MISSING, NativeWorktreeReference,
                              RecordWrite, ReferenceWrite, StoreError, WorkspaceStore, record_reference)
-from workspace_records import canonical_bytes, contracts
+from workspace_records import RecordError, canonical_bytes, contracts
 
 
 def git(path, *args):
@@ -75,6 +75,7 @@ class StorePort(WorkspaceStore):
         self.admitted = True
         self.fail_projection = False
         self.before_apply = None
+        self.lose_ack = False
 
     def _command(self, arguments, attempt=None):
         if arguments[0].startswith('--snapshot='):
@@ -100,6 +101,8 @@ class StorePort(WorkspaceStore):
             row['metadata'].update(p['set'])
             row['revision'] = str(int(row['revision']) + 1)
             result.append(dict(id=p['id'], revision=row['revision'], changed=True))
+        if self.lose_ack:
+            raise StoreError('synthetic native reply lost after commit')
         return dict(schema_version='1', ok=True, store_ref=self.store_ref, rows=result)
 
     def execute(self, prepared):
@@ -420,7 +423,7 @@ class CheckoutTests(unittest.TestCase):
         self.assertEqual(result['head'], head)
         self.assertEqual(result['workspace']['native_provenance']['base_sha'], self.base)
 
-    def managed_context(self):
+    def managed_context(self, *, inherited=False, shared=False):
         import workspace_cooked as cooked
         import workspace_run as run_api
         from workspace_records import record_sha256
@@ -433,6 +436,9 @@ class CheckoutTests(unittest.TestCase):
                     base_oid=self.base, parent_canonical_generation=None, parent_canonical_oid=None,
                     nodes=[dict(owner_id='owner-1', strategy='isolated', member_ids=['member-1'], source_predecessor_owner_ids=[], single_lane=False)],
                     terminal_owner_id='owner-1')
+        if shared:
+            plan['nodes'][0].update(strategy='shared-chain', member_ids=['member-1', 'member-2'], single_lane=True)
+            self.workspace['strategy'] = 'shared-chain'
         rows = {i: row(i) for i in ('root-1', 'run-record', 'plan-record', 'record-1', 'plan-1', 'owner-1', 'member-1',
                                    'authority-1', 'blocker-record', 'convoy-1', 'source-1', 'attach-1')}
         rows['root-1'].update(status='in_progress', metadata={'gc.implementation_run_ref': canonical_bytes(record_reference('run', 'run-record', self.run)).decode(),
@@ -450,6 +456,8 @@ class CheckoutTests(unittest.TestCase):
         rows['owner-1']['metadata'] = dict(native)
         rows['member-1']['metadata'] = dict(native)
         rows['member-1']['status'] = 'open'
+        if shared:
+            rows['member-2'] = row('member-2', dict(native), status='open')
         formula_path = self.root / 'do-work.formula.toml'
         formula_path.write_text('formula = "do-work"\n')
         rows['attach-1']['metadata'] = dict(native, **{'gc.formula_name': 'do-work',
@@ -479,6 +487,21 @@ class CheckoutTests(unittest.TestCase):
             session = row('session-' + bead_id, {'instance_token': 'incarnation-' + bead_id, 'template': target,
                 'session_name': 'fixture-' + bead_id, 'state': 'active', 'current_claim_bead_id': bead_id}, status='in_progress')
             session['type'] = 'session'; self.sessions[session['id']] = session
+        if inherited:
+            rows['root-1']['metadata']['gc.build.implementation_convoy_id'] = 'convoy-1'
+            rows['root-1']['metadata']['gc.var.worktree_lifecycle'] = 'new'
+            rows['control-1'] = row('control-1', dict(native, **{'gc.kind': 'drain'}))
+            rows['unit-1'] = row('unit-1', dict(native, **{'gc.synthetic_kind': 'drain-unit-convoy',
+                'gc.parent_convoy_id': 'convoy-1', 'gc.drain_control_id': 'control-1', 'gc.drain_member_id': 'member-1'}))
+            rows['unit-1']['type'] = 'convoy'
+            formula = {k: v for k, v in rows['attach-1']['metadata'].items() if k.startswith('gc.formula_')}
+            rows['child-1'] = row('child-1', dict(formula, **{'gc.kind': 'workflow',
+                'gc.root_store_ref': 'rig:fixture', 'gc.input_convoy_id': 'unit-1',
+                'gc.drain_control_id': 'control-1', 'gc.drain_member_id': 'member-1'}), status='in_progress')
+            for bead_id, *_ in stages:
+                rows[bead_id]['metadata']['gc.root_bead_id'] = 'child-1'
+                for key in ('gc.attach_root_id', 'gc.source_anchor_id', 'gc.drain_member_id'):
+                    rows[bead_id]['metadata'].pop(key, None)
         store = StorePort(rows, self.run['common_git_dir'], gc=str(self.native), cwd=str(self.root))
         def registration(*args, **kwargs):
             return dict(city_path=str(self.root), city_name='fixture-city', rigs=[dict(name='fixture', path=str(self.repo))])
@@ -489,17 +512,25 @@ class CheckoutTests(unittest.TestCase):
             patcher.start(); self.addCleanup(patcher.stop)
         attempt = Attempt('session-prepare-1', 'incarnation-prepare-1', 'prepare-1')
         self.workspace = self.mod._writer(self.workspace, attempt)
-        writer_map, original = cooked.read_cooked_writer_map(store, workflow_root_id='root-1', claimed_step_id='prepare-1')
+        continuation, context_rows = None, None
+        if inherited:
+            from workspace_entry import read_native_continuation
+            continuation, context_rows = read_native_continuation(store, claimed_step_id='prepare-1', requested_root_id='root-1')
+        writer_map, original = cooked.read_cooked_writer_map(store, workflow_root_id='root-1', claimed_step_id='prepare-1',
+            continuation=continuation, continuation_rows=context_rows)
         original.update(store.snapshot(['root-1', 'record-1', 'owner-1', 'authority-1']))
         initial = store.install_grant(attempt, dict(workflow_root_id='root-1', generation=1, writer_scope_id='owner-1', record_kind='workspace'),
             'authority-1', [RecordWrite('workspace', 'record-1', self.workspace)],
             [ReferenceWrite('owner-1', 'gc.workspace_ref', record_reference('workspace', 'record-1', self.workspace))],
-            writer_map=writer_map, expected_rows=original)
+            writer_map=writer_map, expected_rows=original,
+            projections=[InheritedRunReference(continuation)] if inherited else ())
         self.assertEqual(store.execute(initial)['outcome'], 'committed')
         store.transactions.clear()
         kwargs = dict(gc=str(self.native), city_root=str(self.root), rig_name='fixture', workflow_root_id='root-1', input_convoy_id='convoy-1',
                       run_record_id='run-record', plan_record_id='plan-record', workspace_record_id='record-1', evidence_dir=str(self.evidence),
                       selected_mode='new', parent=str(self.parent), allow_external_parent=True)
+        if inherited:
+            kwargs.update(workflow_root_id='child-1', input_convoy_id='unit-1')
         return store, attempt, kwargs
 
     def admit_recorder(self, store):
@@ -510,11 +541,14 @@ class CheckoutTests(unittest.TestCase):
         row = store.rows['recorder-1']
         row.update(status='in_progress', assignee='fixture-recorder-1')
         attempt = Attempt('session-recorder-1', 'incarnation-recorder-1', 'recorder-1')
-        writer_map, original = cooked.read_cooked_writer_map(store, workflow_root_id='root-1', claimed_step_id='recorder-1')
+        continuation = self.mod._occurrence_continuation(store, 'root-1', 'recorder-1', {})
+        writer_map, original = cooked.read_cooked_writer_map(store, workflow_root_id='root-1', claimed_step_id='recorder-1',
+            continuation=continuation)
         original.update(store.snapshot(['root-1', 'record-1', 'owner-1', 'authority-1', 'run-record']))
         workspace = self.mod._writer(dict(self.workspace, phase='active'), attempt)
         native_ref = dict(self.mod.WorkspaceCheckout(self.run, self.workspace, store_ref=store.store_ref,
-            evidence_dir=str(self.evidence), parent=str(self.parent), allow_external_parent=True, gc=str(self.native))._result(
+            evidence_dir=str(self.evidence), parent=str(self.parent), allow_external_parent=True, gc=str(self.native),
+            continuation=continuation, native_rows=original)._result(
                 {'provenance': self.workspace['native_provenance'], 'head': self.base})['launch_reference'], binding_step_id='recorder-1')
         prepared = store.accept_replacement(attempt,
             dict(workflow_root_id='root-1', generation=1, writer_scope_id='owner-1', record_kind='workspace'),
@@ -527,6 +561,245 @@ class CheckoutTests(unittest.TestCase):
         for bead_id in ('result-record', 'result-authority'):
             store.rows[bead_id] = dict(id=bead_id, revision='1', metadata={}, status='closed', assignee='', type='task', labels=[])
         return attempt
+
+    def test_inherited_prepare_keeps_logical_payload_and_physical_native_references(self):
+        store, attempt, kwargs = self.managed_context(inherited=True)
+        child = store.rows['child-1']['metadata']
+        self.assertIn('gc.workspace_run_continuation.v1', child)
+        self.assertEqual(json.loads(child['gc.implementation_run_ref'])['identity'][0], 'root-1')
+        result = self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+            launch_step_ids=['test-1', 'producer-1', 'recorder-1'], **kwargs)
+        self.workspace = result['workspace']
+        self.assertEqual(self.workspace['workflow_root_id'], 'root-1')
+        self.assertEqual(store.rows['record-1']['metadata']['gc.root_bead_id'], 'child-1')
+        for step in ('test-1', 'producer-1', 'recorder-1'):
+            reference = json.loads(store.rows[step]['metadata']['gc.worktree_ref'])
+            self.assertEqual(reference['workflow_root_id'], 'child-1')
+            self.assertEqual(reference['binding_step_id'], step)
+        self.assertNotIn('gc.worktree_ref', store.rows['member-1']['metadata'])
+        self.assertEqual(git(result['path'], 'rev-parse', 'HEAD'), self.base)
+        logical = dict(kwargs, workflow_root_id='root-1', input_convoy_id='convoy-1')
+        count = len(store.transactions)
+        observed = self.mod.manage_workspace(store, action='path', claimed_step_id='prepare-1', **logical)
+        self.assertEqual(observed['path'], result['path'])
+        self.assertEqual(len(store.transactions), count)
+
+    def test_inherited_dirty_continuation_keeps_callable_and_does_not_advance_checkpoint(self):
+        store, attempt, kwargs = self.managed_context(inherited=True)
+        result = self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+            launch_step_ids=['test-1', 'producer-1'], **kwargs)
+        self.workspace = result['workspace']
+        store.rows['prepare-1'].update(status='closed', assignee='')
+        store.rows['prepare-1']['metadata']['gc.outcome'] = 'pass'
+        store.rows['test-1'].update(status='in_progress', assignee='fixture-test-1')
+        attempt = Attempt('session-test-1', 'incarnation-test-1', 'test-1')
+        self.native_session_ports(attempt)
+        (Path(result['path']) / 'private-edit').write_text('unfinished work')
+        before, count = copy.deepcopy(store.rows), len(store.transactions)
+        continued = self.mod.manage_workspace(store, attempt, action='continue', authority_id='authority-1',
+            artifact_root=str(self.evidence), **kwargs)
+        self.assertEqual(continued['git_state'], 'dirty')
+        self.assertFalse(continued['accepted'])
+        self.assertTrue(continued['checkpoint_required'])
+        self.assertEqual(continued['launch_reference']['workflow_root_id'], 'child-1')
+        self.assertEqual(continued['launch_reference']['binding_step_id'], 'test-1')
+        self.assertEqual(continued['workspace']['current_oid'], self.base)
+        self.assertEqual(store.rows, before)
+        self.assertEqual(len(store.transactions), count)
+
+    def test_inherited_native_chain_refusals_preserve_git_and_metadata(self):
+        store, attempt, kwargs = self.managed_context(inherited=True)
+        baseline = copy.deepcopy(store.rows)
+        changes = [('control-1', 'gc.root_bead_id', 'foreign-root'),
+                   ('child-1', 'gc.root_store_ref', 'rig:foreign'),
+                   ('unit-1', 'gc.parent_convoy_id', 'foreign-convoy'),
+                   ('child-1', 'gc.drain_member_id', 'member-2'),
+                   ('convoy-1', 'gc.source_generation', '2'),
+                   ('child-1', 'gc.implementation_run_ref', 'null')]
+        for bead_id, key, value in changes:
+            with self.subTest(bead_id=bead_id, key=key):
+                store.rows = copy.deepcopy(baseline)
+                store.rows[bead_id]['metadata'][key] = value
+                changed = copy.deepcopy(store.rows)
+                with self.assertRaises((self.mod.CheckoutError, RecordError, KeyError)):
+                    self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+                        launch_step_ids=['producer-1'], **kwargs)
+                self.assertEqual(store.rows, changed)
+                self.assertFalse(self.log.exists())
+                self.assertFalse(Path(self.workspace['work_dir']).exists())
+
+    def test_inherited_late_control_revision_change_stops_before_git(self):
+        store, attempt, kwargs = self.managed_context(inherited=True)
+        def race(request):
+            store.rows['control-1']['revision'] = str(int(store.rows['control-1']['revision']) + 1)
+        store.before_apply = race
+        with self.assertRaisesRegex(self.mod.CheckoutError, 'unresolved|unknown') as error:
+            self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+                launch_step_ids=['producer-1'], **kwargs)
+        self.assertTrue(Path(error.exception.evidence_path).is_file())
+        self.assertFalse(self.log.exists())
+        self.assertFalse(Path(self.workspace['work_dir']).exists())
+        self.assertEqual(json.loads(store.rows['record-1']['metadata']['gc.workspace'])['phase'], 'preparing')
+
+    def test_inherited_recovery_records_result_without_recapturing_run_or_acceptance(self):
+        store, attempt, kwargs = self.managed_context(inherited=True)
+        prepared = self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+            launch_step_ids=['recorder-1'], **kwargs)
+        self.workspace = prepared['workspace']
+        run_before = store.rows['run-record']['metadata']['gc.implementation_run']
+        attempt = self.admit_recorder(store)
+        head = self.change()
+        declared = dict(self.result(head), writer_step_id='recorder-1')
+        recovered = self.mod.manage_workspace(store, attempt, action='recover', authority_id='authority-1',
+            launch_step_ids=['recorder-1'], result_record_id='result-record', declared_result=declared,
+            result_authority_id='result-authority', **kwargs)
+        self.assertEqual(recovered['workspace']['current_oid'], head)
+        self.assertEqual(recovered['launch_reference']['workflow_root_id'], 'child-1')
+        self.assertEqual(recovered['launch_reference']['binding_step_id'], 'recorder-1')
+        result = json.loads(store.rows['result-record']['metadata']['gc.workspace_result'])
+        self.assertEqual(result['acceptance'], declared['acceptance'])
+        self.assertEqual(store.rows['run-record']['metadata']['gc.implementation_run'], run_before)
+
+    def test_shared_historical_workspace_uses_published_old_child_context(self):
+        from workspace_entry import read_native_continuation
+        store, attempt, kwargs = self.managed_context(inherited=True, shared=True)
+        prepared = self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+            launch_step_ids=['producer-1'], **kwargs)
+        self.workspace = prepared['workspace']
+        old, original = read_native_continuation(store, claimed_step_id='prepare-1', requested_root_id='root-1')
+        for old_id, new_id in [('child-1', 'child-2'), ('unit-1', 'unit-2'), ('prepare-1', 'prepare-2')]:
+            store.rows[new_id] = copy.deepcopy(store.rows[old_id])
+            store.rows[new_id]['id'] = new_id
+        store.rows['unit-2']['metadata']['gc.drain_member_id'] = 'member-2'
+        store.rows['child-2']['metadata'].update({'gc.input_convoy_id': 'unit-2', 'gc.drain_member_id': 'member-2'})
+        for key in ('gc.implementation_run_ref', 'gc.workspace_run_continuation.v1'):
+            store.rows['child-2']['metadata'].pop(key)
+        store.rows['prepare-2']['metadata']['gc.root_bead_id'] = 'child-2'
+        store.rows['prepare-2']['metadata'].pop('gc.worktree_ref', None)
+        newer, _ = read_native_continuation(store, claimed_step_id='prepare-2', requested_root_id='root-1')
+        before = copy.deepcopy(store.rows)
+        loaded = self.mod.load_workspace_context(store, gc=str(self.native), city_root=str(self.root),
+            rig_name='fixture', workflow_root_id='child-2', input_convoy_id='unit-2',
+            run_record_id='run-record', plan_record_id='plan-record', workspace_record_id='record-1',
+            claimed_step_id='prepare-2', record_kind=None)
+        self.assertEqual(loaded[2], self.workspace)
+        observed = self.mod.WorkspaceCheckout(loaded[0], loaded[2], store_ref=store.store_ref,
+            evidence_dir=str(self.evidence), parent=str(self.parent), allow_external_parent=True,
+            gc=str(self.native), continuation=old, native_rows=loaded[3]).verify()
+        self.assertEqual(observed['owner_metadata']['gc.root_bead_id'], 'child-1')
+        self.assertEqual(store.read_record('workspace', 'record-1', continuation=old), self.workspace)
+        with self.assertRaises(RecordError):
+            store.read_record('workspace', 'record-1', continuation=newer)
+        self.assertEqual(store.rows, before)
+
+    def test_lost_publication_reply_blocks_new_intent_until_fresh_process_readback(self):
+        store, attempt, kwargs = self.managed_context(inherited=True)
+        store.lose_ack = True
+        with patch.object(store, 'resolve', return_value={'outcome': 'unknown'}):
+            with self.assertRaisesRegex(self.mod.CheckoutError, 'original request') as error:
+                self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+                    launch_step_ids=['producer-1'], **kwargs)
+        store.lose_ack = False
+        request_path = Path(error.exception.evidence_path)
+        self.assertTrue(request_path.is_file())
+        self.assertFalse(self.log.exists())
+        count = len(store.transactions)
+        with self.assertRaisesRegex(self.mod.CheckoutError, 'unresolved'):
+            self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+                launch_step_ids=['producer-1'], **kwargs)
+        other_evidence = self.root / 'other-evidence'
+        other_evidence.mkdir(mode=0o700)
+        with self.assertRaisesRegex(self.mod.CheckoutError, 'unresolved'):
+            self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+                launch_step_ids=['producer-1'], **dict(kwargs, evidence_dir=str(other_evidence)))
+        self.assertEqual(len(store.transactions), count)
+        self.assertFalse(self.log.exists())
+        packet = json.loads(request_path.read_text())
+        state_path = self.root / 'lost-reply-state.json'
+        state_path.write_text(json.dumps(dict(rows=store.rows, common=store.common_git_dir,
+            gc=str(self.native), cwd=store.cwd, paths=sys.path, request=str(request_path))))
+        program = '''import json, sys
+from pathlib import Path
+state=json.loads(Path(sys.argv[1]).read_text())
+sys.path[:0]=state['paths']
+from test_workspace_checkout import StorePort
+from workspace_requests import resolve_request
+store=StorePort(state['rows'],state['common'],gc=state['gc'],cwd=state['cwd'])
+receipt=resolve_request(store,state['request'])
+assert not store.transactions, 'readback submitted a new effect'
+print(json.dumps(receipt))
+'''
+        fresh = subprocess.run([sys.executable, '-c', program, str(state_path)],
+            capture_output=True, text=True, timeout=15)
+        self.assertEqual(fresh.returncode, 0, fresh.stderr)
+        receipt = json.loads(fresh.stdout)
+        self.assertIn(receipt['outcome'], ('committed', 'replayed'))
+        self.assertEqual(receipt['request_sha256'], packet['request_sha256'])
+        self.assertNotIn('rows', receipt)
+        self.assertFalse(list(request_path.parent.glob('*.pending')))
+        self.assertTrue(request_path.exists())
+        resumed = self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+            launch_step_ids=['producer-1'], **kwargs)
+        self.assertEqual(resumed['head'], self.base)
+
+    def test_shared_successor_projection_is_pure_intent_and_preserves_persisted_admission(self):
+        import workspace_cooked as cooked
+        from workspace_entry import read_native_continuation
+        store, attempt, kwargs = self.managed_context(inherited=True, shared=True)
+        self.workspace = self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+            launch_step_ids=['recorder-1'], **kwargs)['workspace']
+        attempt = self.admit_recorder(store)
+        head = self.change()
+        self.workspace = self.mod.manage_workspace(store, attempt, action='recover', authority_id='authority-1',
+            launch_step_ids=['recorder-1'], result_record_id='result-record',
+            declared_result=dict(self.result(head), writer_step_id='recorder-1'),
+            result_authority_id='result-authority', **kwargs)['workspace']
+        store.rows['recorder-1'].update(status='closed', assignee='')
+        store.rows['recorder-1']['metadata']['gc.outcome'] = 'pass'
+        for old_id, new_id in [('child-1', 'child-2'), ('unit-1', 'unit-2')]:
+            store.rows[new_id] = copy.deepcopy(store.rows[old_id]); store.rows[new_id]['id'] = new_id
+        store.rows['child-2']['metadata'].update({'gc.input_convoy_id': 'unit-2', 'gc.drain_member_id': 'member-2'})
+        store.rows['unit-2']['metadata']['gc.drain_member_id'] = 'member-2'
+        for key in ('gc.implementation_run_ref', 'gc.workspace_run_continuation.v1'):
+            store.rows['child-2']['metadata'].pop(key)
+        new_ids = []
+        for old_id in ('prepare-1', 'test-1', 'story-1', 'producer-1', 'reviewer-1', 'recorder-1'):
+            new_id = old_id + '-next'; new_ids.append(new_id)
+            store.rows[new_id] = copy.deepcopy(store.rows[old_id]); store.rows[new_id]['id'] = new_id
+            store.rows[new_id]['metadata']['gc.root_bead_id'] = 'child-2'
+            store.rows[new_id]['metadata'].pop('gc.worktree_ref', None)
+            store.rows[new_id].update(status='in_progress' if old_id == 'prepare-1' else 'open',
+                assignee='fixture-next' if old_id == 'prepare-1' else '')
+        current = Attempt('session-next', 'incarnation-next', new_ids[0])
+        old, _ = read_native_continuation(store, claimed_step_id='recorder-1', requested_root_id='root-1')
+        new, original = read_native_continuation(store, claimed_step_id=current.claimed_bead_id, requested_root_id='root-1')
+        with patch.object(cooked, '_native_list', return_value=new_ids):
+            writer_map, rows = cooked.read_cooked_writer_map(store, workflow_root_id='root-1',
+                claimed_step_id=current.claimed_bead_id, continuation=new, continuation_rows=original)
+        rows.update(store.snapshot(list(store.rows)))
+        checkout = self.mod.WorkspaceCheckout(self.run, self.workspace, store_ref=store.store_ref,
+            evidence_dir=str(self.evidence), parent=str(self.parent), allow_external_parent=True,
+            gc=str(self.native), continuation=old, native_rows=rows)
+        candidate = self.mod._writer(dict(self.workspace, phase='entry', active_member_id='member-2',
+            next_member_position=1, input_oid=head, current_oid=head, output_oid=None), current)
+        before, log = copy.deepcopy(store.rows), self.log.read_bytes()
+        with patch.object(self.mod, 'git', side_effect=AssertionError('successor projection must not perform Git')):
+            intent = checkout.successor_projection(candidate, continuation=new, native_rows=rows, writer_map=writer_map)
+            self.assertEqual(intent['owner_metadata']['gc.root_bead_id'], 'child-2')
+            self.assertEqual(intent['launch_reference']['workflow_root_id'], 'child-2')
+            self.assertEqual(intent['launch_reference']['binding_step_id'], current.claimed_bead_id)
+            self.assertEqual(intent['workspace']['native_provenance'], self.workspace['native_provenance'])
+            self.assertEqual(intent['evidence_level'], 'guarded-successor-intent')
+            for field, value in [('work_branch', 'different'), ('next_member_position', 2), ('input_oid', self.base)]:
+                with self.subTest(field=field), self.assertRaises(RecordError):
+                    checkout.successor_projection(dict(candidate, **{field: value}), continuation=new,
+                        native_rows=rows, writer_map=writer_map)
+        with self.assertRaisesRegex(self.mod.CheckoutError, 'not been published'):
+            self.mod.WorkspaceCheckout(self.run, candidate, store_ref=store.store_ref,
+                evidence_dir=str(self.evidence), parent=str(self.parent), allow_external_parent=True,
+                gc=str(self.native), continuation=new, native_rows=rows)
+        self.assertEqual(store.rows, before)
+        self.assertEqual(self.log.read_bytes(), log)
 
     def test_managed_preparation_publishes_actual_native_consumer_with_checkpoint(self):
         store, attempt, kwargs = self.managed_context()

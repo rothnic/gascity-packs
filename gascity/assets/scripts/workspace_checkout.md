@@ -5,16 +5,15 @@ record. It provisions through native `gc worktree ensure` and verifies through
 `gc worktree verify`. It never resolves a default branch, fetches source, creates
 physical record IDs, claims work, replaces a writer grant or removes a checkout.
 
-The helper is an opt-in source component. Existing workflow preflights still
-classify their source paths as `legacy` and reject `new`. Enabling a workflow
-requires the composed core/pack checks, source-inventory admission and actual
-native launch/resume acceptance. A passing command-double test supplies component
-evidence only.
+The helper serves the opt-in managed workspace workflow. Enabling it requires
+the composed core/pack checks, source-inventory admission and actual native
+launch/resume acceptance. Command-double tests supply component evidence only.
 
 ## Callable API
 
 `WorkspaceCheckout(run, workspace, *, store_ref, evidence_dir, parent=None,
-allow_external_parent=False, gc="gc", city_root=None, timeout=15, lock_timeout=2)`
+allow_external_parent=False, gc="gc", city_root=None, timeout=15, lock_timeout=2,
+continuation=None, native_rows=None)`
 provides the Git/native component operations:
 
 - `prepare()` admits preparing/absent or registered/exact-input state and returns
@@ -44,6 +43,26 @@ actual `CookedWriterMap` and full original snapshots. Conflicting later reads
 refuse. The reader also compares the captured required-check sidecar with the
 original run and native configuration.
 
+Native drain children keep their physical workflow and unit convoy identities.
+Their lifecycle records retain the original run, base, policy and source plan.
+The loader resolves that relationship through the actual drain control, unit
+convoy and member. It accepts the proven child/unit or logical root/implementation
+convoy tuple; it never captures a new base. `continuation` is the typed
+`NativeRunContinuation`, with its original snapshots in `native_rows`.
+
+The first child workspace publication installs its inherited run reference in
+the same guarded transaction. Native owner projections and launch references
+name the physical child; each launch binding names the actual step. A shared
+workspace awaiting its next member remains bound to the published old child
+until the guarded successor transaction moves it. Historical reads must use
+that retained context, not an unpublished next child.
+
+`old_checkout.successor_projection(candidate, continuation=..., native_rows=...,
+writer_map=...)` builds that transaction's native owner and launch-reference
+intent. It validates the immediate ordered shared-member transition and retained
+native identity. It performs no Git operation and grants no path or acceptance;
+the guarded writer still publishes and revalidates the complete handoff.
+
 `manage_workspace(store, attempt=None, *, action, gc, city_root, rig_name,
 workflow_root_id, input_convoy_id, run_record_id, plan_record_id,
 workspace_record_id, evidence_dir, selected_mode, claimed_step_id=None, parent=None,
@@ -71,6 +90,17 @@ An actual `NativeSourceRuntime` supplied by the bridge receives that same
 `PreparedWrite` through `advance_written_rows`. A new result authority joins its
 first payload and reference through `install_grant`. An empty grant cannot adopt
 an existing workspace.
+
+Every write retains its exact request before submission. Requests and pending
+markers live in the run's common Git directory under `gc-workspace-locks`,
+separated by the exact city and store. An uncertain reply leaves a pending
+marker; a new intent in that same owner/kind/generation scope refuses before
+Git effects, including when the diagnostic directory changes.
+Resolve the original request through
+[`workspace_requests.resolve_request(store, path)`](workspace_requests.py).
+This performs readback only and clears the marker only when the original intent
+is proven committed or replayed. Keep the reported request path for recovery
+after the command exits; do not resubmit it or create a replacement intent.
 
 `action="continue"` returns a read-only path for the exact current same-member
 occurrence, including `write-failing-test` and `implement-story`. It requires a

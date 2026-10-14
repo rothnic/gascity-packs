@@ -115,7 +115,8 @@ class WorkspaceCheckout:
     """Component engine. Durable publication is performed by manage_workspace."""
     def __init__(self, run: dict, workspace: dict, *, store_ref: str, evidence_dir: str,
                  parent: str | None = None, allow_external_parent=False, gc='gc',
-                 city_root: str | None = None, timeout=15, lock_timeout=2):
+                 city_root: str | None = None, timeout=15, lock_timeout=2,
+                 continuation=None, native_rows=None):
         self.run, self.workspace = copy.deepcopy(run), copy.deepcopy(workspace)
         self.gc, self.city_root = gc, city_root
         self.timeout, self.lock_timeout = timeout, lock_timeout
@@ -134,6 +135,29 @@ class WorkspaceCheckout:
                              'preparing workspace has unexplained source state')
             self.require(isinstance(store_ref, str) and re.fullmatch(r'(?:city|rig):[A-Za-z0-9][A-Za-z0-9._-]*', store_ref), 'exact native store identity is required')
             self.store_ref = store_ref
+            self.run_continuation = continuation
+            self.native_workflow_root_id = self.workspace['workflow_root_id']
+            if continuation is not None:
+                from workspace_store import NativeRunContinuation, validate_native_continuation
+                from workspace_records import record_sha256
+                self.require(isinstance(continuation, NativeRunContinuation) and isinstance(native_rows, dict),
+                             'inherited checkout requires its typed native continuation and original rows')
+                binding = validate_native_continuation(continuation, native_rows, store_ref=store_ref,
+                    workflow_root_id=self.workspace['workflow_root_id'], claimed_step_id=self.workspace['writer_step_id'],
+                    require_reference=self.workspace['native_provenance'] is not None)
+                plan = _record(native_rows[binding['source_plan_ref']['bead_id']], 'source-plan')
+                nodes = [node for node in plan['nodes'] if node['owner_id'] == self.workspace['workspace_owner_id']]
+                self.require(binding['run_sha256'] == record_sha256(self.run)
+                             and binding['generation'] == self.workspace['generation']
+                             and plan['source_plan_owner_id'] == self.workspace['source_plan_owner_id']
+                             and len(nodes) == 1 and nodes[0]['strategy'] == self.workspace['strategy']
+                             and self.workspace['next_member_position'] < len(nodes[0]['member_ids'])
+                             and nodes[0]['member_ids'][self.workspace['next_member_position']]
+                                 == binding['member_id'] == self.workspace['active_member_id'],
+                             'inherited checkout differs from its original run/source member')
+                self.native_workflow_root_id = binding['child_root_id']
+            elif native_rows is not None:
+                self.require(isinstance(native_rows, dict), 'native rows must be an exact snapshot dictionary')
             for field in ('workflow_root_id', 'source_plan_owner_id', 'workspace_owner_id', 'workspace_bead_id', 'writer_step_id', 'writer_attempt_id'):
                 self.require(bool(ID.fullmatch(self.workspace[field])) and self.workspace[field] not in ('.', '..'), f'unsafe {field}')
             self.require(type(allow_external_parent) is bool, 'external parent selection must be a boolean')
@@ -348,14 +372,65 @@ class WorkspaceCheckout:
     def _result(self, report: dict, workspace: dict | None = None) -> dict:
         workspace = copy.deepcopy(workspace or self.workspace)
         owner = {key: self.spec[flag] for key, flag in OWNERSHIP.items()}
-        owner.update({'gc.worktree_placement': self.placement, 'gc.root_bead_id': workspace['workflow_root_id'],
+        owner.update({'gc.worktree_placement': self.placement, 'gc.root_bead_id': self.native_workflow_root_id,
                       'gc.root_store_ref': self.store_ref})
         reference = dict(version=1, binding_step_id=workspace['writer_step_id'],
-                         workflow_root_id=workspace['workflow_root_id'], generation=workspace['generation'],
+                         workflow_root_id=self.native_workflow_root_id, generation=workspace['generation'],
                          workspace_owner_id=workspace['workspace_owner_id'], workspace_bead_id=workspace['workspace_bead_id'],
                          store_ref=self.store_ref, native_attempt_id=report['provenance']['attempt_id'])
         return {'ok': True, 'evidence_level': 'component', 'path': str(self.path_value), 'head': report['head'],
                 'workspace': workspace, 'native_report': report, 'owner_metadata': owner, 'launch_reference': reference}
+
+    def successor_projection(self, candidate: dict, *, continuation, native_rows: dict, writer_map) -> dict:
+        """Build guarded successor intent; this does not admit or operate a checkout."""
+        from workspace_store import (CookedWriterMap, NativeRunContinuation,
+            validate_cooked_writer_map, validate_native_continuation, validate_transition)
+
+        previous = self.workspace
+        candidate = copy.deepcopy(candidate)
+        validate_record('workspace', candidate)
+        self.require(isinstance(self.run_continuation, NativeRunContinuation)
+                     and isinstance(continuation, NativeRunContinuation)
+                     and isinstance(writer_map, CookedWriterMap) and writer_map.continuation == continuation,
+                     'successor intent requires the retained old and actual new typed native contexts')
+        validate_native_continuation(self.run_continuation, native_rows, store_ref=self.store_ref,
+            workflow_root_id=previous['workflow_root_id'], claimed_step_id=previous['writer_step_id'], require_reference=True)
+        binding = validate_native_continuation(continuation, native_rows, store_ref=self.store_ref,
+            workflow_root_id=previous['workflow_root_id'], claimed_step_id=candidate['writer_step_id'])
+        validate_cooked_writer_map(writer_map, native_rows, store_ref=self.store_ref,
+            workflow_root_id=previous['workflow_root_id'], record_kind='workspace', claimed_step_id=candidate['writer_step_id'])
+        verify_replay('workspace', _record(native_rows[previous['workspace_bead_id']], 'workspace'), previous)
+        stable = ('version', 'workflow_root_id', 'generation', 'source_plan_owner_id', 'workspace_owner_id',
+                  'workspace_bead_id', 'strategy', 'work_dir', 'work_branch', 'native_attempt_id', 'native_provenance')
+        self.require(all(previous[key] == candidate[key] for key in stable)
+                     and previous['strategy'] == 'shared-chain' and previous['phase'] == 'result'
+                     and candidate['phase'] == 'entry' and previous['native_provenance'] is not None
+                     and previous['output_oid'] == previous['current_oid']
+                     and candidate['input_oid'] == candidate['current_oid'] == previous['current_oid']
+                     and candidate['output_oid'] is None
+                     and candidate['next_member_position'] == previous['next_member_position'] + 1
+                     and native_rows[previous['writer_step_id']]['status'] == 'closed',
+                     'successor intent must preserve native identity and advance exactly one completed shared member')
+        validate_transition('workspace', previous, candidate)
+        plan = _record(native_rows[binding['source_plan_ref']['bead_id']], 'source-plan')
+        nodes = [node for node in plan['nodes'] if node['owner_id'] == previous['workspace_owner_id']]
+        self.require(len(nodes) == 1 and nodes[0]['strategy'] == 'shared-chain'
+                     and plan['source_plan_owner_id'] == previous['source_plan_owner_id']
+                     and candidate['next_member_position'] < len(nodes[0]['member_ids'])
+                     and nodes[0]['member_ids'][previous['next_member_position']] == previous['active_member_id']
+                     and nodes[0]['member_ids'][candidate['next_member_position']]
+                         == candidate['active_member_id'] == binding['member_id']
+                     and writer_map.declaration['source_member_id'] == candidate['active_member_id'],
+                     'successor intent differs from the exact ordered source plan')
+        original = self._result({'provenance': previous['native_provenance'], 'head': previous['current_oid']})
+        self.require(all(native_rows[previous['workspace_bead_id']]['metadata'].get(key) == value
+                         for key, value in original['owner_metadata'].items()),
+                     'successor intent has a changed retained native owner projection')
+        result = self._result({'provenance': candidate['native_provenance'], 'head': candidate['current_oid']}, candidate)
+        result['owner_metadata']['gc.root_bead_id'] = binding['child_root_id']
+        result['launch_reference']['workflow_root_id'] = binding['child_root_id']
+        result['evidence_level'] = 'guarded-successor-intent'
+        return result
 
     def prepare(self) -> dict:
         self.require(self.workspace['phase'] in ('preparing', 'entry'), 'prepare only admits preparing or entry state')
@@ -493,6 +568,24 @@ def _retain_rows(rows: dict, incoming: dict) -> None:
         raise CheckoutError('complete original native rows exceed the guarded batch bound')
 
 
+def _occurrence_continuation(store, workflow_root_id, step_id, rows, *, require_reference=False):
+    from workspace_entry import native_root, read_native_continuation
+    from workspace_store import validate_native_continuation
+    if step_id not in rows:
+        _retain_rows(rows, store.snapshot([step_id]))
+    if native_root(rows[step_id]) == workflow_root_id:
+        return None
+    try:
+        continuation, original = read_native_continuation(store, claimed_step_id=step_id,
+                                                         requested_root_id=workflow_root_id)
+        _retain_rows(rows, original)
+        validate_native_continuation(continuation, rows, store_ref=store.store_ref,
+            workflow_root_id=workflow_root_id, claimed_step_id=step_id, require_reference=require_reference)
+        return continuation
+    except (KeyError, TypeError, ValueError) as exc:
+        raise CheckoutError('native continuation relationship is incomplete or malformed') from exc
+
+
 def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
                            workflow_root_id: str, input_convoy_id: str,
                            run_record_id: str, plan_record_id: str, workspace_record_id: str,
@@ -516,7 +609,14 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
     entry = read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
                        workflow_root_id=workflow_root_id, claimed_step_id=claimed_step_id,
                        worktree_lifecycle='new', generation=workspace['generation'],
-                       input_convoy_id=input_convoy_id, require_plan=True)
+                       require_plan=True)
+    _retain_rows(rows, entry.get('_native_rows', {}))
+    if input_convoy_id not in (entry['input_convoy_id'], entry.get('native_input_convoy_id', entry['input_convoy_id'])):
+        raise CheckoutError('invocation input is neither the recorded implementation convoy nor its native child unit')
+    workflow_root_id, input_convoy_id = entry['workflow_root_id'], entry['input_convoy_id']
+    missing = [bead_id for bead_id in (workflow_root_id, input_convoy_id) if bead_id not in rows]
+    if missing:
+        _retain_rows(rows, store.snapshot(missing))
     run, plan = entry['run'], entry['source_plan']
     verify_replay('run', _record(rows[run_record_id], 'run'), run)
     verify_replay('source-plan', _record(rows[plan_record_id], 'source-plan'), plan)
@@ -550,7 +650,8 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
             or (require_live and root['status'] == 'closed')):
         raise CheckoutError('frozen workflow root/current convoy is stale or ineligible')
     step = rows[claimed_step_id]
-    if (native_root(step) != workflow_root_id or step['metadata'].get('gc.root_store_ref') != store.store_ref
+    physical_root_id = entry.get('native_workflow_root_id', workflow_root_id)
+    if (native_root(step) != physical_root_id or step['metadata'].get('gc.root_store_ref') != store.store_ref
             or step['status'] != 'in_progress' or not step['assignee']):
         raise CheckoutError('frozen invoking step is no longer claimed for this root/store')
     for row in (rows[run['input_convoy_id']], rows[run['source_anchor_id']]):
@@ -586,6 +687,18 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
         _reference(root['metadata']['gc.canonical_ref'], 'canonical', canonical_ref['bead_id'], canonical)
     validate_source_plan(plan, run, rows, store_ref=store.store_ref, canonical=canonical, stored=plan)
     _reference(rows[workspace['workspace_owner_id']]['metadata'].get('gc.workspace_ref'), 'workspace', workspace_record_id, workspace)
+    retained = _occurrence_continuation(store, workflow_root_id, workspace['writer_step_id'], rows,
+                                       require_reference=workspace['native_provenance'] is not None)
+    if retained is not None:
+        from workspace_store import CONTINUATION_KEY
+        child = rows[retained.binding['child_root_id']]
+        if CONTINUATION_KEY in child['metadata'] or workspace['native_provenance'] is not None:
+            observed = store.read_record('workspace', workspace_record_id,
+                                        identity=list(record_identity('workspace', workspace)), continuation=retained)
+            if observed is None:
+                raise CheckoutError('retained child workspace record disappeared')
+            verify_replay('workspace', workspace, observed)
+            _retain_rows(rows, store.snapshot(list(dict.fromkeys([workspace_record_id, *retained.row_ids]))))
     nodes = [n for n in plan['nodes'] if n['owner_id'] == workspace['workspace_owner_id']]
     if len(nodes) != 1:
         raise CheckoutError('workspace owner is missing or ambiguous in recorded source plan')
@@ -602,6 +715,9 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
         validate_cooked_writer_map(writer_map, rows, store_ref=store.store_ref,
                                   workflow_root_id=workflow_root_id, claimed_step_id=claimed_step_id,
                                   record_kind=record_kind, **access)
+        expected_context = entry.get('native_continuation')
+        if ((writer_map.continuation.binding if writer_map.continuation is not None else None) != expected_context):
+            raise CheckoutError('cooked map differs from the actual invoking child continuation')
         if writer_map.declaration['source_member_id'] != workspace['active_member_id']:
             raise CheckoutError('cooked occurrence belongs to a different active source member')
     return run, plan, workspace, rows
@@ -610,10 +726,15 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
 def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
              writer_map, writer_rows, native_runtime=None,
              projections=(), writes=(), references=(), scope_owner=None, record_kind='workspace') -> dict:
-    from workspace_store import GRANT_KEY, GuardRead
+    from workspace_store import GRANT_KEY, GuardRead, InheritedRunReference
+    from workspace_requests import retain_request
 
     # Freeze every observed metadata value, as well as each row's native revision.
     guards = [GuardRead(i, key, value) for i, row in rows.items() for key, value in row['metadata'].items()]
+    projections = list(projections)
+    if record_kind == 'workspace' and writer_map.continuation is not None:
+        if not any(isinstance(item, InheritedRunReference) for item in projections):
+            projections.append(InheritedRunReference(writer_map.continuation))
     publish = store.install_grant if GRANT_KEY not in rows[authority_id]['metadata'] else store.write_records
     prepared = publish(attempt, {'workflow_root_id': workspace['workflow_root_id'],
                                              'generation': workspace['generation'],
@@ -621,17 +742,26 @@ def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
                                              'record_kind': record_kind},
                                    authority_id, list(writes), references=list(references), projections=tuple(projections),
                                    writer_map=writer_map, guards=guards, expected_rows=rows)
-    receipt = store.execute(prepared)
-    resolved = store.resolve(prepared)
+    path, pending = retain_request(store, prepared)
+    try:
+        receipt = store.execute(prepared)
+        resolved = store.resolve(prepared)
+    except (RecordError, OSError) as exc:
+        raise CheckoutError('guarded workspace publication is unresolved; original request=' + str(path)
+                            + '; request_sha256=' + prepared.sha256 + '; resolve the original request without repeating effects',
+                            str(path)) from exc
     if (resolved.get('outcome') not in ('committed', 'replayed')
             or resolved.get('request_sha256') != prepared.sha256):
         raise CheckoutError('guarded workspace publication is unknown; request_sha256=' + prepared.sha256
-                            + '; readback=' + str(resolved.get('outcome')) + '; reobserve without automatic retry')
+                            + '; readback=' + str(resolved.get('outcome')) + '; original request=' + str(path)
+                            + '; resolve the original request without repeating effects', str(path))
     # Native grants contain instance tokens; public results contain only the digest/outcome.
     rows.update(resolved['rows'])
     writer_rows.update(copy.deepcopy(rows))
     if native_runtime is not None:
         native_runtime.advance_written_rows(resolved['rows'], prepared=prepared)
+    if pending.exists() and pending.read_text() == str(path):
+        pending.unlink()
     return {'outcome': resolved['outcome'], 'request_sha256': prepared.sha256,
             'write_outcome': receipt.get('outcome')}
 
@@ -646,14 +776,15 @@ def _writer(workspace: dict, attempt) -> dict:
 def _step_binding(checkout, row, *, require_reference=False):
     workspace = checkout.workspace
     metadata = row['metadata']
-    checkout.require(metadata.get('gc.root_bead_id') == workspace['workflow_root_id']
-                     and all(metadata[k] == workspace['workflow_root_id'] for k in ('workflow_id', 'molecule_id') if k in metadata)
+    checkout.require(metadata.get('gc.root_bead_id') == checkout.native_workflow_root_id
+                     and all(metadata[k] == checkout.native_workflow_root_id for k in ('workflow_id', 'molecule_id') if k in metadata)
                      and metadata.get('gc.root_store_ref') == checkout.store_ref
                      and isinstance(metadata.get('gc.step_ref'), str) and bool(metadata['gc.step_ref']),
                      'native step lacks exact root/store/step identity')
     member = workspace['active_member_id']
     pins = [metadata[k] for k in ('gc.drain_member_id', 'gc.source_anchor_id') if k in metadata]
-    checkout.require((row['id'] == member or bool(pins)) and all(pin == member for pin in pins),
+    inherited = checkout.run_continuation is not None and checkout.run_continuation.binding['member_id'] == member
+    checkout.require((row['id'] == member or bool(pins) or inherited) and all(pin == member for pin in pins),
                      'native step has missing, conflicting or foreign member bindings')
     if 'gc.worktree_ref' in metadata:
         checkout.require(workspace['native_provenance'] is not None, 'native step has an unexplained prior reference')
@@ -691,7 +822,7 @@ def _continue_workspace(store, attempt, checkout, plan, rows, writer_map, *, aut
                      and isinstance(index.get('scopes'), dict)
                      and index['scopes'].get(scope_hash) == {'scope': scope, 'authority_id': authority_id},
                      'workspace authority lacks its exact native root reference')
-    map_hash = hashlib.sha256(writer_map.declaration_bytes).hexdigest()
+    map_hash = writer_map.sha256
     checkout.require(grant['writer_map_sha256'] == map_hash, 'continuation cooked map differs from the recorded writer grant')
     declaration = writer_map.declaration
     writers = [item for item in declaration['steps'] if item['bead_id'] == previous.claimed_bead_id]
@@ -699,12 +830,14 @@ def _continue_workspace(store, attempt, checkout, plan, rows, writer_map, *, aut
                      'retained checkpoint writer lacks its exact cooked responsibility')
     occurrence = {key: declaration[key] for key in ('source_member_id', 'expansion_root_id', 'formula_name', 'formula_hash', 'formula_source')}
     occurrence.update({key: writers[0][key] for key in ('step_id', 'step_ref')})
+    if writer_map.continuation is not None:
+        occurrence['continuation'] = writer_map.continuation.binding
     checkout.require(grant['writer_occurrence'] == occurrence, 'retained writer occurrence differs from the cooked checkpoint')
     if previous == attempt:
         checkout.require(grant['attempt'] == attempt.admission, 'continuation native writer attempt changed')
     else:
         # Read the existing dependency proof. No replacement grant is published.
-        store._successor(grant, attempt, scope, None, rows, writer_map.declaration, map_hash)
+        store._successor(grant, attempt, scope, None, rows, writer_map.declaration, map_hash, writer_map.continuation)
     if native_runtime is None:
         checkout.require(artifact_root is not None, 'continuation requires the recorded artifact directory for native admission')
         native_runtime = NativeSourceRuntime(store, gc=checkout.gc, city_root=checkout.city_root,
@@ -766,15 +899,7 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
     extra = list(launch_step_ids) + [i for i in (authority_id, result_record_id, result_authority_id, blocker_record_id) if i]
     directory = diagnostic_directory(evidence_dir)
     try:
-        if writer_map is None:
-            from workspace_cooked import read_cooked_writer_map
-            access = {'read_only': True} if action == 'continue' else {}
-            writer_map, discovered = read_cooked_writer_map(store, workflow_root_id=workflow_root_id,
-                                                           claimed_step_id=invoking_step, **access)
-            originals = {} if writer_rows is None else writer_rows
-            _retain_rows(originals, discovered)
-            writer_rows = originals
-        if not isinstance(writer_map, CookedWriterMap) or writer_rows is None:
+        if writer_map is not None and (not isinstance(writer_map, CookedWriterMap) or writer_rows is None):
             raise CheckoutError('typed CookedWriterMap and its original native rows are required')
         if native_runtime is not None:
             from workspace_runtime import NativeSourceRuntime
@@ -786,13 +911,39 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
             workspace_record_id=workspace_record_id, claimed_step_id=invoking_step,
             extra_ids=extra, require_live=True, writer_map=writer_map, writer_rows=writer_rows, source_rows=source_rows,
             record_kind=None if action == 'continue' else 'workspace')
+        workflow_root_id = run['workflow_root_id']
+        if writer_map is None:
+            from workspace_cooked import read_cooked_writer_map
+            continuation = _occurrence_continuation(store, workflow_root_id, invoking_step, rows)
+            access = {'read_only': True} if action == 'continue' else {}
+            writer_map, discovered = read_cooked_writer_map(store, workflow_root_id=workflow_root_id,
+                claimed_step_id=invoking_step, continuation=continuation,
+                continuation_rows=rows if continuation is not None else None, **access)
+            _retain_rows(rows, discovered)
+            if writer_map.declaration['source_member_id'] != workspace['active_member_id']:
+                raise CheckoutError('cooked occurrence belongs to a different active source member')
+        originals = {} if writer_rows is None else writer_rows
+        _retain_rows(originals, rows)
+        writer_rows = originals
+        workspace_continuation = _occurrence_continuation(store, workflow_root_id, workspace['writer_step_id'], rows,
+                                                        require_reference=workspace['native_provenance'] is not None)
+        if changing:
+            from workspace_requests import require_resolved_scope
+            require_resolved_scope(store, dict(workflow_root_id=workflow_root_id,
+                generation=workspace['generation'], writer_scope_id=workspace['workspace_owner_id'],
+                record_kind='workspace'))
+            if result_authority_id is not None:
+                require_resolved_scope(store, dict(workflow_root_id=workflow_root_id,
+                    generation=workspace['generation'], writer_scope_id=workspace['active_member_id'],
+                    record_kind='member-result'))
     except (RecordError, OSError) as exc:
         path = save_diagnostic(directory, {'version': 1, 'state': 'blocked', 'reason': str(exc),
                                'store_ref': store.store_ref, 'workflow_root_id': workflow_root_id,
                                'workspace_record_id': workspace_record_id})
         raise CheckoutError(str(exc), path) from exc
     checkout = WorkspaceCheckout(run, workspace, store_ref=store.store_ref, evidence_dir=evidence_dir,
-                                 parent=parent, allow_external_parent=allow_external_parent, gc=gc, city_root=city_root)
+                                 parent=parent, allow_external_parent=allow_external_parent, gc=gc, city_root=city_root,
+                                 continuation=workspace_continuation, native_rows=rows)
     try:
         owner_keys = set(OWNERSHIP) | {'gc.worktree_placement', 'gc.root_bead_id', 'gc.root_store_ref'}
         owner_metadata = rows[workspace_record_id]['metadata']
@@ -803,6 +954,8 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
             checkout.require(all(owner_metadata.get(k) == v for k, v in expected_owner.items()),
                              'stored native owner projection is incomplete or changed')
         for step_id in launch_step_ids:
+            checkout.require(any(item['bead_id'] == step_id for item in writer_map.declaration['steps']),
+                             'launch consumer has no exact native cooked occurrence')
             _step_binding(checkout, rows[step_id], require_reference=not changing)
         if action == 'continue':
             return _continue_workspace(store, attempt, checkout, plan, rows, writer_map,

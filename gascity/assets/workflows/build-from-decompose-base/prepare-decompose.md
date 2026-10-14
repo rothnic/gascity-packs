@@ -20,6 +20,17 @@ only when the supplied requirements, implementation plan, and plan-review
 artifacts exist and the plan-review artifact records approval or an equivalent
 pass verdict.
 
+Apply the [workspace entry contract](../workspace-entry.md) before handoff:
+
+```sh
+python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
+  --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --rig "$RIG_NAME" \
+  --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" --entrypoint decompose
+```
+
+In new mode, the approved artifacts supplement the original recorded run;
+they do not establish its root, store, generation or base commit.
+
 Record `gc.build.continuation_entrypoint=decompose` when this suffix is
 launched directly. Close only after the decompose stage can create or reuse the
 decomposition artifact and implementation convoy.

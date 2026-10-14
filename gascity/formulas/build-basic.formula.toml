@@ -21,6 +21,21 @@ implementation_strategy = "drain"
 interaction_modes = ["interactive", "autonomous", "headless"]
 review_modes = ["report", "agent", "interactive"]
 
+[vars]
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+default = ""
+
+[vars.worktree_base_ref]
+description = "Initial source selector. @default captures registered rig HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_lifecycle]
+description = "Retained source lifecycle. New uses native owned workspaces and captured project checks."
+default = "legacy"
+enum = ["legacy", "new"]
+
+
 [[steps]]
 id = "requirements"
 title = "Generate requirements"
@@ -109,13 +124,13 @@ title = "Run starter implementation review"
 needs = ["summarize-implementation"]
 metadata = { "gc.run_target" = "gc.implementation-reviewer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
 expand = "build-basic-review"
-expand_vars = { implementation_target = "{{implementation_target}}" }
+expand_vars = { implementation_target = "{{implementation_target}}", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
 description_file = "../assets/workflows/build-basic/review.md"
 
 [[steps]]
 id = "finalize"
 title = "Finalize build-basic"
-needs = ["review"]
+needs = ["review", "review-result"]
 metadata = { "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.final-report.v1", "gc.build.artifact_path_keys" = "gc.build.final_report_path" }
 description_file = "../assets/workflows/build-basic/finalize.md"
 

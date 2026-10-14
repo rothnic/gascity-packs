@@ -22,6 +22,19 @@ interaction_modes = ["interactive", "autonomous", "headless"]
 review_modes = ["report", "agent", "interactive"]
 
 [vars]
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+default = ""
+
+[vars.worktree_base_ref]
+description = "Initial source selector. @default captures registered rig HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_lifecycle]
+description = "Retained source lifecycle. New uses native owned workspaces and captured project checks."
+default = "legacy"
+enum = ["legacy", "new"]
+
 [vars.implementation_target]
 description = "BMAD task implementation role."
 default = "bmad.story-implementer"
@@ -145,5 +158,5 @@ title = "BMAD code review"
 needs = ["summarize-implementation"]
 metadata = { "gc.run_target" = "bmad.bmad-review-synthesizer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
 expand = "bmad-code-review-flow"
-expand_vars = { implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}", artifact_path_keys = "gc.build.review_report_path" }
+expand_vars = { worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}", artifact_path_keys = "gc.build.review_report_path", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
 description_file = "../assets/workflows/bmad-build/review.md"

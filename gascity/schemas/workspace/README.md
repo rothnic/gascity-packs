@@ -1,10 +1,11 @@
 # Workspace records
 
 The base pack defines version 1 JSON records for source lifecycle state and a
-read-only validator. These contracts bind run identity, source OIDs and evidence
-for later workflow writers. Existing formulas still use their current lifecycle;
-this package does not provision workspaces, write Beads metadata, advance a
-chain, enforce locks or authorize publication.
+read-only validator. These contracts bind run identity, source OIDs and evidence.
+The [record-access adapter](access.md) publishes validated records with native
+writer admission, guarded transactions and bounded local locks. Existing formulas
+retain their current lifecycle until their workflow writers are connected and
+qualified.
 
 ## Validate
 
@@ -156,11 +157,10 @@ entrypoints remain visible. The artifact path check is recorded as an additional
 source helper. Review delegation, fix-generation ownership and interactive
 review's conditional source writes are explicit lifecycle responsibilities.
 
-`legacy` classifies current lifecycle responsibilities, and `reference` identifies
-planning/artifact-only surfaces. Every discovered asset must be listed; absent
-or changed entries fail discovery. No existing formula is declared migrated.
-Base, Compound and gstack shared-item commit-contract gaps are explicit. A future
-migration must update classifications, hashes and owning steps together.
+`new` classifies composed managed paths, `legacy` retains compatibility surfaces,
+and `reference` identifies planning/artifact-only surfaces. Every discovered asset
+must be listed. Changed content or bindings require matching classifications and
+hashes. Source declarations do not establish native workflow acceptance.
 
 `verify_source_modes(selected_mode, surfaces)` requires at least one source
 classification and accepts only the selected lifecycle plus planning-only
@@ -168,7 +168,9 @@ classification and accepts only the selected lifecycle plus planning-only
 entry preflights use the executable `workspace-lifecycle-valid.py` check with
 `gc.lifecycle` and JSON-string `gc.lifecycle.source_modes` step metadata. The
 check reads the exact check bead through `gc bd show`; it makes no store writes.
-Current entries declare their workflow `legacy` and refuse a `new` selection.
+Composed entry declarations select `new` source support with explicit
+`gc.lifecycle.compatibility=legacy`. The selector still defaults to legacy.
+A legacy fallback requires that explicit compatibility declaration.
 This checks supplied declarations. Installed-layer priority, shadowed source
 admission and new-workflow acceptance require separate runtime verification.
 

@@ -1,3 +1,13 @@
+For new mode, run `gc gc workspace flow close-source` through the native runtime recipe before closing this step.
+The explicit `legacy` route retains the existing closure rules below.
+
+For retained lifecycle `{{worktree_lifecycle}}=new`, closure requires the exact
+member-result reference from `record-result`, and owner-output for a final member.
+Read them through `workspace_outputs.referenced_record`; validate current native
+qualification, HEAD, required checks/review and artifact hashes with
+`validate_accepted_result`. Missing/partial/stale/unaccepted results block closure.
+Closure supplies no additional acceptance. Current new-mode activation remains
+blocked at lifecycle preflight. Legacy retains the closure rules below.
 
 Resolve `<source-anchor-id>` from the workflow ROOT, which is the SINGLE SOURCE
 OF TRUTH for every step of this lane: read the claimed step bead's

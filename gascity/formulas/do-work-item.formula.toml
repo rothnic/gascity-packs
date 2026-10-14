@@ -15,6 +15,18 @@ internal = true
 single_lane = true
 
 [vars]
+[vars.worktree_base_ref]
+description = "Initial source selector; @default captures the registered repository HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}]. Required when worktree_lifecycle is new; captured once on the run."
+default = ""
+
+[vars.worktree_lifecycle]
+description = "Retained shared run lifecycle; new remains blocked until composed native acceptance."
+default = "legacy"
+
 [vars.context_path]
 description = "Optional context bundle path."
 default = ""
@@ -24,7 +36,15 @@ description = "Role target for implementation work."
 default = "gc.implementation-worker"
 
 [[steps]]
+id = "prepare-worktree"
+title = "Prepare the shared member's accepted native input"
+condition = "{{worktree_lifecycle}} == new"
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+description_file = "../assets/workflows/do-work-item/prepare-worktree.md"
+
+[[steps]]
 id = "implement-item"
+needs = ["prepare-worktree"]
 title = "Implement shared-drain item"
 metadata = { "gc.run_target" = "{{implementation_target}}", "gc.build.artifact_schema" = "gc.build.implementation-summary.v1", "gc.build.artifact_path_keys" = "gc.implementation.summary_path,gc.build.implementation_summary_path,gc.var.summary_path" }
 description_file = "../assets/workflows/do-work-item/implement-item.md"
@@ -36,3 +56,27 @@ max_attempts = 3
 mode = "exec"
 path = "../assets/scripts/checks/build-artifact-valid.sh"
 timeout = "5m"
+
+[[steps]]
+id = "independent-acceptance"
+title = "Independently review the exact shared member output"
+needs = ["implement-item"]
+condition = "{{worktree_lifecycle}} == new"
+metadata = { "gc.run_target" = "gc.implementation-reviewer" }
+description_file = "../assets/workflows/do-work-item/independent-acceptance.md"
+
+[[steps]]
+id = "record-result"
+title = "Record qualified shared member and owner output"
+needs = ["independent-acceptance"]
+condition = "{{worktree_lifecycle}} == new"
+metadata = { "gc.run_target" = "gc.run-operator" }
+description_file = "../assets/workflows/do-work-item/record-result.md"
+
+[[steps]]
+id = "close-source-anchor"
+title = "Close the qualified shared member"
+needs = ["implement-item", "record-result"]
+condition = "{{worktree_lifecycle}} == new"
+metadata = { "gc.run_target" = "gc.run-operator" }
+description_file = "../assets/workflows/do-work-item/close-source-anchor.md"

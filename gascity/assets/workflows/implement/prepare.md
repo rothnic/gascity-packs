@@ -31,5 +31,18 @@ Requirements:
 - write a run-status artifact if summary_path {{summary_path}} or artifact root is provided
 - record push {{push}} and open_pr {{open_pr}}
 
-Close pass only after no workflow roots, drain controls, routed beads,
-worktrees, refs, or publish records have been created before validation.
+Before starting a drain, apply the [workspace entry contract](../workspace-entry.md):
+
+```sh
+python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
+  --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --rig "$RIG_NAME" \
+  --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" \
+  --entrypoint implement --worktree-lifecycle "{{worktree_lifecycle}}" --require-plan
+```
+
+New mode requires the current implementation convoy's recorded source plan.
+Neither source selection nor qualification may be inferred from scheduling
+dependencies or the convoy target branch.
+
+Close pass only after validation and, in new mode, exact run/plan readback.
+Start drains and create worktrees only after this step succeeds.

@@ -35,3 +35,12 @@ verdict, unresolved findings, drift observations, and any existing fix-attempt
 count on the workflow root metadata.
 
 Artifact validation: this stage is gated by the pack-owned `build-artifact-valid.sh` check, which validates the artifact recorded at `gc.build.review_report_path` against schema `gc.build.review.v1`. On repair attempts (`gc.attempt` greater than 1), read the validator errors from `gc.attempt_log` on the validation loop control bead (the dependent of this step bead) and repair the artifact in place instead of rewriting it. Two bounded repair attempts follow the first failure; exhausting them closes this stage with `gc.outcome=fail` and machine-readable validation errors that block downstream stages. Never ask questions in headless mode; record unresolved ambiguity inside the artifact.
+
+Before any explicit child launch, read `WORKTREE_BASE_REF` and `WORKTREE_CHECKS`
+from the original native root's `gc.var.worktree_base_ref` and
+`gc.var.worktree_checks`. Preserve the exact strings as quoted argument values:
+`--var worktree_base_ref="$WORKTREE_BASE_REF"` and
+`--var worktree_checks="$WORKTREE_CHECKS"`, together with the recorded lifecycle.
+An omitted initial base uses `@default`; an explicitly empty base refuses.
+Keep `gc.restart.worktree_base_ref` and `gc.restart.worktree_checks` in any restart
+handoff. A child consumes its proven inherited run rather than capturing another base.

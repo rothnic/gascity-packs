@@ -214,6 +214,37 @@ step between reviewers.
 
 ## Customization
 
+### Source workspaces
+
+`worktree_lifecycle=legacy` is the default for builds, story formulas and
+continuations. `new` selects the managed source contract with the imported native
+entry, checkout, runtime and record helpers. Configure its fixed base and required
+checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
+Native worker execution and installation require separate matched-pair validation.
+
+The managed contract retains one run base and a source-plan for the story
+graph. Separate stories use their declared inputs. Shared stories consume the
+preceding accepted checkpoint in one serial workspace. Source writes require
+the current native claim and admitted owner grant. Each story must match
+`gc.drain_member_id`, generation and recorded position. Continuations read the
+same records. Missing or conflicting evidence blocks with work preserved.
+
+BMAD keeps the PRD, architecture, readiness, self-check and acceptance-audit
+gates. `apply-story-findings` supplies the final producer output after those
+checks. A source repair returns `iterate` so the next pass reviews the changed
+commit. Post-commit project checks and independent acceptance bind the final
+commit before an admitted recorder publishes the member result. A verified
+no-change result retains the input commit and needs the same evidence.
+Accepted results precede closure and shared advancement. The last member also
+produces the owner-output consumed by integration and review.
+
+Code-review fixes create a generation based on the exact reviewed canonical
+commit. Tests and independent review qualify the replacement before
+finalization. The inherited publisher uses that approved commit and existing
+`push` and `open_pr` authority. Report-only review grants no source mutation or
+publication authority. Unexpected index, HEAD or owner state becomes a
+preserved blocker.
+
 Launch variables you are most likely to set (all passed as `--var k=v`):
 
 | Variable | Default | What it changes |

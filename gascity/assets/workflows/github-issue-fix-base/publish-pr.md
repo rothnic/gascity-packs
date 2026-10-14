@@ -1,3 +1,15 @@
+For `new`, execute `gc gc workspace flow publish` through
+[the native publication recipe](../workspace-publication.md). Keep the same
+recorded publish intent for push/PR readback; never create another effect after
+an uncertain response. Legacy retains its publication policy below.
+
+For a captured `new` run, use `workspace_publish.py` and shared publish steps to
+consume exact current canonical approval and positive existing PR authority.
+The existing adapter owns actor lookup, sanitized content and provider effects.
+Reserve one creation attempt, then reconcile the same marker/repo/base/actor/mode/
+head OID after response loss; never duplicate an uncertain PR. Record completion
+only with exact Git/provider readback. Missing guards/approval blocks; new activation
+requires full composed acceptance. Legacy retains the policy below.
 
 Only after build passes implementation, gap-analysis, and review, publish
 according to PR mode {{pr_mode}}: `draft` opens or updates a draft PR; `ready`

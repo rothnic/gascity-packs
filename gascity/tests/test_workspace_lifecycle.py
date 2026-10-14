@@ -84,7 +84,8 @@ class WorkspaceLifecycleTests(unittest.TestCase):
                 self.assertEqual(formula["vars"]["worktree_lifecycle"]["enum"], ["legacy", "new"])
                 step = next(step for step in formula["steps"] if step["id"] == first)
                 self.assertEqual(step["metadata"]["gc.lifecycle"], "{{worktree_lifecycle}}")
-                self.assertEqual(step["metadata"]["gc.lifecycle.source_modes"], '{"workflow":"legacy"}')
+                self.assertEqual(step["metadata"]["gc.lifecycle.source_modes"], '{"workflow":"new"}')
+                self.assertEqual(step["metadata"]["gc.lifecycle.compatibility"], "legacy")
                 self.assertEqual(step["check"]["max_attempts"], 1)
                 self.assertEqual(Path(step["check"]["check"]["path"]).name, CHECK.name)
 

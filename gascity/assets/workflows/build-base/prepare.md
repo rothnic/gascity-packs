@@ -27,6 +27,18 @@ Launch inputs:
 
 Validate the target, artifact root, and optional context inputs. Record the normalized artifact paths on the workflow root bead so later stages can reuse them without inventing new locations.
 
+Apply the [workspace entry contract](../workspace-entry.md) before handoff:
+
+```sh
+python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
+  --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --rig "$RIG_NAME" \
+  --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" \
+  --entrypoint build --worktree-lifecycle "{{worktree_lifecycle}}" --allow-pending-source
+```
+
+An `awaiting-source` result permits planning only. Keep implementation blocked
+until the original workflow has a valid native source and recorded run.
+
 Validate mode inputs against the methodology vocabulary before any stage runs:
 `interaction_mode` must be `interactive`, `autonomous`, or `headless`;
 `review_mode` must be `report`, `agent`, or `interactive`; `drain_policy` must

@@ -1,3 +1,32 @@
+For `worktree_lifecycle=new`, use the imported Gas City
+[managed runtime recipe](../workspace-runtime.md).
+Before source access, run `gc gc workspace checkout continue` with actual native
+run/plan/workspace/grant references. After the final focused commit and summary,
+run `gc gc workspace runtime checks`; the captured native policy selects required
+commands. Preserve the exact output OID and actual receipts for independent-acceptance.
+Leave source closure to the guarded result/checkpoint and close stages.
+The legacy instructions below retain their existing behavior.
+
+Managed lifecycle: retain `{{worktree_lifecycle}}` from the run. Current source
+classifications remain `legacy`; `new` must stop at lifecycle preflight until
+composed helpers, native guards and workflow acceptance are qualified.
+
+For an admitted managed run, read exact run/source-plan/workspace references through
+`workspace_outputs.referenced_record` and the recorded input prepared by
+`workspace_checkout.py`. Use its authoritative path and native provenance. Missing
+or conflicting references block; do not fall back to a launcher or recapture base.
+
+After implementation, freeze actual full HEAD. Construct
+`workspace_outputs.result_binding(run, plan, workspace, store_ref=...,
+member_id=..., output_oid=...)`. Run `workspace_outputs.execute_checks` in that
+checkout with frozen ordered requirement IDs/argv and actual native producer
+step/session/attempt. Preserve actual receipts, including failed/skipped/unrun/
+setup_failure. Core/pack source checks do not replace project behavior checks.
+Include summary and frozen requirement artifacts with their actual hashes.
+This step emits test evidence; only `record-result` may publish acceptance after
+`independent-acceptance` completes. A summary schema pass supplies no acceptance.
+
+For the default legacy run, retain the following source-anchor behavior.
 
 Resolve `<source-anchor-id>` as described below: the root's stamped
 `gc.source_anchor_id`, else the same rules as `prepare-worktree`. For a

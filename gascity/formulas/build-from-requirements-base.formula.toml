@@ -19,6 +19,19 @@ interaction_modes = ["interactive", "autonomous", "headless"]
 review_modes = ["report", "agent", "interactive"]
 
 [vars]
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+default = ""
+
+[vars.worktree_base_ref]
+description = "Initial source selector. @default captures registered rig HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_lifecycle]
+description = "Retained source lifecycle. New uses native owned workspaces and captured project checks."
+default = "legacy"
+enum = ["legacy", "new"]
+
 [vars.requirements_path]
 description = "Requirements artifact path to create or reuse."
 default = ""
@@ -26,7 +39,7 @@ default = ""
 [[steps]]
 id = "prepare-requirements"
 title = "Validate requirements continuation inputs"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"legacy\"}" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
 description_file = "../assets/workflows/build-from-requirements-base/prepare-requirements.md"
 
 [steps.check]
@@ -56,7 +69,7 @@ timeout = "5m"
 id = "prepare-plan"
 title = "Validate plan continuation inputs"
 needs = ["requirements"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"legacy\"}" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
 description_file = "../assets/workflows/build-from-requirements-base/prepare-plan.md"
 
 [steps.check]

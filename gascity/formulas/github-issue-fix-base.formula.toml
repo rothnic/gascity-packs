@@ -31,8 +31,16 @@ contract = "graph.v2"
 target_required = false
 
 [vars]
+[vars.worktree_base_ref]
+description = "Initial source selector; @default captures the registered repository HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}]. Required when worktree_lifecycle is new; captured once on the run."
+default = ""
+
 [vars.worktree_lifecycle]
-description = "Source lifecycle for this run: legacy or new. Current source paths require legacy."
+description = "Source lifecycle for this run. New mode requires the composed native workspace helpers and frozen check policy."
 default = "legacy"
 enum = ["legacy", "new"]
 
@@ -95,7 +103,7 @@ default = "fix-loop-base"
 [[steps]]
 id = "snapshot"
 title = "Snapshot GitHub issue"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"legacy\"}" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
 description_file = "../assets/workflows/github-issue-fix-base/snapshot.md"
 
 [steps.check]
@@ -158,6 +166,9 @@ description_file = "../assets/workflows/github-issue-fix-base/design-review.md"
 
 [steps.expand_vars]
 mode = "{{mode}}"
+worktree_lifecycle = "{{worktree_lifecycle}}"
+worktree_base_ref = "{{worktree_base_ref}}"
+worktree_checks = "{{worktree_checks}}"
 
 [[steps]]
 id = "create-beads"

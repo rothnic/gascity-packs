@@ -1,3 +1,30 @@
+Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
+`new` requires the composed native workspace helpers and captured check policy.
+Keep the methodology below. Its legacy source/path/state operations apply
+only to explicit `legacy`; the managed instructions govern an admitted `new`
+run. Unknown modes or failed reads never authorize legacy fallback.
+Resolve helper modules through the imported Gas City `assets/scripts` layer;
+keep that resolved directory on Python's import path for sibling modules.
+
+For an admitted `new` fix, read the current canonical and commit-bound
+findings through `workspace_outputs.referenced_record`. Report mode cannot
+apply fixes. A no-op retains the exact canonical OID and matching approval.
+Source or test changes require `workspace_review.fix_plan(canonical, findings,
+previous_plan, writer_step_id=..., source_plan_owner_id=..., nodes=...,
+terminal_owner_id=..., max_iterations=...)`. Use native IDs and the configured
+bounded retry policy. Publish the declared source-plan using
+`workspace_source_plan.declare_plan` and `publish_plan` under the current
+admitted claim/owner grant. Retain the exact parent generation/OID; do not edit
+the accepted canonical checkout in place or replace a newer parent.
+
+Run the selected methodology's native implementation/fix lanes against that
+recorded generation. Use the common checkout, result and canonical APIs for
+its tested commit and independent review. A changed pass returns `iterate`;
+only a later independent review of the new canonical commit can approve.
+Preserve artifacts for both generations. Do not rewrite the old accepted
+summary, review or receipt. Any missing native route, grant or helper blocks
+with original state retained. Existing raw artifact edits below are legacy only.
+
 Apply required BMAD code-review findings.
 
 Read the synthesized BMAD review report and resolve required findings in this

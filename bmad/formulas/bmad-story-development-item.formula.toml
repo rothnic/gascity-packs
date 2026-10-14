@@ -12,9 +12,38 @@ target_required = true
 internal = true
 single_lane = true
 
+[vars]
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+default = ""
+
+[vars.worktree_base_ref]
+description = "Initial source selector. @default captures registered rig HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_lifecycle]
+description = "Retained source lifecycle. New uses the composed native workspace helpers and captured policy."
+default = "legacy"
+enum = ["legacy", "new"]
+
+[[steps]]
+id = "validate-workspace-mode"
+title = "Validate methodology source lifecycle"
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+description_file = "../assets/workflows/workspace-mode/validate.md"
+
+[steps.check]
+max_attempts = 1
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/workspace-lifecycle-valid.py"
+timeout = "1m"
+
 [[steps]]
 id = "implement-item"
 title = "Run BMAD story development until clean"
+needs = ["validate-workspace-mode", "prepare-worktree"]
 metadata = { "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/bmad-story-development/implement-item.md"
 
@@ -57,5 +86,5 @@ description_file = "../assets/workflows/bmad-story-development/acceptance-audit.
 id = "apply-story-findings"
 title = "Apply BMAD story findings"
 needs = ["acceptance-audit"]
-metadata = { "gc.run_target" = "bmad.story-implementer", "gc.continuation_group" = "bmad-story-fixes" }
+metadata = { "gc.run_target" = "bmad.story-implementer", "gc.continuation_group" = "bmad-story-fixes", "gc.build.artifact_schema" = "gc.build.implementation-summary.v1" }
 description_file = "../assets/workflows/bmad-story-development/apply-story-findings.md"

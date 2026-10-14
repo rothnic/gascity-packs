@@ -32,7 +32,11 @@ def main() -> int:
         source_modes = metadata.get("gc.lifecycle.source_modes")
         if not isinstance(source_modes, str):
             raise RecordError("source classifications are required")
-        verify_source_modes(mode, parse_record(source_modes))
+        declared = parse_record(source_modes)
+        if mode == "legacy" and metadata.get("gc.lifecycle.compatibility") == "legacy":
+            verify_source_modes("new", declared)
+        else:
+            verify_source_modes(mode, declared)
         print(json.dumps({"ok": True, "worktree_lifecycle": mode}, sort_keys=True))
         return 0
     except (RecordError, OSError, subprocess.SubprocessError, UnicodeError) as exc:

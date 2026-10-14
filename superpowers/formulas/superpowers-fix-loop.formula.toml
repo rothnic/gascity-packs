@@ -9,6 +9,19 @@ target_required = false
 internal = true
 
 [vars]
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+default = ""
+
+[vars.worktree_base_ref]
+description = "Initial source selector. @default captures registered rig HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_lifecycle]
+description = "Retained source lifecycle. New uses native owned workspaces and captured project checks."
+default = "legacy"
+enum = ["legacy", "new"]
+
 [vars.implementation_formula]
 description = "Superpowers implementation formula used for fix work."
 default = "superpowers-implementation"

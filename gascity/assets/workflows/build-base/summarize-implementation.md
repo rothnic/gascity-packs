@@ -1,4 +1,18 @@
+For `new`, execute `gc gc workspace flow canonical` through
+[the canonical recording recipe](../workspace-canonical.md) after the accepted
+terminal owner output. Preserve the existing aggregate artifact contract below.
+
 Write the canonical build implementation summary.
+
+For a captured `new` run, read the exact source plan's terminal owner-output and
+qualified final member result through the native adapter. Bind its already accepted
+terminal summary with `workspace_outputs.prepare_canonical`, then execute/read back
+the frozen request before review. An aggregate human summary may reference that
+accepted artifact; it cannot replace its hash with newly written unreviewed bytes.
+No missing terminal result, multiple unintegrated outputs or stale parent generation
+may proceed. Never infer acceptance from closed anchors. Current new activation
+remains blocked pending full composed native acceptance. Legacy retains the stage
+below.
 
 This build-base stage may be inherited by concrete build methodology packs.
 Concrete build methodology packs may override this stage, but any override must

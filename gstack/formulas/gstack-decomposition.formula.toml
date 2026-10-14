@@ -21,4 +21,3 @@ max_attempts = 3
 mode = "exec"
 path = ".gc/scripts/checks/build-artifact-valid.sh"
 timeout = "5m"
-

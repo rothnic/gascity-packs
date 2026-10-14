@@ -1,3 +1,15 @@
+For `new`, execute `gc gc workspace flow canonical` through
+[the canonical recording recipe](../workspace-canonical.md) after the accepted
+terminal owner output. Preserve the existing aggregate artifact contract below.
+
+For a captured `new` run, select the source plan's single terminal owner-output,
+read its qualified final member result and accepted summary, and bind through
+`workspace_outputs.prepare_canonical` with guarded exact readback. Reuse identical
+producer review through `workspace_review` for terminal approval where its OID,
+required scope and artifacts match. Aggregate reporting cannot mint acceptance or
+replace the accepted terminal summary hash. Missing/partial/stale results block;
+new activation still requires full native workflow acceptance. Legacy retains the
+direct summary stage below.
 
 Write the aggregate implementation summary, including selected anchors, drain
 policy, item result classes, report paths, commit refs when available, and any

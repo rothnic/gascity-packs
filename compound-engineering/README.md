@@ -252,6 +252,36 @@ while each member receives a Compound `ce-work` item formula.
 
 ## Customization
 
+### Source workspaces
+
+`worktree_lifecycle=legacy` is the default for builds, item formulas and
+continuations. `new` selects the managed source contract with the imported native
+entry, checkout, runtime and record helpers. Configure its fixed base and required
+checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
+Native worker execution and installation require separate matched-pair validation.
+
+The managed contract captures one run base and declares each workspace's
+source predecessors. Separate items receive their declared input. Shared items
+start at the preceding accepted checkpoint in one serial workspace. Native
+claims and owner grants control source writes. A continuation reads the same
+run, source-plan, workspace and accepted output. Missing or conflicting records
+leave the existing work intact and block progress.
+
+Compound's source writer commits in `implement` or `implement-item`.
+Post-commit project checks and independent review bind that exact output.
+Accepted member results precede source closure and shared advancement.
+The final member produces the owner-output consumed by integration and review.
+A verified no-change result keeps its input commit and requires the same checks.
+Synthetic drain convoys resolve to their original member for closure.
+
+Code review uses the canonical commit and its accepted evidence. Required
+source fixes create a generation based on that exact parent, followed by tests
+and independent review. Resolution preserves accepted artifact hashes.
+The inherited publisher requires the approved commit and existing `push` or
+`open_pr` authority. Report-only review supplies findings without source edits
+or publication authority. Unexpected index, HEAD or owner state becomes a
+preserved blocker.
+
 All knobs are launch vars on `compound-build` (most are inherited from
 `build-base`); pass them as `--var key=value`:
 

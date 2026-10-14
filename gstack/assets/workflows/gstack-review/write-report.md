@@ -1,3 +1,18 @@
+Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
+`new` requires the composed native workspace helpers and captured check policy.
+Keep the methodology below. Its legacy source/path/state operations apply only
+to explicit `legacy`; the managed instructions govern an admitted `new` run.
+Unknown modes and failed managed reads never authorize legacy fallback.
+Resolve shared helpers through the imported Gas City `assets/scripts` layer.
+
+For an admitted `new` review/continuation, consume the recorded
+canonical generation, owner-output and accepted terminal member-result through
+`workspace_outputs.referenced_record`. Pass the retained mode and exact subject
+into the existing methodology review expansion. Do not reconstruct source from
+summary paths, a launcher HEAD or a current default branch. The concrete setup,
+review/fix and terminal approval lanes own commit-bound review. Report mode
+keeps source read-only and supplies no publication authority.
+
 Write a gstack report-only review for `{{subject_path}}` and save it to
 `{{report_path}}`.
 

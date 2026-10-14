@@ -13,6 +13,19 @@ target_required = false
 internal = true
 
 [vars]
+[vars.worktree_lifecycle]
+description = "Retained source lifecycle. New mode consumes the original native run and policy."
+default = "legacy"
+enum = ["legacy", "new"]
+
+[vars.worktree_base_ref]
+description = "Initial source selector; @default captures the registered repository HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}]. Required when worktree_lifecycle is new; captured once on the run."
+default = ""
+
 [vars.final_report]
 description = "Final report path to publish from."
 required = true

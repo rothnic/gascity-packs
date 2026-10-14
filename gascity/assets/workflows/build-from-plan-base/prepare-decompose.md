@@ -4,6 +4,14 @@ Validate that the plan and plan-review artifacts now exist, that the
 plan-review verdict approves decomposition, and that downstream decompose
 selectors are present.
 
+Apply the [workspace entry contract](../workspace-entry.md) before handoff:
+
+```sh
+python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
+  --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --rig "$RIG_NAME" \
+  --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" --entrypoint decompose
+```
+
 Do not create implementation beads in this handoff step. Close only after the
 inherited `build-from-decompose-base` suffix has the approved plan inputs it
 requires.

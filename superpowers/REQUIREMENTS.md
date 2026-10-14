@@ -204,3 +204,18 @@ PY
   points to the compatibility contract directly.
 - The ledger is pack-local; the base contracts remain defined by `gascity`
   and are inherited through `build-base`.
+
+## Managed workspaces
+
+The GC-METH-017 through GC-METH-019 contract preserves the legacy default and
+forwards base/check policy through reached formula expansions. New mode uses
+the imported native preparation, continuation, acceptance and record helpers.
+The concrete final producer completes before independent-acceptance and
+record-result. Shared members checkpoint before advancement. Canonical
+review-result precedes finalization and publication with exact native identities.
+Source tests validate these bindings. Native worker and installation acceptance
+require the matched core/pack/project workflow receipts.
+
+Evidence: `../gascity/tests/test_workspace_composition.py`,
+`../gascity/tests/test_workspace_methodologies.py` and
+`../gascity/tests/test_derived_pack_compatibility.py`.

@@ -1,5 +1,14 @@
 This is the `code-review-base` methodology contract report step.
 
+For managed source, finish through `workspace_review.finish_canonical_review`, then
+`prepare_review_record` and exact guarded readback. Recheck current generation/OID,
+clean HEAD and hashes. Reuse producer qualification only at identical commit,
+required scope and artifacts, retaining the original independent reviewer identity.
+Rereading a receipt is not a new code review; a new reviewer supplies an actually
+completed report. Failed findings request changes; skipped/unrun/setup_failure are
+blocked and inspectable. Core/pack checks cannot approve unexecuted requirements.
+Wrong OID, dirty source or changed hashes refuse approval. Callers own publication.
+
 Concrete methodology packs override this step to run their native code-review
 process. Write the final report to `{{report_path}}` and keep external adapter
 actions out of this methodology contract.

@@ -35,3 +35,12 @@ review blocks the fix, run `{{review_fix_formula}}` until the review passes or
 the workflow reaches its max iteration limit. In `headless` interaction mode,
 never ask questions; on missing required input, stop blocked with a
 machine-readable `gc.blocked_reason` instead of waiting on a human.
+
+Before any explicit child launch, read `WORKTREE_BASE_REF` and `WORKTREE_CHECKS`
+from the original native root's `gc.var.worktree_base_ref` and
+`gc.var.worktree_checks`. Preserve the exact strings as quoted argument values:
+`--var worktree_base_ref="$WORKTREE_BASE_REF"` and
+`--var worktree_checks="$WORKTREE_CHECKS"`, together with the recorded lifecycle.
+An omitted initial base uses `@default`; an explicitly empty base refuses.
+Keep `gc.restart.worktree_base_ref` and `gc.restart.worktree_checks` in any restart
+handoff. A child consumes its proven inherited run rather than capturing another base.

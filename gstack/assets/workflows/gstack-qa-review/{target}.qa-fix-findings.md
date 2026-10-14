@@ -1,3 +1,21 @@
+Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
+`new` requires the composed native workspace helpers and captured check policy.
+Keep the methodology below. Its legacy source/path/state operations apply only
+to explicit `legacy`; the managed instructions govern an admitted `new` run.
+Unknown modes and failed managed reads never authorize legacy fallback.
+Resolve shared helpers through the imported Gas City `assets/scripts` layer.
+
+For an admitted `new` QA fix, read the current canonical OID and the
+commit-bound QA findings. Report mode cannot modify source. Missing proof can
+be re-run against the same exact commit, with new immutable evidence. Code or
+test edits require `workspace_review.fix_plan` with the exact canonical parent,
+a committed/replayed source-plan declaration and admitted native fix workspace.
+Run the existing gstack implementation/result lanes on that generation. Obtain
+its tested accepted owner-output, canonical and independent review before QA
+retries. A changed pass returns `iterate`; earlier review, QA and release
+reports cannot approve the replacement OID. Do not edit the canonical checkout
+or rewrite old evidence. Missing native qualification/route blocks.
+
 Apply gstack QA findings.
 
 Use implementation target {{implementation_target}} for fixes. Fix behavior

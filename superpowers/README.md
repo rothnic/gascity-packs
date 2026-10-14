@@ -277,6 +277,38 @@ converge before the post-implementation review fan-out.
 
 ## Customization
 
+### Source workspaces
+
+`worktree_lifecycle=legacy` is the default for builds, item formulas and
+continuations. `new` selects the managed source contract with the imported native
+entry, checkout, runtime and record helpers. Configure its fixed base and required
+checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
+Native worker execution and installation require separate matched-pair validation.
+
+The managed contract retains the run base, source-plan, workspace owner and
+accepted input for each task. Separate tasks use their declared source.
+Shared tasks start from the preceding accepted checkpoint in one serial
+workspace. Native claims and owner grants control source writes. Continuations
+recover the same records and task position. Missing or conflicting evidence
+blocks with existing source and artifacts preserved.
+
+`implement` and `implement-item` inspect task context. The task still follows
+write-failing-test, verify-failure, implement-change, verify-success, then
+spec-compliance and code-quality review. `record-item-result` owns the final
+task commit. Post-commit project checks and independent acceptance bind that
+exact commit before an admitted result recorder checkpoints the task.
+A verified no-change result retains the input commit and needs the same proof.
+Source closure follows accepted result readback. The last shared task also
+requires an accepted owner-output.
+
+The design, written-spec and plan approval gates retain their selected modes.
+Code-review fixes create an explicit generation based on the reviewed
+canonical commit. Tests and independent review qualify the replacement before
+finalization or publication. Report-only review grants no fix or publication
+authority. Unexpected dirty state, HEAD drift or an owner mismatch becomes a
+preserved blocker. The inherited publisher uses the approved commit and the
+existing `push` and `open_pr` flags.
+
 All variables are passed at launch with `--var name=value`. The first group is
 inherited from `build-base`; `brainstorming_approval_mode` is
 Superpowers-specific.

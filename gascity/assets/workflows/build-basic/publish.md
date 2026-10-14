@@ -1,4 +1,17 @@
+For `new`, execute `gc gc workspace flow publish` through
+[the native publication recipe](../workspace-publication.md). Keep the same
+recorded publish intent for push/PR readback; never create another effect after
+an uncertain response. Legacy retains its publication policy below.
+
 Use the built-in Gas City publish flow.
+
+For a captured `new` run, use `workspace_publish.py` and the shared publish
+preflight/push/open-pr contract. Consume the exact current approved canonical OID,
+hashed artifacts and positive existing push/open_pr authority. Persist/read back
+intent before effects; uncertain Git/PR responses reconcile that same intent and
+marker without another effect. Missing guards/approval or changed source blocks.
+No-op preserves earlier failures. New activation requires composed native acceptance;
+legacy retains the flow below.
 
 If publishing is enabled, publish the finalized build-basic result with the existing publish helper. If publishing is disabled, record a no-op publish outcome with the final artifact paths.
 

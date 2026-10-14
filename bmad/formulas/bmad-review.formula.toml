@@ -10,9 +10,43 @@ internal = true
 mode = "report"
 
 [vars]
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+default = ""
+
+[vars.worktree_base_ref]
+description = "Initial source selector. @default captures registered rig HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_lifecycle]
+description = "Retained source lifecycle; new requires composed methodology acceptance."
+default = "legacy"
+enum = ["legacy", "new"]
+
 [vars.implementation_target]
 description = "BMAD task implementation role used for review fixes."
 default = "bmad.story-implementer"
+
+[[steps]]
+id = "validate-workspace-mode"
+title = "Validate methodology review source lifecycle"
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+description_file = "../assets/workflows/workspace-mode/validate.md"
+
+[steps.check]
+max_attempts = 1
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/workspace-lifecycle-valid.py"
+timeout = "1m"
+
+[[steps]]
+id = "validate-context"
+title = "Validate admitted methodology review context"
+needs = ["validate-workspace-mode"]
+metadata = { "gc.run_target" = "gc.run-operator" }
+description_file = "../assets/workflows/code-review-base/validate-context.md"
 
 [[steps]]
 id = "write-report"
@@ -20,5 +54,5 @@ title = "Run BMAD review"
 needs = ["validate-context"]
 metadata = { "gc.run_target" = "bmad.bmad-review-synthesizer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path,gc.var.report_path" }
 expand = "bmad-code-review-flow"
-expand_vars = { implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}" }
+expand_vars = { worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
 description_file = "../assets/workflows/bmad-review/write-report.md"

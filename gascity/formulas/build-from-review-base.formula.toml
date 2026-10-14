@@ -19,8 +19,16 @@ interaction_modes = ["interactive", "autonomous", "headless"]
 review_modes = ["report", "agent", "interactive"]
 
 [vars]
+[vars.worktree_base_ref]
+description = "Initial source selector; @default captures the registered repository HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}]. Required when worktree_lifecycle is new; captured once on the run."
+default = ""
+
 [vars.worktree_lifecycle]
-description = "Source lifecycle for this run: legacy or new. Current source paths require legacy."
+description = "Source lifecycle for this run. New mode requires the composed native workspace helpers and frozen check policy."
 default = "legacy"
 enum = ["legacy", "new"]
 
@@ -95,7 +103,7 @@ default = "false"
 [[steps]]
 id = "prepare-review"
 title = "Validate review continuation inputs"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"legacy\"}" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
 description_file = "../assets/workflows/build-from-review-base/prepare-review.md"
 
 [steps.check]
@@ -129,9 +137,17 @@ metadata = { "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/build-from-review-base/repair-review.md"
 
 [[steps]]
+id = "review-result"
+title = "Review the exact canonical source generation"
+needs = ["repair-review"]
+condition = "{{worktree_lifecycle}} == new"
+metadata = { "gc.run_target" = "gc.implementation-reviewer" }
+description_file = "../assets/workflows/build-from-review-base/review-result.md"
+
+[[steps]]
 id = "finalize"
 title = "Finalize continuation result"
-needs = ["repair-review"]
+needs = ["repair-review", "review-result"]
 metadata = { "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.final-report.v1", "gc.build.artifact_path_keys" = "gc.build.final_report_path" }
 description_file = "../assets/workflows/build-from-review-base/finalize.md"
 

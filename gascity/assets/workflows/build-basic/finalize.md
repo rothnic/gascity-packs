@@ -1,4 +1,15 @@
+For `new`, run `gc gc workspace flow verify` using
+[the native runtime arguments](../workspace-runtime.md) before finalization.
+The command requires the exact canonical approval and actual native reviewer.
+
 Finalize the `build-basic` workflow.
+
+For a captured `new` run, require `workspace_review.validate_approval` on the exact
+current canonical generation/OID, terminal requirement evidence and unchanged
+artifacts before any passing outcome. Closed work, valid ancestry, schema pass or
+publishing disabled supplies no credit. Preserve failed/skipped/unrun/setup_failure,
+unresolved fixes and exhaustion as blockers. New activation requires full composed
+acceptance; legacy retains the rules below.
 
 Summarize requirements, implementation-plan, design-review, create-beads,
 implementation, and review artifacts. Record the final outcome, artifact paths,

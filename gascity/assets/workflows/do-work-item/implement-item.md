@@ -1,3 +1,26 @@
+For `worktree_lifecycle=new`, use the imported Gas City
+[managed runtime recipe](../workspace-runtime.md).
+Before source access, run `gc gc workspace checkout continue` with actual native
+run/plan/workspace/grant references. After the final focused commit and summary,
+run `gc gc workspace runtime checks`; the captured native policy selects required
+commands. Preserve the exact output OID and actual receipts for independent-acceptance.
+Leave source closure to the guarded result/checkpoint and close stages.
+The legacy instructions below retain their existing behavior.
+
+Managed shared-chain completion uses the same `workspace_outputs` qualification
+contract. Native checks and independent review bind the managed result before checkpoint publication.
+
+In an admitted new run, execute frozen project checks at the exact clean member OID,
+then obtain a different native reviewer session through the owning formula graph.
+Use `begin_review`/`complete_review`, `make_member_result` and `prepare_member_result`
+before advancing any shared checkpoint. The final member qualifies all contiguous
+checkpoints with `make_owner_output`/`prepare_owner_output`. Self-review or closure
+cannot supply acceptance. Do not advance source before exact guarded result readback.
+
+The native `new` item graph is implement-item → independent-acceptance →
+record-result → close-source-anchor. Producer checks belong to actual implement-item
+completion; accepted result and checkpoint readback precede closure. In `new`, leave
+the source anchor open for the owning close step. Legacy retains the behavior below.
 
 Run inside an existing shared worktree lifecycle. Resolve reserved `convoy_id`,
 read `gc.drain_member_id` and `gc.drain_item_index`, validate ownership and

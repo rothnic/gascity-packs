@@ -1,5 +1,13 @@
 This is the `build-from-review-base` review handoff step.
 
+For retained `new` mode, restore exact run/plan/canonical/result references from the
+native adapter and verify the accepted canonical subject through `workspace_review`.
+If the immutable canonical exists without its current pointer, use
+`workspace_outputs.prepare_canonical` to replay that same physical record and bytes
+with the original parent guard. Missing/conflicting pointers block; do not recapture
+base, switch roots or infer a canonical commit from ancestry/closure. New activation
+remains blocked until full composed native acceptance passes.
+
 Validate that implementation evidence exists before review runs:
 
 - artifact_root: {{artifact_root}}

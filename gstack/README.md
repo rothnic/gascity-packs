@@ -172,6 +172,40 @@ formulas `gstack-work` (`do-work`) and `gstack-work-item` (`do-work-item`).
 
 ## Customization
 
+### Source workspaces
+
+`worktree_lifecycle=legacy` is the default for builds, item formulas and
+continuations. `new` selects the managed source contract with the imported native
+entry, checkout, runtime and record helpers. Configure its fixed base and required
+checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
+Native worker execution and installation require separate matched-pair validation.
+
+The managed contract retains the run base, declared source predecessors,
+workspace owner and accepted member input. Separate items use their declared
+source. Shared items consume the preceding accepted checkpoint in one serial
+workspace. Current native claims and owner grants control writes.
+Continuations recover the same records and position. Missing or conflicting
+evidence blocks with the existing source and artifacts preserved.
+
+`implement` and `implement-item` commit the owned change. The common result
+stages require post-commit project checks and independent review of that exact
+output before closure or shared advancement. A verified no-change result keeps
+its input commit and requires the same proof. The final member produces the
+accepted owner-output used by integration and canonical review.
+
+Staff, QA-evidence, security, gap-analysis, browser QA and release-readiness
+reports bind one canonical generation and commit. Code, test or documentation
+fixes create a generation based on that exact parent. The resulting commit
+must pass tests, independent review, QA and release readiness before
+publication. Report-only review remains read-only and grants no publishing
+authority. Unexpected dirty state, HEAD drift or conflicting owners become
+preserved blockers.
+
+The publisher alone owns `push` and `open_pr` effects. Both flags default to
+false and produce an explicit no-op. Positive authority records an intent for
+the approved commit, exact destination and PR scope before any effect.
+Uncertain responses preserve that intent for Git/provider readback.
+
 Pass any of these as `--var k=v` on the launch command. The selector vars also
 let shared Gas City adapters pick gstack stages without using `gstack-build`.
 

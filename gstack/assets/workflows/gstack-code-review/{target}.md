@@ -1,3 +1,24 @@
+Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
+`new` requires the composed native workspace helpers and captured check policy.
+Keep the methodology below. Its legacy source/path/state operations apply
+only to explicit `legacy`; the managed instructions govern an admitted `new`
+run. Unknown modes or failed reads never authorize legacy fallback.
+Resolve helper modules through the imported Gas City `assets/scripts` layer;
+keep that resolved directory on Python's import path for sibling modules.
+
+For an admitted `new` run, finish the exact context opened by this
+review's setup with `workspace_review.finish_canonical_review`. Supply the
+actual report and immutable evidence path after every required methodology
+lane completes. The report-only path preserves findings without authorizing
+source changes or publication. The approval path must bind the independently
+reviewed clean canonical OID, required checks and artifact hashes; a loop
+`done` or a schema-valid report alone does not approve a commit.
+Publish with `workspace_review.prepare_review_record`, an admitted current
+recorder claim, exact owner grant and current native qualification. Execute and
+resolve the same prepared `WorkspaceStore` request; require committed/replayed
+readback. Drift, unknown writes, missing evidence or a changed generation block.
+Do not rewrite accepted summary artifacts during report publication.
+
 Finalize the gstack code review.
 
 If workflow root metadata `gc.var.review_mode=report`, do not require the

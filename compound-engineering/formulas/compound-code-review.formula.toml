@@ -13,6 +13,19 @@ version = 1
 contract = "graph.v2"
 
 [vars]
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+default = ""
+
+[vars.worktree_base_ref]
+description = "Initial source selector. @default captures registered rig HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_lifecycle]
+description = "Retained source lifecycle; new requires composed methodology acceptance."
+default = "legacy"
+enum = ["legacy", "new"]
+
 [vars.implementation_target]
 description = "Compound Engineering task implementation role used for the review-fix lane."
 default = "compound-engineering.ce-work"

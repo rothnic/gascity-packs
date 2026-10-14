@@ -52,7 +52,55 @@ Include the required schema sections:
 Create work-item beads first, then create a new implementation convoy for those
 work units. Do not reuse the source or launch convoy from `gc.var.convoy_id`.
 
-Use the convoy creation flow exactly:
+For **new lifecycle**, use the [workspace entry contract](../workspace-entry.md)
+and the pack's native expansion helper. Declare code sources separately from
+ordinary scheduling dependencies in the `tasks.md` creation payload:
+
+Set `TASKS_PATH` to that creation file's absolute path. Keep it separate from
+the approved decomposition artifact: native creation records its recovery
+status and returned IDs in `tasks.md`.
+
+```yaml
+sources:
+  nodes:
+    - owner: a
+      strategy: isolated
+      members: [a]
+      predecessors: []
+    - owner: b
+      strategy: isolated
+      members: [b]
+      predecessors: []
+    - owner: d
+      strategy: dependent
+      members: [d]
+      predecessors: [b, a]
+  terminal: d
+```
+
+Each owner/member key must name a work item or convoy in that same payload.
+Use one terminal output. Ordered predecessors describe which accepted code
+feeds a task; scheduling dependencies alone transfer no source code.
+Multiple predecessors create a real integration work item before the
+dependent item. Its inputs retain the declared order. A shared-chain owner
+uses ordered members and `single_lane: true`.
+
+```sh
+python3 "{{pack_root}}/assets/scripts/create_beads_from_tasks.py" "$TASKS_PATH" \
+  --city "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --workflow-root "$ROOT_ID" \
+  --claimed-step "$CLAIMED_BEAD_ID" --worktree-lifecycle new --generation 1
+```
+
+The helper creates native members and their implementation convoy, then
+publishes the source plan and both root convoy bindings in one guarded batch.
+Planning A/B inputs does not require their outputs to exist yet. The
+integration workspace refuses missing or unaccepted outputs at consumption.
+Verify the exact plan/reference readback before closing decomposition or
+starting any drain. If the command reports an uncertain operation, resolve
+that operation; do not rerun creation blindly. For a fix generation, pass its
+actual generation and exact current canonical parent instead of `1`.
+
+For **legacy lifecycle**, use the existing convoy creation flow:
 
 1. Create each work item with `gc bd create ...` and capture the returned work-item
    bead IDs. Do not use `gc bd create --root-bead`; `--root-bead` is not a
@@ -72,13 +120,13 @@ Record the decomposition output on the workflow root bead with
 Do not use `gc bd update --metadata 'key=value'`; `--metadata` only accepts a JSON
 object.
 
-Then set both `gc.input_convoy_id=<implementation-convoy-id>` and
+In legacy mode, set both `gc.input_convoy_id=<implementation-convoy-id>` and
 `gc.build.implementation_convoy_id=<implementation-convoy-id>` on the workflow
 root bead with a quoted command like:
 
 `gc bd update "<workflow-root-id>" --set-metadata "gc.input_convoy_id=<implementation-convoy-id>" --set-metadata "gc.build.implementation_convoy_id=<implementation-convoy-id>"`
 
-before closing, verify both metadata fields exist on the workflow root and point
+Before closing, verify both metadata fields exist on the workflow root and point
 to the new implementation convoy.
 Before closing this step, set the claimed step outcome with
 `gc bd update "<claimed-step-id>" --set-metadata "gc.outcome=pass"`, then close

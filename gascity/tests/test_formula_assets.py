@@ -90,11 +90,13 @@ BUILD_BASE_STEPS = [
     "implement-same-session",
     "summarize-implementation",
     "review",
+    "review-result",
     "finalize",
     "publish",
 ]
 
 BUILD_FROM_REVIEW_STEPS = {
+    "review-result",
     "prepare-review",
     "review",
     "repair-review",
@@ -620,7 +622,11 @@ def effective_formula_text_from_dirs(formula_dirs: list[pathlib.Path], name: str
     for node in formula_nodes(data):
         description_file = node.get("description_file")
         if description_file:
-            chunks.append((formula_path.parent / description_file).resolve().read_text(encoding="utf-8"))
+            assets = [(directory / description_file).resolve() for directory in reversed(formula_dirs)]
+            asset = next((candidate for candidate in assets if candidate.is_file()), None)
+            if asset is None:
+                raise AssertionError(f"missing composed description {description_file!r}")
+            chunks.append(asset.read_text(encoding="utf-8"))
     return "\n".join(chunks)
 
 
@@ -1388,7 +1394,7 @@ class FormulaAssetTests(unittest.TestCase):
                 self.assertNotIn("catalog", data)
                 self.assertNotIn("extends", data)
                 self.assertEqual(data["target_required"], expected["target_required"])
-                self.assertEqual(set(data.get("vars", {})), expected["vars"])
+                self.assertEqual(set(data.get("vars", {})), expected["vars"] | ({"worktree_lifecycle", "worktree_base_ref", "worktree_checks"} if name in {"code-review-base", "fix-loop-base"} else set()))
                 self.assertEqual([step["id"] for step in data["steps"]], expected["steps"])
                 if "mode" in expected:
                     self.assertEqual(data["mode"], expected["mode"])
@@ -1414,7 +1420,19 @@ class FormulaAssetTests(unittest.TestCase):
                 resolved = resolve_formula(root, name)
                 parent = load_formula(root, parents[0])
                 self.assertEqual(data["extends"], parents)
-                self.assertEqual([step["id"] for step in resolved["steps"]], [step["id"] for step in parent["steps"]])
+                expected_steps = [step["id"] for step in parent["steps"]]
+                if name in ("do-work", "do-work-item"):
+                    expected_steps += ["independent-acceptance", "record-result"]
+                    if name == "do-work-item":
+                        expected_steps = [expected_steps[0], "prepare-worktree", *expected_steps[1:], "close-source-anchor"]
+                    self.assertEqual(resolved["vars"]["worktree_lifecycle"]["default"], "legacy")
+                    steps = {step["id"]: step for step in resolved["steps"]}
+                    self.assertEqual(steps["independent-acceptance"]["needs"], ["implement" if name == "do-work" else "implement-item"])
+                    self.assertEqual(steps["record-result"]["needs"], ["independent-acceptance"])
+                    self.assertEqual(steps["close-source-anchor"]["needs"], ["implement", "record-result"] if name == "do-work" else ["implement-item", "record-result"])
+                    for stage in ("independent-acceptance", "record-result"):
+                        self.assertEqual(steps[stage]["condition"], "{{worktree_lifecycle}} == new")
+                self.assertEqual([step["id"] for step in resolved["steps"]], expected_steps)
 
     def test_entrypoint_adapters_expose_methodology_formula_vars(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
@@ -1765,7 +1783,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(steps["prepare-review"]["needs"], ["implement", "implement-same-session"])
         self.assertEqual(steps["review"]["needs"], ["prepare-review"])
         self.assertEqual(steps["repair-review"]["needs"], ["review"])
-        self.assertEqual(steps["finalize"]["needs"], ["repair-review"])
+        self.assertEqual(steps["finalize"]["needs"], ["repair-review", "review-result"])
         self.assertEqual(steps["publish"]["needs"], ["finalize"])
 
         text = effective_formula_text(root, "build-from-decompose")
@@ -1866,7 +1884,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(steps["prepare-review"]["needs"], ["implement", "implement-same-session"])
         self.assertEqual(steps["review"]["needs"], ["prepare-review"])
         self.assertEqual(steps["repair-review"]["needs"], ["review"])
-        self.assertEqual(steps["finalize"]["needs"], ["repair-review"])
+        self.assertEqual(steps["finalize"]["needs"], ["repair-review", "review-result"])
         self.assertEqual(steps["publish"]["needs"], ["finalize"])
 
     def test_build_from_review_blocked_results_are_healable_not_passed(self) -> None:
@@ -1921,6 +1939,9 @@ class FormulaAssetTests(unittest.TestCase):
             review_step["expand_vars"],
             {
                 "implementation_target": "{{implementation_target}}",
+                "worktree_lifecycle": "{{worktree_lifecycle}}",
+                "worktree_base_ref": "{{worktree_base_ref}}",
+                "worktree_checks": "{{worktree_checks}}",
             },
         )
         self.assertEqual(review_step["needs"], ["summarize-implementation"])
@@ -2365,6 +2386,7 @@ class FormulaAssetTests(unittest.TestCase):
                     "review_mode": "{{review_mode}}",
                     "artifact_path_keys": "gc.build.review_report_path",
                 }
+                expected_review_expand_vars.update({key: "{{" + key + "}}" for key in ("worktree_lifecycle", "worktree_base_ref", "worktree_checks")})
                 expected_review_expand_vars.update(expected.get("review_expand_vars", {}))
                 self.assertEqual(
                     review_step["expand_vars"],
@@ -2470,6 +2492,7 @@ class FormulaAssetTests(unittest.TestCase):
                     self.assertEqual(
                         set(resolved_steps),
                         {
+                            "validate-workspace-mode",
                             "prepare-worktree",
                             "implement",
                             "write-failing-test",
@@ -2478,13 +2501,16 @@ class FormulaAssetTests(unittest.TestCase):
                             "verify-test-passes",
                             "task-review",
                             "record-item-result",
+                            "independent-acceptance",
+                            "record-result",
                             "close-source-anchor",
                         },
                     )
                     self.assertEqual(
                         {step_id: step.get("needs", []) for step_id, step in resolved_steps.items()},
                         {
-                            "prepare-worktree": [],
+                            "validate-workspace-mode": [],
+                            "prepare-worktree": ["validate-workspace-mode"],
                             "implement": ["prepare-worktree"],
                             "write-failing-test": ["implement"],
                             "verify-test-fails": ["write-failing-test"],
@@ -2492,14 +2518,19 @@ class FormulaAssetTests(unittest.TestCase):
                             "verify-test-passes": ["implement-change"],
                             "task-review": ["verify-test-passes"],
                             "record-item-result": ["task-review"],
-                            "close-source-anchor": ["record-item-result"],
+                            "independent-acceptance": ["record-item-result"],
+                            "record-result": ["independent-acceptance"],
+                            "close-source-anchor": ["record-item-result", "record-result"],
                         },
                     )
                 else:
                     self.assertEqual(
                         [step["id"] for step in resolved_item["steps"]],
-                        ["prepare-worktree", "implement", "close-source-anchor"],
+                        ["prepare-worktree", "implement", "close-source-anchor", "independent-acceptance", "record-result", "validate-workspace-mode"],
                     )
+                for stage in ("independent-acceptance", "record-result"):
+                    managed_step = next(step for step in resolved_item["steps"] if step["id"] == stage)
+                    self.assertEqual(managed_step["condition"], "{{worktree_lifecycle}} == new")
                 self.assertTrue(any(step["id"] == "implement" for step in item_formula["steps"]))
                 text = effective_formula_text_from_dirs(
                     [gascity_root / "formulas", pack_root / "formulas"],
@@ -2548,6 +2579,8 @@ class FormulaAssetTests(unittest.TestCase):
                     self.assertEqual(
                         set(resolved_steps),
                         {
+                            "prepare-worktree",
+                            "validate-workspace-mode",
                             "implement-item",
                             "write-failing-test",
                             "verify-test-fails",
@@ -2555,24 +2588,34 @@ class FormulaAssetTests(unittest.TestCase):
                             "verify-test-passes",
                             "task-review",
                             "record-item-result",
+                            "independent-acceptance",
+                            "record-result",
                             "close-source-anchor",
                         },
                     )
                     self.assertEqual(
                         {step_id: step.get("needs", []) for step_id, step in resolved_steps.items()},
                         {
-                            "implement-item": [],
+                            "prepare-worktree": [],
+                            "validate-workspace-mode": [],
+                            "implement-item": ["validate-workspace-mode", "prepare-worktree"],
                             "write-failing-test": ["implement-item"],
                             "verify-test-fails": ["write-failing-test"],
                             "implement-change": ["verify-test-fails"],
                             "verify-test-passes": ["implement-change"],
                             "task-review": ["verify-test-passes"],
                             "record-item-result": ["task-review"],
-                            "close-source-anchor": ["record-item-result"],
+                            "independent-acceptance": ["record-item-result"],
+                            "record-result": ["independent-acceptance"],
+                            "close-source-anchor": ["record-item-result", "record-result"],
                         },
                     )
                 else:
-                    self.assertEqual([step["id"] for step in resolved_shared["steps"]], ["implement-item"])
+                    self.assertEqual([step["id"] for step in resolved_shared["steps"]],
+                                     ["implement-item", "prepare-worktree", "independent-acceptance", "record-result", "close-source-anchor", "validate-workspace-mode"])
+                for stage in ("independent-acceptance", "record-result", "close-source-anchor"):
+                    managed_step = next(step for step in resolved_shared["steps"] if step["id"] == stage)
+                    self.assertEqual(managed_step.get("condition", ""), "" if pack_name == "superpowers" and stage == "close-source-anchor" else "{{worktree_lifecycle}} == new")
                 self.assertTrue(any(step["id"] == "implement-item" for step in shared_item_formula["steps"]))
                 text = effective_formula_text_from_dirs(
                     [gascity_root / "formulas", pack_root / "formulas"],
@@ -2683,6 +2726,7 @@ class FormulaAssetTests(unittest.TestCase):
                     "implementation_target": "{{implementation_target}}",
                     "review_mode": "{{review_mode}}",
                 }
+                expected_review_expand_vars.update({key: "{{" + key + "}}" for key in ("worktree_lifecycle", "worktree_base_ref", "worktree_checks")})
                 expected_review_expand_vars.update(
                     expected.get(
                         "code_review_entry_expand_vars",
@@ -2733,7 +2777,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(step_by_id["plan-review"]["expand"], "gstack-plan-review")
         self.assertEqual(step_by_id["qa"]["expand"], "gstack-qa-review")
         self.assertEqual(step_by_id["release-readiness"]["expand"], "gstack-release-readiness")
-        self.assertEqual(step_by_id["finalize"]["needs"], ["release-readiness"])
+        self.assertEqual(step_by_id["finalize"]["needs"], ["release-readiness", "review-result"])
 
         plan_review = load_formula(pack_root, "gstack-plan-review")
         plan_loop = {
@@ -3116,7 +3160,7 @@ class FormulaAssetTests(unittest.TestCase):
                 text = effective_formula_text_from_dirs(formula_dirs, formula_name)
                 self.assertIn('expand = "superpowers-task-review"', text)
                 self.assertIn(
-                    'expand_vars = { implementation_target = "{{implementation_target}}" }',
+                    'implementation_target = "{{implementation_target}}"',
                     text,
                 )
                 formula = load_formula(pack_root, formula_name)
@@ -3561,7 +3605,7 @@ class FormulaAssetTests(unittest.TestCase):
         step_ids = [step["id"] for step in data["steps"]]
         self.assertEqual(
             step_ids,
-            ["prepare", "drain-separate", "drain-same-session", "wait-for-drain", "summarize", "publish"],
+            ["prepare", "drain-separate", "drain-same-session", "wait-for-drain", "summarize", "record-canonical", "review-result", "publish"],
         )
 
         separate = data["steps"][1]
@@ -3581,7 +3625,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(same["drain"]["on_item_failure"], "skip_remaining")
         self.assertEqual(data["steps"][3]["metadata"]["gc.run_target"], "gc.run-operator")
         self.assertEqual(data["steps"][4]["metadata"]["gc.run_target"], "gc.run-operator")
-        self.assertEqual(data["steps"][5]["metadata"]["gc.run_target"], "gc.publisher")
+        self.assertEqual(next(step for step in data["steps"] if step["id"] == "publish")["metadata"]["gc.run_target"], "gc.publisher")
         self.assertEqual(data["steps"][5]["needs"], ["summarize"])
         summarize = node_description(root, data["steps"][4])
         self.assertIn("gc.implementation.summary_path", summarize)
@@ -3596,7 +3640,7 @@ class FormulaAssetTests(unittest.TestCase):
         ):
             with self.subTest(step="wait-for-drain", fragment=fragment):
                 self.assertIn(fragment, wait)
-        publish = node_description(root, data["steps"][5])
+        publish = node_description(root, next(step for step in data["steps"] if step["id"] == "publish"))
         for fragment in (
             "push {{push}}",
             "open_pr {{open_pr}}",
@@ -3642,14 +3686,17 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(do_work["vars"]["implementation_target"]["default"], "gc.implementation-worker")
         self.assertEqual(do_work["steps"][0]["metadata"]["gc.run_target"], "gc.run-operator")
         self.assertEqual(do_work["steps"][1]["metadata"]["gc.run_target"], "{{implementation_target}}")
-        self.assertEqual(do_work["steps"][2]["metadata"]["gc.run_target"], "gc.run-operator")
+        steps = {step["id"]: step for step in do_work["steps"]}
+        self.assertEqual(steps["independent-acceptance"]["metadata"]["gc.run_target"], "gc.implementation-reviewer")
+        self.assertEqual(steps["record-result"]["metadata"]["gc.run_target"], "gc.run-operator")
+        self.assertEqual(steps["close-source-anchor"]["metadata"]["gc.run_target"], "gc.run-operator")
 
         do_work_item = tomllib.loads((root / "formulas" / "do-work-item.formula.toml").read_text(encoding="utf-8"))
         self.assertEqual(do_work_item["extends"], ["implementation-item-base"])
         self.assertNotIn("infra_target", do_work_item["vars"])
         self.assertNotIn("hard_target", do_work_item["vars"])
         self.assertEqual(do_work_item["vars"]["implementation_target"]["default"], "gc.implementation-worker")
-        self.assertEqual(do_work_item["steps"][0]["metadata"]["gc.run_target"], "{{implementation_target}}")
+        self.assertEqual(next(step for step in do_work_item["steps"] if step["id"] == "implement-item")["metadata"]["gc.run_target"], "{{implementation_target}}")
 
     def test_do_work_formula_requires_persisted_item_worktree(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
@@ -3845,7 +3892,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(route_by_step["finalize"], "gc.run-operator")
 
         design_review = load_formula(root, "github-issue-fix-design-review-work")
-        self.assertEqual(set(design_review.get("vars", {})), {"mode"})
+        self.assertEqual(set(design_review.get("vars", {})), {"mode", "worktree_lifecycle", "worktree_base_ref", "worktree_checks"})
         design_review_text = effective_formula_text(root, "github-issue-fix-design-review-work")
         for target in (
             "gc.run-operator",
@@ -3923,7 +3970,7 @@ class FormulaAssetTests(unittest.TestCase):
                 self.assertEqual(data["contract"], "graph.v2")
                 self.assertFalse(data["target_required"])
                 self.assertTrue(data["vars"][url_var]["required"])
-                self.assertEqual(set(data["vars"]) - {url_var}, optional_vars)
+                self.assertEqual(set(data["vars"]) - {url_var}, optional_vars | ({"worktree_base_ref", "worktree_checks"} if name == "github-issue-fix" else set()))
                 text = effective_formula_text(root, name)
                 self.assertIn("{{pack_root}}/assets/scripts/github_api.py", text)
                 self.assertNotIn("{{pack_root}}" + "/scripts/", text)
@@ -4300,6 +4347,9 @@ description = "Override sink that writes the base triage report contract."
             data = tomllib.loads(path.read_text(encoding="utf-8"))
             text = effective_formula_text(root, path.name.removesuffix(".formula.toml"))
             for var_name in data.get("vars", {}):
+                if var_name in {"worktree_lifecycle", "worktree_base_ref", "worktree_checks"}:
+                    self.assertEqual(data["vars"][var_name]["default"], "legacy" if var_name == "worktree_lifecycle" else "@default" if var_name == "worktree_base_ref" else "")
+                    continue
                 with self.subTest(formula=path.name, var=var_name):
                     if data.get("type") == "expansion":
                         self.assertTrue(

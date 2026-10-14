@@ -14,13 +14,41 @@ internal = true
 single_lane = true
 
 [vars]
+[vars.worktree_checks]
+description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+default = ""
+
+[vars.worktree_base_ref]
+description = "Initial source selector. @default captures registered rig HEAD. Empty is invalid."
+default = "@default"
+
+[vars.worktree_lifecycle]
+description = "Retained source lifecycle. New uses the composed native workspace helpers and captured policy."
+default = "legacy"
+enum = ["legacy", "new"]
+
 [vars.implementation_target]
 description = "Superpowers task implementation role."
 default = "superpowers.implementer"
 
 [[steps]]
+id = "validate-workspace-mode"
+title = "Validate methodology source lifecycle"
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+description_file = "../assets/workflows/workspace-mode/validate.md"
+
+[steps.check]
+max_attempts = 1
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/workspace-lifecycle-valid.py"
+timeout = "1m"
+
+[[steps]]
 id = "implement-item"
 title = "Inspect Superpowers shared-drain task"
+needs = ["validate-workspace-mode", "prepare-worktree"]
 metadata = { "gc.run_target" = "{{implementation_target}}", "gc.continuation_group" = "superpowers-task-{{issue}}", "gc.build.artifact_schema" = "gc.build.implementation-summary.v1", "gc.build.artifact_path_keys" = "gc.implementation.summary_path,gc.build.implementation_summary_path,gc.var.summary_path" }
 description_file = "../assets/workflows/superpowers-development/implement-item.md"
 
@@ -66,19 +94,27 @@ title = "Run Superpowers task fanout review"
 needs = ["verify-test-passes"]
 metadata = { "gc.run_target" = "superpowers.code-quality-reviewer" }
 expand = "superpowers-task-review"
-expand_vars = { implementation_target = "{{implementation_target}}" }
+expand_vars = { worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
 description_file = "../assets/workflows/superpowers-development/task-review.md"
 
 [[steps]]
 id = "record-item-result"
 title = "Record Superpowers task result"
 needs = ["task-review"]
-metadata = { "gc.run_target" = "{{implementation_target}}", "gc.continuation_group" = "superpowers-task-{{issue}}" }
+metadata = { "gc.run_target" = "{{implementation_target}}", "gc.continuation_group" = "superpowers-task-{{issue}}", "gc.build.artifact_schema" = "gc.build.implementation-summary.v1" }
 description_file = "../assets/workflows/superpowers-development/record-item-result.md"
+
+[[steps]]
+id = "independent-acceptance"
+title = "Independently review the committed Superpowers shared task"
+needs = ["record-item-result"]
+condition = "{{worktree_lifecycle}} == new"
+metadata = { "gc.run_target" = "gc.implementation-reviewer" }
+description_file = "../assets/workflows/do-work-item/independent-acceptance.md"
 
 [[steps]]
 id = "close-source-anchor"
 title = "Close Superpowers shared-drain task"
-needs = ["record-item-result"]
+needs = ["record-item-result", "record-result"]
 metadata = { "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/superpowers-development/close-source-anchor.md"

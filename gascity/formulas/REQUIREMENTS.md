@@ -46,6 +46,12 @@ For every formula change:
 ## Global Invariants
 
 - Every formula uses `contract = "graph.v2"`.
+- Managed roots, reached expansions and native drain items preserve
+  `worktree_lifecycle`, `worktree_base_ref` and `worktree_checks`. Legacy is the
+  default. Initial new-mode capture requires a nonempty canonical project policy.
+- Managed result/checkpoint and canonical review stages are real native steps.
+  Legacy closure/finalization retains its direct producer/review prerequisite
+  when new-only stages skip. Native worker acceptance remains separate.
 - No formula declares reserved runtime vars `issue`, `bead_id`, or `convoy_id`.
 - Cataloged formulas are user-runnable; internal/base/helper formulas are not
   cataloged unless deliberately promoted.
@@ -134,7 +140,7 @@ this ledger against the `FORMULAS` constant and formula directory.
 
 | ID | Formula | Type | Required behavior | Evidence |
 | --- | --- | --- | --- | --- |
-| GC-BF-001 | `build-base` | Virtual targeted full-lifecycle contract | Defines the stable build stage sequence, selector variables, mode variables, methodology metadata, implementation strategy selection, artifact validation/repair gates, review/fix loop, finalization, and optional publication contract that concrete methodology packs extend. Entry preflight defaults `worktree_lifecycle` to `legacy` and blocks a conflicting source declaration. | `build-base.formula.toml`; `../tests/test_formula_assets.py`; `../tests/test_workspace_lifecycle.py` |
+| GC-BF-001 | `build-base` | Virtual targeted full-lifecycle contract | Defines the stable build stage sequence, selector variables, mode variables, methodology metadata, implementation strategy selection, artifact validation/repair gates, review/fix loop, finalization, and optional publication contract that concrete methodology packs extend. Entry preflight defaults `worktree_lifecycle` to `legacy` with explicit new-source compatibility. Managed summarize-implementation records canonical state; review-result approves that exact generation before finalization/publication. | `build-base.formula.toml`; `../tests/test_formula_assets.py`; `../tests/test_workspace_lifecycle.py` |
 | GC-BF-002 | `planning-base` | Virtual targetless planning contract | Produces approved requirements and implementation-plan artifacts through prepare, requirements, plan, and plan-review stages while preserving strict artifact shape, approval states, hashes, coverage, validator repair, and mode behavior for adapters. | `planning-base.formula.toml`; `../tests/test_formula_assets.py` |
 | GC-BF-003 | `decomposition-base` | Virtual targetless decomposition contract | Converts an approved plan into durable work units and implementation convoy identity that downstream drain or convoy-step implementation strategies consume, after validating decomposition schema, coverage, and upstream hashes. | `decomposition-base.formula.toml`; `../tests/test_formula_assets.py` |
 | GC-BF-004 | `implementation-base` | Virtual targeted implementation contract | Executes one implementation source anchor with prepare-worktree, implement, and close-source-anchor stages while preserving source-anchor close, work-item evidence, requirement coverage, and neutral producer metadata. | `implementation-base.formula.toml`; `../tests/test_formula_assets.py` |
@@ -168,9 +174,9 @@ this ledger against the `FORMULAS` constant and formula directory.
 
 | ID | Formula | Type | Required behavior | Evidence |
 | --- | --- | --- | --- | --- |
-| GC-BF-010 | `implement` | Cataloged targeted implementation entrypoint | Validates the input convoy, drains implementation work using an allowed policy, waits for completion, writes validated item-mapped implementation summary evidence, and optionally delegates publishing. Defaults `worktree_lifecycle` to `legacy`, checks the declared source lifecycle before draining, and retains it through native drain inheritance. | `implement.formula.toml`; `../tests/test_formula_assets.py`; `../tests/test_workspace_lifecycle.py` |
-| GC-BF-011 | `do-work` | Targeted implementation item helper | Extends `implementation-base`, prepares one item worktree, implements owned work with the selected implementation target, and closes the source anchor after implementation succeeds. | `do-work.formula.toml`; `../tests/test_formula_assets.py` |
-| GC-BF-012 | `do-work-item` | Targeted shared-drain item helper | Extends `implementation-item-base`, runs exactly one shared-drain item with the selected implementation target, and stays internal/single-lane. | `do-work-item.formula.toml`; `../tests/test_formula_assets.py` |
+| GC-BF-010 | `implement` | Cataloged targeted implementation entrypoint | Validates the input convoy, drains implementation work using an allowed policy, waits for completion, writes validated item-mapped implementation summary evidence, and in new mode records the canonical output and exact native review before optional publication. Defaults `worktree_lifecycle` to `legacy`, checks the declared source lifecycle before draining, and retains it through native drain inheritance. | `implement.formula.toml`; `../tests/test_formula_assets.py`; `../tests/test_workspace_lifecycle.py` |
+| GC-BF-011 | `do-work` | Targeted implementation item helper | Extends `implementation-base`, prepares owned accepted source, implements with the selected target, and in new mode runs independent-acceptance then record-result/checkpoint before close-source-anchor. Legacy close directly depends on implement. | `do-work.formula.toml`; `../tests/test_formula_assets.py` |
+| GC-BF-012 | `do-work-item` | Targeted shared-drain item helper | Extends `implementation-item-base`, runs one shared-drain item, and stays internal/single-lane. New mode prepares the declared member input, independently accepts output and records its checkpoint before closure or advancement. Legacy keeps its source behavior. | `do-work-item.formula.toml`; `../tests/test_formula_assets.py` |
 | GC-BF-013 | `same-session-implement` | Targeted internal shared-drain helper | Documents and executes the pack-facing same-session policy by draining through `do-work-item` with exclusive member access and single-lane sequencing. | `same-session-implement.formula.toml`; `../tests/test_formula_assets.py` |
 
 ### Review And Fix Utilities

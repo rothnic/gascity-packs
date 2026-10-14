@@ -96,7 +96,7 @@ The SDLC phases are:
 | What you have | Public formula | SDLC phase you're starting from |
 | --- | --- | --- |
 | A target bead containing an idea or request | `build-basic` | Requirements |
-| An idea or request, but no target bead | `build-from-requirements` | Requirements |
+| An idea or request recorded in a task | `build-from-requirements` | Requirements |
 | An approved requirements (aka plan) Markdown file | `build-from-plan` | Implementation Planning |
 | Approved requirements and a reviewed implementation plan | `build-from-decompose` | Plan Decomposition |
 | A Gas City implementation convoy and its requirements, implementation plan, and decomposition | `build-from-convoy` | Implementation |
@@ -145,6 +145,12 @@ launch or pin them in a rig's `formula_vars`:
 | `implementation_target` | `gc.implementation-worker` | The rig role that implements each work item. |
 | `push` / `open_pr` | `false` | Allow the publish stage to push and open a PR after all checks pass. |
 | `max_iterations` | `10` | Bound on implementation/review fix attempts. |
+| `worktree_lifecycle` | `legacy` | `new` selects recorded source inputs, owned workspaces and qualified output handoff. |
+| `worktree_base_ref` | `@default` | Captures the registered checkout HEAD once. Empty is invalid. |
+| `worktree_checks` | empty | Canonical JSON `required_checks: [{id, argv}]`, required only for `new` and captured on the run. |
+
+For recorded bases, source dependencies, shared workspaces, and recovery, see
+[Worktree dependencies](docs/worktree-dependencies.md).
 
 When variables are not enough, every stage prompt can be replaced by dropping
 a Markdown file at the same relative path in a higher-priority layer, and
@@ -155,7 +161,7 @@ If part of the factory already ran, launch the targetless continuation
 entrypoint that matches the artifacts you already have:
 
 ```sh
-gc sling gc.run-operator build-from-decompose --formula \
+gc sling gc.run-operator <request-id> --on build-from-decompose \
   --var artifact_root=<artifact-dir> \
   --var requirements_path=<artifact-dir>/requirements.md \
   --var plan_path=<artifact-dir>/implementation-plan.md \
@@ -163,7 +169,8 @@ gc sling gc.run-operator build-from-decompose --formula \
   --var drain_policy=separate
 ```
 
-Each continuation validates the artifacts you hand it before doing any work,
+Launch a continuation against a real task or convoy. Each continuation validates
+the artifacts you hand it before doing any work,
 records the entrypoint it started from, and refuses to finalize as a pass when
 review or repair is still blocked — see "Choosing an entrypoint" above for
 which one matches the artifacts you have.
@@ -263,14 +270,13 @@ and resume each step independently.
 
 Use these mode inputs when designing or launching methodology formulas:
 
-- `worktree_lifecycle` selects the source lifecycle. Build, implementation,
-  issue-fix and continuation entrypoints default to `legacy`; their preflight
-  checks reject a selection that conflicts with the declared source lifecycle.
-  Current source paths declare `legacy`, so `new` stops at preflight. Native
-  drains inherit the value; explicit child launches and restart handoffs must
-  retain it. The [run record contract](schemas/workspace/README.md) validates
-  supplied run snapshots, but durable capture and runtime continuation checks
-  still require their workflow writers.
+- `worktree_lifecycle` defaults to `legacy`. New mode uses the native entry,
+  source-selection, checkout, acceptance and guarded record helpers. Initial
+  capture freezes the registered base and project check policy atomically.
+  Native drains and explicit child launches retain the original mode and policy.
+  Continuations must prove the original run and current source generation.
+  Use a matched core/pack revision qualified for the intended workflow.
+  Native worker execution and installation remain unverified in this candidate.
 
 - `interaction_mode` controls human participation in planning and gates.
   `interactive` preserves blocking questions and approval menus, `autonomous`
@@ -300,17 +306,25 @@ asset tests fail if a formula exists without a requirements row.
 
 ## Build Flow
 
-Workspace lifecycle record contracts and their read-only JSON validator are
-documented in [`schemas/workspace/README.md`](schemas/workspace/README.md). The
-contracts include a closed source inventory and acceptance oracles for later
-workflow migration. Current formulas retain their existing lifecycle behavior.
-The [workspace acceptance fixture](tests/fixtures/workspace-acceptance/README.md)
-provides frozen project assertions, real Git composition checks and named native
-cases that remain unrun.
+New mode wires accepted source selection through owned checkout preparation,
+independent project checks/review, result checkpoints, canonical review and
+publication. Legacy remains the default. The candidate's source and component
+checks do not establish native worker execution or installation acceptance.
 
-The [workspace source discovery command](schemas/workspace/discovery.md)
-checks that supplied source and override layers match the declared inventory.
-Workflow migration requires separate runtime acceptance.
+- **Configuration and recovery:** [Worktree dependencies](docs/worktree-dependencies.md).
+- **Records and authority:** [record contracts](schemas/workspace/README.md) and
+  [guarded record access](schemas/workspace/access.md).
+- **Source inputs:** [source plans](schemas/workspace/source-plans.md) and
+  [accepted inputs](schemas/workspace/source-inputs.md).
+- **Owned checkout:** [preparation and continuation](assets/scripts/workspace_checkout.md).
+- **Checks, review and publication:** [native runtime](assets/scripts/workspace_runtime.md)
+  and [qualified outputs](assets/scripts/workspace_outputs.md).
+- **Source and behavior checks:** [closed inventory](schemas/workspace/discovery.md)
+  and [acceptance fixture](tests/fixtures/workspace-acceptance/README.md).
+
+The city-scoped command `gc gc workspace` exposes the entry, dependency,
+checkout, runtime and flow helpers from the installed pack. Native qualifiers
+supply physical identities and frozen policy. Workers do not construct callbacks.
 
 `build-base` is the virtual contract. `build-basic` is the concrete Gas City
 implementation that demonstrates the override surface without vendoring a
@@ -754,8 +768,9 @@ Stable basic override:
 `assets/workflows/do-work/implement.md`
 
 Stable advanced steps:
-`do-work` steps `prepare-worktree`, `implement`, `close-source-anchor`;
-`do-work-item` step `implement-item`
+`do-work` steps `prepare-worktree`, `implement`, `independent-acceptance`,
+`record-result`, `close-source-anchor`; `do-work-item` keeps the same managed
+handoff around `implement-item`, with preparation active only in new mode
 
 Basic example: require local test selection and worktree discipline.
 

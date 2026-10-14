@@ -30,6 +30,31 @@ def walk_steps(steps):
         yield from walk_steps(step.get("loop", {}).get("body", []))
 
 
+def source_asset(root, formula, raw_path, seen=()):
+    """Resolve a supplied source pack's documented ../assets import fallback."""
+    direct = (root / formula).parent / raw_path
+    if direct.is_file():
+        return direct.resolve().relative_to(root).as_posix()
+    pack = Path(formula).parts[0]
+    if not raw_path.startswith("../assets/") or pack in seen:
+        raise ValueError(f"unresolved source asset {raw_path!r} from {formula}")
+    definition = tomllib.loads((root / pack / "pack.toml").read_text())
+    matches = set()
+    for imported in definition.get("imports", {}).values():
+        supplied = imported.get("source", "")
+        if not supplied.startswith("."):
+            continue
+        location = (root / pack / supplied).resolve().relative_to(root)
+        try:
+            matches.add(source_asset(root, str(location / "formulas" / "source.formula.toml"),
+                                     raw_path, (*seen, pack)))
+        except (OSError, ValueError):
+            continue
+    if len(matches) != 1:
+        raise ValueError(f"missing or ambiguous declared import asset {raw_path!r} from {formula}")
+    return matches.pop()
+
+
 def check_inventory(root: Path, manifest: dict, stage="a", layers=()):
     root = root.resolve(strict=True)
     report = {"ok": False, "stage": stage, "classifications": {}, "issues": [],
@@ -190,7 +215,7 @@ def check_inventory(root: Path, manifest: dict, stage="a", layers=()):
                 fail(path, "owning assets require an explicit legacy/new classification")
         try:
             origin, step = effective_steps(formula)[step_id]
-            actual = ((root / origin).parent / step["description_file"]).resolve().relative_to(root).as_posix()
+            actual = source_asset(root, origin, step["description_file"])
             if actual != asset or not roles:
                 raise ValueError(f"{step_id} binds {actual}, expected {asset}")
         except (KeyError, OSError, ValueError) as exc:

@@ -1,4 +1,22 @@
+For retained new mode, run `gc gc workspace flow close-source` through the shared native runtime recipe.
+
 Close the Superpowers implementation source anchor.
+
+For retained `worktree_lifecycle` {{worktree_lifecycle}} `new`, require the
+exact accepted member-result from `record-result`. Load it through the imported
+Gas City `workspace_outputs.referenced_record` API and use
+`workspace_outputs.validate_accepted_result` with the exact run/source-plan,
+native store, required checks, artifact hashes and current native qualification.
+The reviewed full `output_oid` must still equal clean HEAD in the recorded
+workspace. Require final owner-output when this is the owner's last member.
+The active member must equal `gc.drain_member_id`. Missing, partial, stale,
+foreign or unaccepted evidence blocks without closing any source bead.
+Close only that original member after committed/replayed result readback.
+An already closed member still requires the same evidence on replay.
+Preserve unknown state outside worktrees and never adopt raw metadata or
+recapture a base. `new` remains disabled until composed acceptance qualifies.
+
+The fallback rules below apply only to explicit `legacy`.
 
 Resolve `<source-anchor-id>` from the workflow ROOT, which is the SINGLE SOURCE
 OF TRUTH for every step of this lane: read the claimed step bead's

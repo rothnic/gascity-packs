@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""Capture build inputs and validate recorded inputs at workflow handoffs."""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+from typing import Any
+
+from workspace_records import (RecordError, canonical_bytes, contracts, parse_record,
+                               record_identity, record_sha256, validate_record)
+from workspace_run import (RunError, canonical_path, capture_payload, capture_run,
+                           native_json, read_check_policy, registered_rig, repository_identity, source_context)
+
+
+RUN_REF = "gc.implementation_run_ref"
+PLAN_REF = "gc.source_plan_ref"
+ROOT_KEYS = ("workflow_id", "molecule_id", "gc.root_bead_id")
+
+
+class EntryError(RecordError):
+    pass
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise EntryError(message)
+
+
+def native_root(row: dict[str, Any]) -> str | None:
+    metadata = row["metadata"]
+    return next((metadata[key] for key in ROOT_KEYS if metadata.get(key)), None)
+
+
+def reference(raw: Any, kind: str) -> dict[str, Any]:
+    require(isinstance(raw, str), f"missing recorded {kind} reference; resume its original workflow or migrate explicitly")
+    value = parse_record(raw)
+    require(set(value) == {"kind", "identity", "bead_id"} and value["kind"] == kind
+            and isinstance(value["identity"], list) and isinstance(value["bead_id"], str)
+            and bool(value["bead_id"]), f"malformed exact {kind} reference")
+    return value
+
+
+def healthy(row: dict[str, Any]) -> None:
+    metadata = row["metadata"]
+    labels = row.get("labels") or []
+    require(isinstance(metadata, dict) and isinstance(labels, list), "malformed native entry state")
+    require(metadata.get("gc.outcome") not in ("fail", "skipped", "canceled", "cancelled")
+            and metadata.get("molecule_failed") not in (True, "true")
+            and metadata.get("gc.molecule_failed") not in (True, "true")
+            and not metadata.get("gc.cancel_requested")
+            and all(isinstance(label, str) and not label.startswith("hold:") for label in labels),
+            "native entry is failed, canceled or held")
+
+
+def allocate_placeholder(store, *, title: str, existing_id: str | None = None) -> str:
+    """Allocate one native closed record without publishing any lifecycle state.
+
+    A lost create acknowledgement is not retried. An operator may pass the exact
+    returned native ID after inspecting the original command's outcome.
+    """
+    if existing_id is None:
+        rig = store.store_ref.split(":", 1)[1] if store.store_ref.startswith("rig:") else None
+        try:
+            response = native_json(store.gc, store.cwd,
+                ["bd", "create", title, "--type", "task", "--status", "closed",
+                 "--assignee", "", "--metadata", "{}", "--json"], rig)
+        except (RunError, RecordError, OSError) as exc:
+            raise EntryError("native allocation outcome is uncertain; inspect the original create response before retrying") from exc
+        existing_id = response.get("id")
+        require(isinstance(existing_id, str) and bool(existing_id.strip()) and existing_id == existing_id.strip(),
+                "native allocation outcome is unknown: create returned no exact physical ID; do not create a duplicate")
+    try:
+        row = store.snapshot([existing_id])[existing_id]
+    except (RecordError, OSError, KeyError) as exc:
+        raise EntryError(f"allocated native ID {existing_id} cannot be verified; retry verification of this ID, not creation") from exc
+    require(row["id"] == existing_id and row["status"] == "closed" and not row["assignee"]
+            and not row["metadata"] and row["type"] == "task" and not row.get("labels"),
+            f"native ID {existing_id} is not an empty closed, unassigned record allocation")
+    return existing_id
+
+
+def _load(store, kind: str, ref: dict[str, Any]) -> dict[str, Any]:
+    payload = store.read_record(kind, ref["bead_id"], identity=ref["identity"])
+    require(payload is not None, f"{kind} reference points to a missing record")
+    validate_record(kind, payload)
+    require(list(record_identity(kind, payload)) == ref["identity"], f"{kind} reference identity changed")
+    return payload
+
+
+def read_entry(store, *, gc: str, city_root: str, rig_name: str,
+               workflow_root_id: str, claimed_step_id: str, worktree_lifecycle: str,
+               generation: int, input_convoy_id: str | None = None,
+               require_plan: bool = False, expected_run_sha256: str | None = None,
+               expected_plan_sha256: str | None = None) -> dict[str, Any]:
+    """Read immutable provenance separately from the mutable current convoy.
+
+    Native attached suffixes keep the original root. A separate root without
+    the same native root binding is refused; artifacts never establish lineage.
+    The caller must fence this state again in the operation that uses it.
+    """
+    try:
+        require(type(generation) is int and generation > 0, "generation must be a positive integer")
+        city_root = canonical_path(city_root)
+        require(city_root == store.cwd, "selected city conflicts with the native store adapter")
+        rig_root = registered_rig(gc, city_root, rig_name, store.store_ref)
+        rows = store.snapshot(list(dict.fromkeys([workflow_root_id, claimed_step_id])))
+        root, step = rows[workflow_root_id], rows[claimed_step_id]
+        healthy(root)
+        healthy(step)
+        require(root["metadata"].get("gc.kind") == "workflow"
+                and root["metadata"].get("gc.root_store_ref") == store.store_ref,
+                "workflow root belongs to another native store")
+        require(native_root(step) == workflow_root_id and step["metadata"].get("gc.root_store_ref") == store.store_ref
+                and step["status"] == "in_progress" and bool(step["assignee"]),
+                "claimed entry step belongs to another native root/store or is no longer claimed")
+        ref = reference(root["metadata"].get(RUN_REF), "run")
+        captured = _load(store, "run", ref)
+        require(captured["workflow_root_id"] == workflow_root_id,
+                "cross-root continuation has no supported native inheritance; attach to the original workflow")
+        # Reuse the capture validator without selecting HEAD or any current ref.
+        replay = capture_payload(workflow_root_id=workflow_root_id,
+            input_convoy_id=captured["input_convoy_id"], source_anchor_id=captured["source_anchor_id"],
+            rig_root=rig_root, writer_step_id=captured["writer_step_id"],
+            worktree_lifecycle=worktree_lifecycle, stored=captured)
+        digest = record_sha256(replay)
+        pin = expected_run_sha256 or root["metadata"].get("gc.implementation_run_sha256")
+        require(pin is None or pin == digest, "recorded run hash differs from the continuation binding")
+        original_ids = list(dict.fromkeys([captured["input_convoy_id"], captured["source_anchor_id"]]))
+        original = store.snapshot(original_ids)
+        require(original[captured["input_convoy_id"]]["type"] == "convoy", "original run input is no longer a native convoy")
+        for row in original.values():
+            healthy(row)
+            for key in ("gc.root_store_ref", "gc.source_store_ref"):
+                require(key not in row["metadata"] or row["metadata"][key] == store.store_ref,
+                        "original source changed native store")
+            require(native_root(row) in (None, workflow_root_id), "original source changed native workflow")
+        require(original[captured["source_anchor_id"]]["metadata"].get("gc.synthetic") != "true",
+                "original source anchor became synthetic")
+        current_id = root["metadata"].get("gc.input_convoy_id")
+        require(isinstance(current_id, str) and bool(current_id), "current workflow has no native input convoy")
+        require(input_convoy_id is None or input_convoy_id == current_id, "rendered input differs from the current native convoy")
+        convoy = store.snapshot([current_id])[current_id]
+        healthy(convoy)
+        require(convoy["type"] == "convoy", "continuation input is not a native convoy")
+        if current_id != captured["input_convoy_id"] or require_plan:
+            require(native_root(convoy) == workflow_root_id
+                    and convoy["metadata"].get("gc.root_store_ref") == store.store_ref
+                    and convoy["metadata"].get("gc.source_root_id") == workflow_root_id
+                    and convoy["metadata"].get("gc.source_generation") == str(generation),
+                    "implementation convoy conflicts with the original root, native store or source generation")
+        result = {"state": "recorded", "run": replay, "run_reference": ref, "run_sha256": digest,
+                  "workflow_root_id": workflow_root_id, "generation": generation,
+                  "store_ref": store.store_ref, "rig_name": rig_name, "input_convoy_id": current_id}
+        if worktree_lifecycle == "new":
+            result["check_policy"] = read_check_policy(store, ref["bead_id"], replay)
+        if require_plan:
+            from workspace_source_plan import source_node_ids, validate_source_plan
+            owner_id = convoy["metadata"].get("gc.source_plan_owner_id")
+            require(isinstance(owner_id, str) and bool(owner_id), "implementation convoy has no declared source-plan owner")
+            owner = store.snapshot([owner_id])[owner_id]
+            plan_ref = reference(owner["metadata"].get(PLAN_REF), "source-plan")
+            plan = _load(store, "source-plan", plan_ref)
+            require(plan["source_plan_owner_id"] == owner_id and plan["generation"] == generation,
+                    "source plan has a different owner or generation")
+            plan_digest = record_sha256(plan)
+            pin = expected_plan_sha256 or convoy["metadata"].get("gc.source_plan_sha256")
+            require(pin is None or pin == plan_digest, "source-plan hash differs from the continuation binding")
+            nodes = store.snapshot(list(dict.fromkeys([owner_id, *source_node_ids(plan)])))
+            canonical = None
+            if generation > 1:
+                canonical_ref = reference(root["metadata"].get("gc.canonical_ref"), "canonical")
+                canonical = _load(store, "canonical", canonical_ref)
+            # An existing generation is exact replay, not a proposal based on
+            # the current canonical result that it may have produced itself.
+            validate_source_plan(plan, replay, nodes, store_ref=store.store_ref, canonical=canonical, stored=plan)
+            result.update(source_plan=plan, source_plan_reference=plan_ref, source_plan_sha256=plan_digest)
+        return result
+    except (RecordError, RunError, OSError, KeyError, TypeError, ValueError) as exc:
+        if isinstance(exc, EntryError):
+            raise
+        raise EntryError(f"recorded workflow handoff failed: {exc}; resume the original workflow or migrate explicitly") from exc
+
+
+def prepare_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
+                  workflow_root_id: str, entrypoint: str, worktree_lifecycle: str,
+                  base_ref: str = "@default", generation: int = 1,
+                  input_convoy_id: str | None = None, run_record_id: str | None = None,
+                  authority_id: str | None = None, require_plan: bool = False,
+                  allow_pending_source: bool = False) -> dict[str, Any]:
+    require(worktree_lifecycle in ("legacy", "new"), "unknown worktree lifecycle")
+    require(type(generation) is int and generation > 0, "generation must be a positive integer")
+    require(canonical_path(city_root) == store.cwd, "selected city conflicts with the native store adapter")
+    rows = store.snapshot([workflow_root_id, attempt.claimed_bead_id])
+    root = rows[workflow_root_id]
+    if RUN_REF in root["metadata"]:
+        return read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
+            workflow_root_id=workflow_root_id, claimed_step_id=attempt.claimed_bead_id,
+            worktree_lifecycle=worktree_lifecycle, generation=generation,
+            input_convoy_id=input_convoy_id, require_plan=require_plan)
+    require(entrypoint in ("build", "implement", "requirements"),
+            "continuation has no recorded run; artifact-only legacy input requires explicit migration")
+    require(generation == 1, "an initial run cannot begin at a later generation")
+    step = rows[attempt.claimed_bead_id]
+    healthy(root)
+    healthy(step)
+    require(root["metadata"].get("gc.kind") == "workflow"
+            and root["metadata"].get("gc.root_store_ref") == store.store_ref
+            and native_root(step) == workflow_root_id
+            and step["metadata"].get("gc.root_store_ref") == store.store_ref
+            and step["metadata"].get("gc.session_id") == attempt.session_id
+            and step["status"] == "in_progress" and bool(step["assignee"]),
+            "entry lacks the retained native claimed step, session, root or store")
+    current_id = root["metadata"].get("gc.input_convoy_id")
+    if not current_id:
+        require(allow_pending_source and entrypoint in ("build", "requirements"),
+                "capture requires a valid native source convoy before implementation")
+        require(native_root(rows[attempt.claimed_bead_id]) == workflow_root_id
+                and root["metadata"].get("gc.root_store_ref") == store.store_ref,
+                "pending source entry has no matching native root/store")
+        return {"state": "awaiting-source", "workflow_root_id": workflow_root_id,
+                "store_ref": store.store_ref, "implementation_allowed": False}
+    require(input_convoy_id is None or current_id == input_convoy_id, "rendered input differs from native source convoy")
+    # Validate the actual source boundary before allocating records or grants.
+    source_context(store, gc=gc, city_root=city_root, workflow_root_id=workflow_root_id,
+                   input_convoy_id=current_id, claimed_step_id=attempt.claimed_bead_id)
+    rig_root = registered_rig(gc, canonical_path(city_root), rig_name, store.store_ref)
+    store.common_git_dir = repository_identity(rig_root)[1]
+    from workspace_cooked import read_cooked_writer_map
+    writer_map, writer_rows = read_cooked_writer_map(store, workflow_root_id=workflow_root_id,
+                                                    claimed_step_id=attempt.claimed_bead_id)
+    run_record_id = allocate_placeholder(store, title="Immutable build run", existing_id=run_record_id)
+    authority_id = allocate_placeholder(store, title="Build run writer grant", existing_id=authority_id)
+    captured = capture_run(store, attempt, gc=gc, city_root=city_root, rig_name=rig_name,
+        workflow_root_id=workflow_root_id, input_convoy_id=current_id, record_bead_id=run_record_id,
+        authority_id=authority_id, worktree_lifecycle=worktree_lifecycle, base_ref=base_ref,
+        writer_map=writer_map, writer_rows=writer_rows)
+    require(captured["receipt"].get("outcome") in ("committed", "replayed"),
+            "run publication is uncertain; resolve the original guarded request before continuing")
+    result = read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
+        workflow_root_id=workflow_root_id, claimed_step_id=attempt.claimed_bead_id,
+        worktree_lifecycle=worktree_lifecycle, generation=generation, require_plan=require_plan)
+    result["receipt"] = captured["receipt"]
+    return result
+
+
+def gate_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
+               workflow_root_id: str, entrypoint: str, generation: int = 1,
+               worktree_lifecycle: str | None = None, **kwargs) -> dict[str, Any]:
+    """Apply the mode recorded by native cooking at the real entry boundary."""
+    root = store.snapshot([workflow_root_id])[workflow_root_id]
+    metadata = root["metadata"]
+    mode = metadata.get("gc.var.worktree_lifecycle", "legacy")
+    require(mode in ("legacy", "new"), "native workflow has an invalid worktree lifecycle")
+    require(worktree_lifecycle is None or worktree_lifecycle == mode,
+            "rendered lifecycle conflicts with the native workflow")
+    if RUN_REF in metadata:
+        retained = _load(store, "run", reference(metadata[RUN_REF], "run"))
+        require(retained["workflow_root_id"] == workflow_root_id
+                and retained["worktree_lifecycle"] == mode,
+                "native workflow mode conflicts with its immutable recorded run")
+    if mode == "legacy":
+        return {"state": "legacy", "workflow_root_id": workflow_root_id, "store_ref": store.store_ref}
+    base = metadata.get("gc.var.worktree_base_ref", "@default")
+    return prepare_entry(store, attempt, gc=gc, city_root=city_root, rig_name=rig_name,
+        workflow_root_id=workflow_root_id, entrypoint=entrypoint, generation=generation,
+        worktree_lifecycle=mode, base_ref=base, **kwargs)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("gate", "prepare", "read", "allocate"))
+    parser.add_argument("--gc", default="gc")
+    parser.add_argument("--city-root", required=True)
+    parser.add_argument("--store-ref", required=True)
+    parser.add_argument("--rig", required=True)
+    parser.add_argument("--workflow-root")
+    parser.add_argument("--claimed-step")
+    parser.add_argument("--entrypoint", choices=("build", "implement", "requirements", "plan", "decompose", "convoy"), default="build")
+    parser.add_argument("--worktree-lifecycle", choices=("legacy", "new"))
+    parser.add_argument("--base-ref", default="@default")
+    parser.add_argument("--generation", type=int, default=1)
+    parser.add_argument("--input-convoy-id")
+    parser.add_argument("--run-record-id")
+    parser.add_argument("--authority-id")
+    parser.add_argument("--require-plan", action="store_true")
+    parser.add_argument("--allow-pending-source", action="store_true")
+    parser.add_argument("--expected-run-sha256")
+    parser.add_argument("--expected-plan-sha256")
+    parser.add_argument("--title", default="Workspace record")
+    args = parser.parse_args(argv)
+    try:
+        from workspace_store import Attempt, WorkspaceStore
+        store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city_root)
+        if args.action == "allocate":
+            result = {"bead_id": allocate_placeholder(store, title=args.title, existing_id=args.run_record_id)}
+        else:
+            require(bool(args.workflow_root) and bool(args.claimed_step), "entry requires exact workflow root and claimed step")
+            kwargs = dict(gc=args.gc, city_root=args.city_root, rig_name=args.rig,
+                workflow_root_id=args.workflow_root, worktree_lifecycle=args.worktree_lifecycle or "new",
+                generation=args.generation, input_convoy_id=args.input_convoy_id, require_plan=args.require_plan)
+            if args.action == "read":
+                result = read_entry(store, claimed_step_id=args.claimed_step,
+                    expected_run_sha256=args.expected_run_sha256, expected_plan_sha256=args.expected_plan_sha256, **kwargs)
+            elif args.action == "gate":
+                kwargs.pop("worktree_lifecycle")
+                result = gate_entry(store, Attempt.from_env(args.claimed_step), entrypoint=args.entrypoint,
+                    worktree_lifecycle=args.worktree_lifecycle, run_record_id=args.run_record_id,
+                    authority_id=args.authority_id, allow_pending_source=args.allow_pending_source, **kwargs)
+            else:
+                result = prepare_entry(store, Attempt.from_env(args.claimed_step), entrypoint=args.entrypoint,
+                    base_ref=args.base_ref, run_record_id=args.run_record_id, authority_id=args.authority_id,
+                    allow_pending_source=args.allow_pending_source, **kwargs)
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    except (RecordError, RunError, OSError, ValueError) as exc:
+        print(f"workspace entry: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

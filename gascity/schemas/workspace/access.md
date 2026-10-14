@@ -55,9 +55,20 @@ The entry helper constructs
 the map from the actual native formula, source hash and physical steps. The
 adapter checks each step's root, store, source member, reference and declared
 dependencies. Fixed pack responsibilities determine which record kinds the
-claimed step can write. A native retry control and its single attempt may share
-a semantic step ID. The adapter refuses multiple writable attempts for the same
-semantic step.
+claimed step can write. Physical steps match the compiled formula's explicit
+`gc.step_ref`, or its full step ID when that reference is absent. Dependency
+edges still resolve through full compiled IDs. Duplicate or malformed references
+are refused.
+
+A native retry or Ralph control and its single attempt may share a semantic
+step ID when the attempt names that control and both retain the same
+dependencies. The control cannot write records. The adapter refuses multiple
+writable attempts for the same semantic step.
+
+Graph discovery retains at most 4096 original native rows, including the expansion
+and source context. Read-only snapshots use batches of at most 100 rows. A listing
+that reaches the extra sentinel row is refused rather than accepted as complete.
+This read limit is separate from the 100-row atomic transaction limit.
 
 ## Publish a record
 
@@ -77,11 +88,19 @@ References contain the kind, full ordered identity and native physical ID. A
 reference joins its validated payload in the same batch. Native reference targets
 must belong to the same workflow and store.
 
-`expected_rows` retains the complete original snapshot, including the grant,
-claimed step, root, every mapped step, payloads, references and read guards.
+`expected_rows` retains the complete original snapshot, including the cooked
+graph and the operation's grant, claimed step, root, payloads and references.
 `GuardRead` compares metadata against the original snapshot. Use `MISSING` for an absent key and `None` for
-JSON null. Every selected row receives a changing transaction nonce so parent
-and input guards participate in native commit ordering.
+JSON null. The transaction selects the authority, claim, source and expansion
+bindings, records, references, explicit read guards and typed projection targets.
+Grant replacement also selects its previous writer and the closed predecessor
+path used to authorize the successor, including paired control and attempt rows.
+Unrelated graph branches remain read-only context.
+
+Every selected row receives a changing transaction nonce so parent and input
+guards participate in native commit ordering. More than 100 required transaction
+rows still refuse; mutations are never split into batches. Original context rows
+cannot be replaced with newer revisions or different typed metadata.
 
 The prepared request fixes its city, store, common Git directory and original
 revisions. `execute` submits that request once. A timeout or malformed response

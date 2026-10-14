@@ -293,7 +293,8 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
                 captured_run: dict[str, Any] | None = None,
                 captured_checks_config: str | None = None,
                 expected_source_anchor_id: str | None = None, operation_nonce: str | None = None) -> dict[str, Any]:
-    from workspace_store import GRANT_KEY, GuardRead, MISSING, RecordWrite, ReferenceWrite, RunCheckPolicyProjection
+    from workspace_store import (GRANT_KEY, GuardRead, MISSING, RecordWrite, ReferenceWrite,
+                                 RunCheckPolicyProjection, read_cooked_context)
     from workspace_requests import require_resolved_scope, retain_request, resolve_request
 
     city_root = canonical_path(city_root)
@@ -354,7 +355,7 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
     else:
         absent = [bead_id for bead_id in map_ids if bead_id not in rows]
         if absent:
-            rows.update(store.snapshot(absent))
+            rows.update(read_cooked_context(store, absent))
     projections = []
     if worktree_lifecycle == "new":
         raw_checks = root_meta.get(CHECKS_CONFIG_KEY)

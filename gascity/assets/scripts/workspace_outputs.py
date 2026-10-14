@@ -428,7 +428,7 @@ def prepare_record(store, attempt, payload: dict, *, kind: str, record_id: str, 
                    operation_nonce: str | None = None):
     """Use the writer-owned transaction; callers supply every qualified dependency guard."""
     from workspace_store import (CookedWriterMap, GuardRead, GRANT_KEY, MISSING, NativeRunContinuation,
-                                 RecordWrite, ReferenceWrite, SCOPE_OWNER, record_reference)
+                                 RecordWrite, ReferenceWrite, SCOPE_OWNER, read_cooked_context, record_reference)
     require(isinstance(writer_map, CookedWriterMap), "native cooked writer map is required")
     validate_record(kind, payload)
     require(store.common_git_dir is not None, "record write requires its exact repository lock root")
@@ -449,7 +449,7 @@ def prepare_record(store, attempt, payload: dict, *, kind: str, record_id: str, 
                                   *(step["bead_id"] for step in writer_map.declaration["steps"])]))
         if writer_map.continuation is not None:
             ids.extend(writer_map.continuation.row_ids)
-        expected_rows = store.snapshot(list(dict.fromkeys(ids)))
+        expected_rows = read_cooked_context(store, list(dict.fromkeys(ids)))
         expected_rows.update(copy.deepcopy(native_rows))
     require(type(initial_write) is bool, "initial write admission must be explicit boolean authority")
     method = store.install_grant if initial_write else store.write_records
@@ -486,7 +486,7 @@ def prepare_record(store, attempt, payload: dict, *, kind: str, record_id: str, 
             *(writer_map.continuation.row_ids if writer_map.continuation is not None else ())]))
         missing = [bead_id for bead_id in ids if bead_id not in expected_rows]
         if missing:
-            expected_rows.update(store.snapshot(missing))
+            expected_rows.update(read_cooked_context(store, missing))
     return method(attempt=attempt, scope={"workflow_root_id": payload["workflow_root_id"],
                                "generation": payload["generation"], "writer_scope_id": payload[SCOPE_OWNER[kind]], "record_kind": kind},
                                authority_id=authority_id, writes=[RecordWrite(kind, record_id, payload)],

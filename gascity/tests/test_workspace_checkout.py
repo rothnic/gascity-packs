@@ -742,6 +742,28 @@ print(json.dumps(receipt))
             launch_step_ids=['producer-1'], **kwargs)
         self.assertEqual(resumed['head'], self.base)
 
+    def test_failed_exact_write_acknowledgement_preserves_request_without_blocker_or_git_effects(self):
+        store, attempt, kwargs = self.managed_context(inherited=True)
+        observed = []
+        def reject(prepared, resolved):
+            observed.append((prepared.sha256, resolved['request_sha256'], resolved['outcome']))
+            raise RecordError('caller original source rows differ')
+        with self.assertRaisesRegex(self.mod.CheckoutError, 'acknowledgement is unresolved') as error:
+            self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+                launch_step_ids=['producer-1'], blocker_record_id='blocker-record', blocker_id='ack-failed',
+                acknowledge=reject, **kwargs)
+        self.assertEqual(len(observed), 1)
+        self.assertEqual(observed[0][0], observed[0][1])
+        self.assertIn(observed[0][2], ('committed', 'replayed'))
+        self.assertEqual(len(store.transactions), 1)
+        self.assertEqual(store.rows['blocker-record']['metadata'], {})
+        self.assertFalse(self.log.exists())
+        self.assertFalse(Path(self.workspace['work_dir']).exists())
+        request = Path(error.exception.request_path)
+        self.assertEqual(str(request), error.exception.evidence_path)
+        self.assertTrue(request.is_file())
+        self.assertTrue(list(request.parent.glob('*.pending')))
+
     def test_shared_successor_projection_is_pure_intent_and_preserves_persisted_admission(self):
         import workspace_cooked as cooked
         from workspace_entry import read_native_continuation

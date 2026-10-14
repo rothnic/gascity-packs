@@ -10,8 +10,9 @@ import subprocess
 
 from workspace_records import RecordError, canonical_bytes
 from workspace_run import native_json
-from workspace_store import (CookedWriterMap, TOPOLOGY, _dependencies, _formula_identity, _kinds, _root,
-                             require, validate_cooked_writer_map)
+from workspace_store import (CookedWriterMap, MAX_COOKED_CONTEXT_ROWS, TOPOLOGY,
+                             _dependencies, _formula_identity, _kinds, _root,
+                             read_cooked_context, require, validate_cooked_writer_map)
 
 
 def _formula(root):
@@ -30,7 +31,7 @@ def _native_list(store, key, value):
     if store.store_ref.startswith("rig:"):
         command += ["--rig", store.store_ref.split(":", 1)[1]]
     command += ["bd", "list", "--metadata-field", key + "=" + value,
-                "--all", "--include-infra", "--include-gates", "--limit", "101", "--json"]
+                "--all", "--include-infra", "--include-gates", "--limit", str(MAX_COOKED_CONTEXT_ROWS + 1), "--json"]
     environment = {key: value for key, value in os.environ.items() if key not in ROUTING_ENV}
     result = subprocess.run(command, cwd=store.cwd, env=environment, capture_output=True,
                             text=True, encoding="utf-8", errors="strict", timeout=30)
@@ -39,9 +40,10 @@ def _native_list(store, key, value):
         rows = json.loads(result.stdout)
     except ValueError as exc:
         raise RecordError("cooked writer admission: malformed native step listing") from exc
-    require(isinstance(rows, list) and len(rows) < 101
-            and all(isinstance(row, dict) and isinstance(row.get("id"), str) for row in rows),
-            "native step listing is incomplete or exceeds the guarded operation bound")
+    require(isinstance(rows, list) and len(rows) <= MAX_COOKED_CONTEXT_ROWS
+            and all(isinstance(row, dict) and isinstance(row.get("id"), str) for row in rows)
+            and len({row["id"] for row in rows}) == len(rows),
+            "native step listing is malformed or exceeds the 4096-row cooked read bound")
     return [row["id"] for row in rows]
 
 
@@ -56,7 +58,7 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
     def snapshot(ids):
         missing = [bead_id for bead_id in ids if bead_id not in retained]
         if missing:
-            retained.update(store.snapshot(missing))
+            retained.update(read_cooked_context(store, missing))
         require(all(bead_id in retained and retained[bead_id].get("id") == bead_id for bead_id in ids),
                 "native cooked readback has a different physical ID")
         return {bead_id: retained[bead_id] for bead_id in ids}
@@ -78,7 +80,7 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
     key = "gc.attach_root_id" if expansion_id != physical_root_id else "gc.root_bead_id"
     ids = _native_list(store, key, expansion_id)
     ids = list(dict.fromkeys([expansion_id, claimed_step_id, *ids]))
-    require(len(ids) <= 98, "cooked chain exceeds the complete guarded row bound")
+    require(len(ids) <= MAX_COOKED_CONTEXT_ROWS, "cooked chain exceeds the 4096-row read bound")
     snapshot(ids)
     rows = retained
     rig = store.store_ref.split(":", 1)[1] if store.store_ref.startswith("rig:") else None
@@ -90,9 +92,17 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
     formula = native_json(store.gc, store.cwd, arguments, rig)
     require(formula.get("ok") is True and formula.get("name") == name and isinstance(formula.get("steps"), list),
             "native formula readback does not match the cooked expansion")
-    compiled = {step["id"]: step for step in formula["steps"] if isinstance(step, dict) and isinstance(step.get("id"), str)}
-    require(len(compiled) == len(formula["steps"]), "compiled native steps are ambiguous")
-    semantic = {ref: (step.get("metadata") or {}).get("gc.step_id", ref) for ref, step in compiled.items()}
+    compiled_ids = {step["id"]: step for step in formula["steps"] if isinstance(step, dict) and isinstance(step.get("id"), str)}
+    require(len(compiled_ids) == len(formula["steps"]), "compiled native steps are ambiguous")
+    compiled = {}
+    for step in compiled_ids.values():
+        metadata = step.get("metadata") or {}
+        ref = metadata.get("gc.step_ref", step["id"])
+        require(isinstance(ref, str) and ref.strip() and ref not in compiled,
+                "compiled native step references are malformed or ambiguous")
+        compiled[ref] = step
+    semantic = {step_id: (step.get("metadata") or {}).get("gc.step_id", step_id)
+                for step_id, step in compiled_ids.items()}
     compiled_dependencies = {step_id: set() for step_id in semantic.values()}
     require(isinstance(formula.get("deps", []), list), "compiled native dependency readback is malformed")
     for edge in formula.get("deps", []):
@@ -121,7 +131,8 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
                 "missing or duplicate physical occurrence for a compiled native step")
         physical_refs.add(ref)
         cooked = compiled[ref].get("metadata") or {}
-        require(metadata.get("gc.step_id") == cooked.get("gc.step_id", ref), "semantic step differs from the cooked source")
+        require(metadata.get("gc.step_id") == cooked.get("gc.step_id", compiled[ref]["id"]),
+                "semantic step differs from the cooked source")
         for fact in ("gc.kind", "gc.control_for", "gc.build.artifact_schema", "gc.lifecycle", "gc.run_target"):
             require(metadata.get(fact) == cooked.get(fact), "native writer designation differs from the cooked source")
         require(_dependencies(metadata) == sorted(compiled_dependencies[metadata["gc.step_id"]]),
@@ -131,7 +142,7 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
     require(any(item["bead_id"] == claimed_step_id for item in entries), "claimed writer has no exact cooked occurrence")
     if member not in rows:
         snapshot([member])
-    require(len(rows) <= 98, "native context and cooked chain exceed the complete guarded row bound")
+    require(len(rows) <= MAX_COOKED_CONTEXT_ROWS, "native context and cooked chain exceed the 4096-row read bound")
     declaration = {"version": 1, "workflow_root_id": workflow_root_id, "store_ref": store.store_ref,
         "source_member_id": member, "expansion_root_id": expansion_id, "formula_name": name,
         "formula_hash": digest, "formula_source": source, "steps": sorted(entries, key=lambda item: item["step_ref"])}

@@ -16,7 +16,7 @@ from workspace_store import (GRANT_KEY, GRANT_REFS_KEY, MISSING, TRANSITION_NONC
                              GuardRead, InheritedRunReference, NativeOwnerProjection,
                              NativeRunContinuation, NativeWorktreeReference,
                              RecordWrite, ReferenceWrite, SuccessorRelation,
-                             record_reference, transition_locks)
+                             merge_cooked_context, record_reference, transition_locks)
 
 
 class DependencyError(RecordError):
@@ -34,25 +34,37 @@ def require(condition, message):
 class FrozenRecords:
     """Retain original physical rows, references and revisions through a write."""
     def __init__(self, store, rows=None):
-        self.store, self.rows, self.read_keys = store, {}, set()
+        self.store, self.rows, self.cooked_rows, self.read_keys = store, {}, {}, set()
         self.merge(rows or {})
 
-    def merge(self, rows):
+    def merge(self, rows, *, context_only=False):
+        if context_only:
+            self.cooked_rows = merge_cooked_context(self.original_rows, rows)
+            return
         require(isinstance(rows, dict), 'native guard rows must be an exact-ID object')
         require(len(set(self.rows) | set(rows)) <= 100, 'complete guarded scope exceeds 100 rows; chunking is forbidden')
         for bead_id, row in rows.items():
             require(isinstance(row, dict) and row.get('id') == bead_id, 'native guard row physical identity differs')
             require(bead_id not in self.rows or canonical_bytes(self.rows[bead_id]) == canonical_bytes(row),
                     'native source changed after its original snapshot; do not refresh the proof')
+            require(bead_id not in self.cooked_rows or canonical_bytes(self.cooked_rows[bead_id]) == canonical_bytes(row),
+                    'native source changed after its original cooked snapshot; do not refresh the proof')
         self.rows.update(copy.deepcopy(rows))
 
     def ensure(self, ids):
         ids = list(dict.fromkeys(ids))
         require(len(set(ids) | set(self.rows)) <= 100, 'complete guarded scope exceeds 100 rows; chunking is forbidden')
         missing = [bead_id for bead_id in ids if bead_id not in self.rows]
+        retained = {bead_id: self.cooked_rows[bead_id] for bead_id in missing if bead_id in self.cooked_rows}
+        self.merge(retained)
+        missing = [bead_id for bead_id in missing if bead_id not in retained]
         if missing:
             self.merge(self.store.snapshot(missing))
         return self.rows
+
+    @property
+    def original_rows(self):
+        return merge_cooked_context(self.cooked_rows, self.rows)
 
     def metadata(self, bead_id, key):
         self.ensure([bead_id])
@@ -91,18 +103,27 @@ class FrozenRecords:
                 for bead_id, key in sorted(keys)]
 
     def acknowledge(self, prepared, resolved):
+        self.store._prepared(prepared)
         require(resolved.get('request_sha256') == prepared.sha256 and resolved.get('outcome') in ('committed', 'replayed'),
                 'guarded publication is unknown; request_sha256=' + prepared.sha256
                 + '; resolve the original request without another submission')
         # This update acknowledges only the exact after-state of our own frozen
         # request. It never replaces a stale precondition with an arbitrary read.
+        before = parse_record(prepared.before_bytes.decode())
         after = parse_record(prepared.after_bytes.decode())
+        original = self.original_rows
+        require(set(self.rows) <= set(before) and set(before) == set(after)
+                and all(canonical_bytes(before[key]) == canonical_bytes(original[key])
+                        for key in set(before) & set(original)),
+                'guarded publication did not retain its original source rows')
         actual = resolved.get('rows')
         require(isinstance(actual, dict) and set(actual) == set(after), 'exact guarded readback is incomplete')
         for bead_id, expected in after.items():
-            require(all(actual[bead_id][key] == expected[key] for key in ('metadata', 'status', 'assignee', 'type', 'labels')),
+            require(all(canonical_bytes(actual[bead_id][key]) == canonical_bytes(expected[key])
+                        for key in ('metadata', 'status', 'assignee', 'type', 'labels')),
                     'guarded publication readback differs from its frozen intention')
         self.rows.update(copy.deepcopy(actual))
+        self.cooked_rows.update({key: copy.deepcopy(row) for key, row in actual.items() if key in self.cooked_rows})
 
 
 def writer_checkpoint(workspace, attempt):
@@ -209,14 +230,14 @@ def publish_checkpoint(frozen, attempt, workspace, *, authority_id, writer_map, 
                 gc=native_runtime.gc, city_root=native_runtime.city_root,
                 **(dict(continuation=old_context, native_rows=frozen.rows) if old_context is not None else {}))
             native = checkout.successor_projection(workspace, continuation=context,
-                native_rows=frozen.rows, writer_map=writer_map)
+                native_rows=frozen.original_rows, writer_map=writer_map)
             projections.append(NativeOwnerProjection(workspace['workspace_bead_id'], native['owner_metadata']))
             admitted_steps = {step['bead_id'] for step in writer_map.declaration['steps']}
             for step_id in launch_step_ids:
                 require(step_id in admitted_steps, 'successor launch step is outside its actual cooked map')
                 projections.append(NativeWorktreeReference(step_id, workspace['workspace_bead_id'],
                     dict(native['launch_reference'], binding_step_id=step_id)))
-    arguments = dict(writer_map=writer_map, guards=frozen.guards, expected_rows=frozen.rows,
+    arguments = dict(writer_map=writer_map, guards=frozen.guards, expected_rows=frozen.original_rows,
                      projections=projections)
     if raw is MISSING:
         prepared = store.install_grant(attempt, scope, authority_id, writes, references, **arguments)
@@ -230,7 +251,7 @@ def publish_checkpoint(frozen, attempt, workspace, *, authority_id, writer_map, 
             expansion = grant.get('writer_occurrence', {}).get('expansion_root_id')
             require(isinstance(previous, str) and isinstance(expansion, str), 'predecessor grant lacks its native occurrence')
             frozen.ensure([previous, expansion])
-            arguments.update(guards=frozen.guards, expected_rows=frozen.rows, expected_grant=grant,
+            arguments.update(guards=frozen.guards, expected_rows=frozen.original_rows, expected_grant=grant,
                 successor_relation=SuccessorRelation(plan_record_id, workspace['source_plan_owner_id']))
             prepared = store.accept_replacement(attempt, scope, authority_id, writes, references, **arguments)
     request_path, pending = retain_request(store, prepared)
@@ -492,11 +513,11 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
     workflow_root_id, input_convoy_id = run['workflow_root_id'], entry['input_convoy_id']
     context = (NativeRunContinuation(canonical_bytes(entry['native_continuation']))
                if entry.get('native_continuation') is not None else None)
-    writer_map, map_rows = read_cooked_writer_map(entry_reads, workflow_root_id=workflow_root_id,
+    writer_map, map_rows = read_cooked_writer_map(store, workflow_root_id=workflow_root_id,
         claimed_step_id=attempt.claimed_bead_id, continuation=context,
         continuation_rows=entry_reads.rows if context is not None else None)
     frozen = FrozenRecords(store, entry_reads.rows)
-    frozen.merge(map_rows)
+    frozen.merge(map_rows, context_only=True)
     # Entry independently validates the registered rig and replays its captured
     # repository identity. The CLI starts without a caller-supplied lock path.
     if store.common_git_dir is None:
@@ -617,7 +638,8 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
                 plan_record_id=plan_record_id, workspace_record_id=workspace_record_id, evidence_dir=str(directory),
                 selected_mode='new', parent=parent, allow_external_parent=allow_external_parent,
                 authority_id=authority_id, launch_step_ids=launch_step_ids, writer_map=writer_map,
-                writer_rows=frozen.rows, artifact_root=str(artifacts), native_runtime=runtime)
+                writer_rows=frozen.original_rows, source_rows=frozen.rows, acknowledge=frozen.acknowledge,
+                artifact_root=str(artifacts), native_runtime=runtime)
             integration_evidence = None
             if bundle['strategy'] == 'integration':
                 _, integration_evidence = _integration_receipt(integration_receipt_path(artifacts, bundle), bundle, existing)
@@ -672,7 +694,8 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
             plan_record_id=plan_record_id, workspace_record_id=workspace_record_id, evidence_dir=str(directory),
             selected_mode='new', parent=parent, allow_external_parent=allow_external_parent, authority_id=authority_id,
             launch_step_ids=launch_step_ids, blocker_record_id=blocker_record_id, blocker_id=blocker_id,
-            writer_map=writer_map, writer_rows=frozen.rows, native_runtime=runtime)
+            writer_map=writer_map, writer_rows=frozen.original_rows, source_rows=frozen.rows, acknowledge=frozen.acknowledge,
+            native_runtime=runtime)
         workspace = prepared['workspace']
         runtime.bind_workspace(workspace, frozen.rows)
         integration_evidence = None

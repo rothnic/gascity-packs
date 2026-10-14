@@ -169,6 +169,64 @@ class CookedReaderTests(unittest.TestCase):
         writer_map, _ = self.read()
         self.assertNotIn("ordinary-source-work", [step["bead_id"] for step in writer_map.declaration["steps"]])
 
+    def test_large_cooked_context_keeps_complete_graph_with_bounded_snapshot_reads(self):
+        for number in range(105):
+            self.readonly_stage("branch-" + str(number))
+        original = self.store.snapshot
+        reads = []
+        def snapshot(ids):
+            self.assertLessEqual(len(ids), 100)
+            reads.append(list(ids))
+            return original(ids)
+        self.store.snapshot = snapshot
+        writer_map, rows = self.read()
+        self.assertEqual(110, len(writer_map.declaration["steps"]))
+        self.assertEqual(112, len(rows))
+        self.assertEqual(set(rows), set().union(*(set(ids) for ids in reads)))
+
+    def use_explicit_native_refs(self):
+        for step in self.formula["steps"]:
+            stage = step["id"].removeprefix("do-work.")
+            ref = stage + ".iteration.1"
+            step["metadata"].update({"gc.step_id": step["id"], "gc.step_ref": ref})
+            self.rows[stage]["metadata"]["gc.step_ref"] = ref
+
+    def test_explicit_native_refs_match_physical_steps_and_keep_compiled_dependencies(self):
+        self.use_explicit_native_refs()
+        writer_map, _ = self.read()
+        items = {step["bead_id"]: step for step in writer_map.declaration["steps"]}
+        self.assertEqual(items["prepare-worktree"]["step_ref"], "prepare-worktree.iteration.1")
+        self.assertEqual(items["implement"]["dependencies"], ["do-work.prepare-worktree"])
+        self.assertEqual(items["record-result"]["record_kinds"], ["member-result", "owner-output", "workspace"])
+
+    def test_explicit_native_ref_refuses_unknown_physical_ref(self):
+        self.use_explicit_native_refs()
+        self.rows["prepare-worktree"]["metadata"]["gc.step_ref"] = "do-work.prepare-worktree"
+        with self.assertRaisesRegex(RecordError, "physical occurrence"):
+            self.read()
+
+    def test_explicit_native_ref_must_be_nonblank_unique_and_a_string(self):
+        self.use_explicit_native_refs()
+        original = copy.deepcopy(self.formula)
+        for value in ("", " ", None, 1, "implement.iteration.1"):
+            with self.subTest(value=value):
+                self.formula = copy.deepcopy(original)
+                self.formula["steps"][0]["metadata"]["gc.step_ref"] = value
+                with self.assertRaises(RecordError):
+                    self.read()
+
+    def test_explicit_native_refs_preserve_designation_and_dependency_refusals(self):
+        self.use_explicit_native_refs()
+        original = copy.deepcopy(self.rows)
+        for fact, value in (("gc.step_id", "foreign"), ("gc.run_target", "gc.publisher"),
+                            (cooked.TOPOLOGY, '["unknown"]'), ("gc.control_for", "forged")):
+            with self.subTest(fact=fact):
+                self.rows = copy.deepcopy(original)
+                self.store.snapshot = lambda ids: {bead_id: copy.deepcopy(self.rows[bead_id]) for bead_id in ids}
+                self.rows["prepare-worktree"]["metadata"][fact] = value
+                with self.assertRaises(RecordError):
+                    self.read()
+
     def test_unknown_duplicate_foreign_and_changed_native_facts_refuse(self):
         originals = copy.deepcopy(self.rows)
         for change in ("missing", "duplicate", "foreign", "dependencies", "role", "member"):
@@ -222,6 +280,30 @@ class CookedReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(RecordError, "multiple semantic"):
             self.read()
 
+    def test_native_ralph_control_keeps_one_exact_iteration_without_write_rights(self):
+        control = self.rows["implement"]
+        control["metadata"].update({"gc.kind": "ralph", "gc.step_id": "implement"})
+        self.formula["steps"][1]["metadata"].update({"gc.kind": "ralph", "gc.step_id": "implement"})
+        attempt = copy.deepcopy(control)
+        attempt["id"] = "implement-iteration-1"
+        attempt["metadata"].pop("gc.kind")
+        attempt["metadata"].update({"gc.step_ref": "implement.iteration.1", "gc.control_for": "implement"})
+        self.rows[attempt["id"]] = attempt
+        self.formula["steps"].append({"id": "do-work.implement.iteration.1", "metadata": {
+            key: value for key, value in attempt["metadata"].items()
+            if key in ("gc.run_target", "gc.build.artifact_schema", "gc.step_id", "gc.step_ref", "gc.control_for")}})
+        self.formula["deps"].append({"step_id": "do-work.implement.iteration.1", "depends_on_id": "do-work.prepare-worktree", "type": "blocks"})
+        self.rows["independent-acceptance"]["metadata"][cooked.TOPOLOGY] = '["implement"]'
+        writer_map, _ = self.read(claimed=attempt["id"])
+        items = {item["bead_id"]: item for item in writer_map.declaration["steps"]}
+        self.assertEqual(items["implement"]["record_kinds"], [])
+        self.assertEqual(items[attempt["id"]]["record_kinds"], ["workspace"])
+        with self.assertRaises(RecordError):
+            self.read(claimed="implement")
+        attempt["metadata"]["gc.control_for"] = "foreign"
+        with self.assertRaises(RecordError):
+            self.read(claimed=attempt["id"])
+
     def test_bounded_native_listing_uses_selected_city_store_and_no_ambient_route(self):
         class Result:
             returncode = 0
@@ -231,9 +313,19 @@ class CookedReaderTests(unittest.TestCase):
             self.assertEqual(cooked._native_list(self.store, "gc.attach_root_id", "attach-1"), ["prepare-worktree"])
         args, kwargs = native.call_args
         self.assertEqual(args[0][:5], ["gc", "--city", self.store.cwd, "--rig", "example"])
-        self.assertIn("101", args[0])
+        self.assertIn("4097", args[0])
         self.assertNotIn("GC_CITY", kwargs["env"])
         self.assertNotIn("GC_RIG", kwargs["env"])
+
+    def test_native_listing_refuses_sentinel_duplicate_and_malformed_context(self):
+        class Result:
+            returncode = 0
+        for rows in ([{"id": "row-" + str(i)} for i in range(4097)],
+                     [{"id": "same"}, {"id": "same"}], [{"id": None}], {"rows": []}):
+            Result.stdout = json.dumps(rows)
+            with self.subTest(kind=type(rows)), patch.object(cooked.subprocess, "run", return_value=Result()), \
+                 self.assertRaises(RecordError):
+                cooked._native_list(self.store, "gc.attach_root_id", "attach-1")
 
 
 if __name__ == "__main__":

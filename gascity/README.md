@@ -349,6 +349,8 @@ checks do not establish native worker execution or installation acceptance.
 The city-scoped command `gc gc workspace` exposes the entry, dependency,
 checkout, runtime and flow helpers from the installed pack. Native qualifiers
 supply physical identities and frozen policy. Workers do not construct callbacks.
+Native retry and iteration steps retain their compiled writer responsibilities;
+control steps cannot write lifecycle records. See [guarded record access](schemas/workspace/access.md#bind-the-writer).
 
 For a blocked first preparation, use the dependency helper's
 [recovery decision](schemas/workspace/source-inputs.md#retry-first-preparation).

@@ -108,6 +108,42 @@ class FrozenSourceReadTests(unittest.TestCase):
             self.helper.FrozenRecords(port).ensure(ids)
         self.assertEqual([], port.reads)
 
+    def test_cooked_context_is_not_a_guard_until_its_original_row_is_used(self):
+        context = {'step-' + str(i): row('step-' + str(i)) for i in range(110)}
+        frozen = self.helper.FrozenRecords(NativeRows(context))
+        frozen.merge(context, context_only=True)
+        self.assertEqual(110, len(frozen.original_rows))
+        self.assertEqual({}, frozen.rows)
+        self.assertEqual([], frozen.guards)
+        frozen.metadata('step-103', 'absent')
+        self.assertEqual({'step-103'}, set(frozen.rows))
+        self.assertEqual({'step-103'}, {guard.bead_id for guard in frozen.guards})
+        changed = copy.deepcopy(context['step-103'])
+        changed['revision'] = '2'
+        with self.assertRaisesRegex(self.helper.RecordError, 'changed'):
+            frozen.merge({'step-103': changed})
+
+    def test_cooked_context_cannot_refresh_a_nested_boolean_to_an_integer(self):
+        original = row('step', {'typed': True})
+        frozen = self.helper.FrozenRecords(NativeRows({'step': original}))
+        frozen.merge({'step': original}, context_only=True)
+        changed = copy.deepcopy(original)
+        changed['metadata']['typed'] = 1
+        with self.assertRaisesRegex(self.helper.RecordError, 'changed'):
+            frozen.merge({'step': changed})
+        self.assertIs(True, frozen.original_rows['step']['metadata']['typed'])
+
+    def test_cooked_readback_preserves_original_nested_metadata_types(self):
+        from workspace_runtime import _ReadFence
+        original = row('step', {'typed': True})
+        port = NativeRows({'step': original})
+        fence = _ReadFence(port)
+        fence.retain({'step': original})
+        port.rows['step']['metadata']['typed'] = 1
+        with self.assertRaisesRegex(self.helper.RecordError, 'changed'):
+            fence.cooked_snapshot(['step'])
+        self.assertIs(True, fence.rows['step']['metadata']['typed'])
+
 
 class WorkspaceInputCheckpointTests(unittest.TestCase):
     def setUp(self):

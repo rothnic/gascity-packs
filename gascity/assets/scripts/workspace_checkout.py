@@ -31,9 +31,10 @@ OWNERSHIP = {'gc.worktree_repo': 'repo', 'gc.worktree_root': 'root', 'gc.work_di
 
 
 class CheckoutError(RecordError):
-    def __init__(self, message, evidence_path=None):
+    def __init__(self, message, evidence_path=None, request_path=None):
         super().__init__(message)
         self.evidence_path = evidence_path
+        self.request_path = request_path
 
 
 def canonical_path(value: str, *, directory=False) -> Path:
@@ -679,9 +680,8 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
     ids = list(dict.fromkeys([workflow_root_id, run_record_id, plan_record_id, workspace_record_id,
                               claimed_step_id, *extra_ids]))
     rows = {}
-    for original in (writer_rows, source_rows):
-        if original is not None:
-            _retain_rows(rows, original)
+    if source_rows is not None:
+        _retain_rows(rows, source_rows)
     _retain_rows(rows, store.snapshot(ids))
     workspace = _record(rows[workspace_record_id], 'workspace')
     entry = read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
@@ -788,9 +788,9 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
     if str(store.common_git_dir) != run['common_git_dir']:
         raise CheckoutError('record store lock/common Git directory differs from captured run')
     if writer_map is not None:
-        from workspace_store import validate_cooked_writer_map
+        from workspace_store import merge_cooked_context, validate_cooked_writer_map
         access = {'read_only': True} if record_kind is None else {}
-        validate_cooked_writer_map(writer_map, rows, store_ref=store.store_ref,
+        validate_cooked_writer_map(writer_map, merge_cooked_context(writer_rows or {}, rows), store_ref=store.store_ref,
                                   workflow_root_id=workflow_root_id, claimed_step_id=claimed_step_id,
                                   record_kind=record_kind, **access)
         expected_context = entry.get('native_continuation')
@@ -802,9 +802,9 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
 
 
 def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
-             writer_map, writer_rows, native_runtime=None,
+             writer_map, writer_rows, native_runtime=None, acknowledge=None,
              projections=(), writes=(), references=(), scope_owner=None, record_kind='workspace') -> dict:
-    from workspace_store import GRANT_KEY, GuardRead, InheritedRunReference
+    from workspace_store import GRANT_KEY, GuardRead, InheritedRunReference, merge_cooked_context
     from workspace_requests import retain_request
 
     # Freeze every observed metadata value, as well as each row's native revision.
@@ -819,7 +819,8 @@ def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
                                              'writer_scope_id': scope_owner or workspace['workspace_owner_id'],
                                              'record_kind': record_kind},
                                    authority_id, list(writes), references=list(references), projections=tuple(projections),
-                                   writer_map=writer_map, guards=guards, expected_rows=rows)
+                                   writer_map=writer_map, guards=guards,
+                                   expected_rows=merge_cooked_context(writer_rows, rows))
     path, pending = retain_request(store, prepared)
     try:
         receipt = store.execute(prepared)
@@ -827,17 +828,24 @@ def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
     except (RecordError, OSError) as exc:
         raise CheckoutError('guarded workspace publication is unresolved; original request=' + str(path)
                             + '; request_sha256=' + prepared.sha256 + '; resolve the original request without repeating effects',
-                            str(path)) from exc
+                            str(path), str(path)) from exc
     if (resolved.get('outcome') not in ('committed', 'replayed')
             or resolved.get('request_sha256') != prepared.sha256):
         raise CheckoutError('guarded workspace publication is unknown; request_sha256=' + prepared.sha256
                             + '; readback=' + str(resolved.get('outcome')) + '; original request=' + str(path)
-                            + '; resolve the original request without repeating effects', str(path))
+                            + '; resolve the original request without repeating effects', str(path), str(path))
     # Native grants contain instance tokens; public results contain only the digest/outcome.
     rows.update(resolved['rows'])
     writer_rows.update(copy.deepcopy(rows))
-    if native_runtime is not None:
-        native_runtime.advance_written_rows(resolved['rows'], prepared=prepared)
+    try:
+        if native_runtime is not None:
+            native_runtime.advance_written_rows(resolved['rows'], prepared=prepared)
+        if acknowledge is not None:
+            acknowledge(prepared, resolved)
+    except (RecordError, OSError) as exc:
+        raise CheckoutError('guarded workspace publication acknowledgement is unresolved; original request=' + str(path)
+                            + '; request_sha256=' + prepared.sha256 + '; resolve the original request without repeating effects',
+                            str(path), str(path)) from exc
     if pending.exists() and pending.read_text() == str(path):
         pending.unlink()
     return {'outcome': resolved['outcome'], 'request_sha256': prepared.sha256,
@@ -874,9 +882,9 @@ def _step_binding(checkout, row, *, require_reference=False):
         checkout.require(False, 'native producer/consumer is missing its managed workspace reference')
 
 
-def _continue_workspace(store, attempt, checkout, plan, rows, writer_map, *, authority_id,
+def _continue_workspace(store, attempt, checkout, plan, rows, writer_map, *, writer_rows, authority_id,
                         rig_name, artifact_root, native_runtime):
-    from workspace_store import Attempt, GRANT_KEY, GRANT_REFS_KEY
+    from workspace_store import Attempt, GRANT_KEY, GRANT_REFS_KEY, merge_cooked_context
     from workspace_runtime import NativeSourceRuntime
 
     workspace = checkout.workspace
@@ -915,7 +923,9 @@ def _continue_workspace(store, attempt, checkout, plan, rows, writer_map, *, aut
         checkout.require(grant['attempt'] == attempt.admission, 'continuation native writer attempt changed')
     else:
         # Read the existing dependency proof. No replacement grant is published.
-        store._successor(grant, attempt, scope, None, rows, writer_map.declaration, map_hash, writer_map.continuation)
+        original = merge_cooked_context(writer_rows, rows)
+        path = store._successor(grant, attempt, scope, None, original, writer_map.declaration, map_hash, writer_map.continuation)
+        _retain_rows(rows, {key: original[key] for key in path})
     if native_runtime is None:
         checkout.require(artifact_root is not None, 'continuation requires the recorded artifact directory for native admission')
         native_runtime = NativeSourceRuntime(store, gc=checkout.gc, city_root=checkout.city_root,
@@ -949,7 +959,7 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
                      declared_result: dict | None = None, result_authority_id: str | None = None,
                      blocker_record_id: str | None = None, blocker_id: str | None = None,
                      writer_map=None, writer_rows=None, source_rows=None,
-                     artifact_root: str | None = None, native_runtime=None) -> dict:
+                     artifact_root: str | None = None, native_runtime=None, acknowledge=None) -> dict:
     """Native-record caller; current grants must already admit the retained Attempt.
 
     Initial source selection and preparing-record creation belong to the input
@@ -957,10 +967,12 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
     implicitly, or enables a workflow lifecycle.
     """
     from workspace_store import (Attempt, CookedWriterMap, NativeOwnerProjection, NativeWorktreeReference,
-                                 RecordWrite, ReferenceWrite, record_reference)
+                                 RecordWrite, ReferenceWrite, merge_cooked_context, record_reference)
 
     if selected_mode != 'new' or action not in ('prepare', 'path', 'status', 'verify', 'recover', 'continue'):
         raise CheckoutError('explicit new rollout and a supported workspace action are required')
+    if acknowledge is not None and not callable(acknowledge):
+        raise CheckoutError('write acknowledgement must be an internal callable')
     changing = action in ('prepare', 'recover')
     if attempt is not None and claimed_step_id not in (None, attempt.claimed_bead_id):
         raise CheckoutError('invoking step conflicts with the retained native Attempt')
@@ -997,12 +1009,10 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
             writer_map, discovered = read_cooked_writer_map(store, workflow_root_id=workflow_root_id,
                 claimed_step_id=invoking_step, continuation=continuation,
                 continuation_rows=rows if continuation is not None else None, **access)
-            _retain_rows(rows, discovered)
+            writer_rows = merge_cooked_context(discovered, rows)
             if writer_map.declaration['source_member_id'] != workspace['active_member_id']:
                 raise CheckoutError('cooked occurrence belongs to a different active source member')
-        originals = {} if writer_rows is None else writer_rows
-        _retain_rows(originals, rows)
-        writer_rows = originals
+        writer_rows = merge_cooked_context(writer_rows or {}, rows)
         workspace_continuation = _occurrence_continuation(store, workflow_root_id, workspace['writer_step_id'], rows,
                                                         require_reference=workspace['native_provenance'] is not None)
         if changing:
@@ -1037,6 +1047,7 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
             _step_binding(checkout, rows[step_id], require_reference=not changing)
         if action == 'continue':
             return _continue_workspace(store, attempt, checkout, plan, rows, writer_map,
+                                       writer_rows=writer_rows,
                                        authority_id=authority_id, rig_name=rig_name,
                                        artifact_root=artifact_root, native_runtime=native_runtime)
         if not changing:
@@ -1045,7 +1056,7 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
         # Admission and source read guards are checked natively before provisioning.
         candidate = _writer(workspace, attempt)
         _publish(store, attempt, workspace=candidate, authority_id=authority_id, rows=rows,
-                 writer_map=writer_map, writer_rows=writer_rows, native_runtime=native_runtime,
+                 writer_map=writer_map, writer_rows=writer_rows, native_runtime=native_runtime, acknowledge=acknowledge,
                  writes=[RecordWrite('workspace', workspace_record_id, candidate)])
         checkout.workspace = copy.deepcopy(candidate)
         result_record = None
@@ -1079,7 +1090,7 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
         if result.get('record_result'):
             reference = record_reference('member-result', result_record_id, result['member_result'])
             _publish(store, attempt, workspace=candidate, authority_id=result_authority_id, rows=rows,
-                     writer_map=writer_map, writer_rows=writer_rows, native_runtime=native_runtime,
+                     writer_map=writer_map, writer_rows=writer_rows, native_runtime=native_runtime, acknowledge=acknowledge,
                      scope_owner=workspace['active_member_id'], record_kind='member-result',
                      writes=[RecordWrite('member-result', result_record_id, result['member_result'])],
                      references=[ReferenceWrite(workspace['active_member_id'], 'gc.workspace_result_ref', reference)])
@@ -1090,7 +1101,7 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
             projections.append(NativeWorktreeReference(step_id, workspace_record_id, reference))
         result['receipt'] = _publish(store, attempt, workspace=result['workspace'], authority_id=authority_id,
                                      rows=rows, writer_map=writer_map, writer_rows=writer_rows,
-                                     native_runtime=native_runtime, projections=projections,
+                                     native_runtime=native_runtime, acknowledge=acknowledge, projections=projections,
                                      writes=[RecordWrite('workspace', workspace_record_id, result['workspace'])])
         checkout.workspace = result['workspace']
         checkout.verify()
@@ -1106,7 +1117,8 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
             try: checkout.fail(str(exc))
             except CheckoutError as recorded: exc = recorded
         # A missing/unknown blocker allocation remains diagnostic evidence, never a fabricated physical ID.
-        if changing and blocker_record_id and blocker_id and workspace['phase'] != 'blocked':
+        if (changing and blocker_record_id and blocker_id and workspace['phase'] != 'blocked'
+                and getattr(exc, 'request_path', None) is None):
             observation = checkout.last_observation or {}
             blocker = dict(version=1, workflow_root_id=workflow_root_id, generation=workspace['generation'],
                            writer_step_id=attempt.claimed_bead_id, source_plan_owner_id=workspace['source_plan_owner_id'],
@@ -1122,7 +1134,7 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
                 blocked = _writer(dict(workspace, phase='blocked'), attempt)
                 reference = record_reference('blocker', blocker_record_id, blocker)
                 _publish(store, attempt, workspace=blocked, authority_id=authority_id, rows=rows,
-                         writer_map=writer_map, writer_rows=writer_rows, native_runtime=native_runtime,
+                         writer_map=writer_map, writer_rows=writer_rows, native_runtime=native_runtime, acknowledge=acknowledge,
                          writes=[RecordWrite('workspace', workspace_record_id, blocked), RecordWrite('blocker', blocker_record_id, blocker)],
                          references=[ReferenceWrite(workspace['workspace_owner_id'], 'gc.workspace_blocker_ref', reference)])
             except RecordError:

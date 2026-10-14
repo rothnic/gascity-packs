@@ -19,7 +19,7 @@ from workspace_records import canonical_bytes, contracts, record_identity, recor
 from workspace_store import (MISSING, Attempt, CookedWriterMap, GuardRead, RecordWrite, ReferenceWrite,
                              NativeOwnerProjection, NativeWorktreeReference, SourceMembershipProjection,
                              SourcePlanConvoyBinding, RunCheckPolicyProjection, StoreError, SuccessorRelation, WorkspaceStore, record_reference,
-                             transition_locks, validate_cooked_writer_map, validate_transition)
+                             merge_cooked_context, read_cooked_context, transition_locks, validate_cooked_writer_map, validate_transition)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "workspace-records" / "valid.json"
 
@@ -845,15 +845,161 @@ class WorkspaceStoreTests(unittest.TestCase):
             validate_cooked_writer_map(CookedWriterMap(canonical_bytes(data)), self.port.rows,
                 store_ref="rig:example", workflow_root_id="run-example", record_kind="run", claimed_step_id="writer-step-example")
 
-    def test_every_cooked_occurrence_is_fenced_against_late_graph_change(self):
+    def test_unrelated_cooked_sibling_is_not_mutated_or_fenced(self):
         scope, writer_map = self.native_writer_chain()
         prepared = self.prepare("workspace", writer_map=writer_map)
         self.port.rows["review-step"]["revision"] = "2"
         self.port.rows["review-step"]["metadata"]["gc.run_target"] = "other-role"
+        before = copy.deepcopy(self.port.rows["review-step"])
+        self.assertNotIn("review-step", {r["id"] for r in prepared.request["rows"]})
+        self.assertEqual("committed", self.store.execute(prepared)["outcome"])
+        self.assertEqual(before, self.port.rows["review-step"])
+        self.assertTrue(all(r["require_change"] for r in prepared.request["rows"]))
+
+    def large_writer_map(self):
+        declaration = self.writer_map(self.scope).declaration
+        for number in range(109):
+            bead_id = "unrelated-" + str(number)
+            metadata = {"workflow_id": "run-example", "gc.root_store_ref": "rig:example",
+                        "gc.step_id": bead_id, "gc.step_ref": "build." + bead_id,
+                        "gc.native_step_dependencies.v1": "[]"}
+            self.port.rows[bead_id] = row(bead_id, status="open", metadata=metadata)
+            declaration["steps"].append({"bead_id": bead_id, "step_id": bead_id,
+                "step_ref": metadata["gc.step_ref"], "dependencies": [], "record_kinds": []})
+        return CookedWriterMap(canonical_bytes(declaration))
+
+    def test_transaction_large_graph_only_fences_its_exact_operation_endpoints(self):
+        writer_map = self.large_writer_map()
+        with patch.object(self.store, "snapshot", wraps=self.store.snapshot) as snapshot:
+            prepared = self.prepare(writer_map=writer_map)
+        self.assertTrue(all(len(call.args[0]) <= 100 for call in snapshot.call_args_list))
+        selected = {item["id"] for item in prepared.request["rows"]}
+        self.assertEqual({"grant-row", "writer-step-example", "run-example", "payload-row"}, selected)
+        self.assertEqual(selected, set(json.loads(prepared.before_bytes)))
+        grant = next(item for item in prepared.request["rows"] if item["id"] == "grant-row")
+        self.assertEqual(writer_map.sha256, json.loads(grant["set"]["gc.workspace_write_grant"])["writer_map_sha256"])
+        self.port.rows["unrelated-100"]["revision"] = "2"
+        untouched = copy.deepcopy(self.port.rows["unrelated-100"])
+        self.assertEqual("committed", self.store.execute(prepared)["outcome"])
+        self.assertEqual(untouched, self.port.rows["unrelated-100"])
+
+    def test_large_context_does_not_raise_the_atomic_write_limit(self):
+        writer_map = self.large_writer_map()
+        guards = [GuardRead("unrelated-" + str(i), "missing", MISSING) for i in range(97)]
+        with self.assertRaisesRegex(StoreError, "100 physical rows"):
+            self.prepare(writer_map=writer_map, guards=guards)
+        self.assertEqual([], self.port.requests)
+
+    def test_native_null_metadata_is_empty_without_losing_nested_nulls(self):
+        self.port.rows["grant-row"]["metadata"] = None
+        native = copy.deepcopy(self.port.rows["grant-row"])
+        observed = self.store.snapshot(["grant-row"])["grant-row"]
+        self.assertEqual({}, observed["metadata"])
+        self.assertEqual(native["revision"], observed["revision"])
+        self.assertIsNone(self.port.rows["grant-row"]["metadata"])
+        self.port.rows["grant-row"]["metadata"] = {"null": None, "typed": [True, 3, {"x": None}]}
+        self.assertEqual(self.port.rows["grant-row"]["metadata"], self.store.snapshot(["grant-row"])["grant-row"]["metadata"])
+        for value in ([], "null", "", False, 0, 1):
+            self.port.rows["grant-row"]["metadata"] = value
+            with self.subTest(value=value), self.assertRaises(StoreError):
+                self.store.snapshot(["grant-row"])
+        del self.port.rows["grant-row"]["metadata"]
+        with self.assertRaises(StoreError):
+            self.store.snapshot(["grant-row"])
+
+    def test_cooked_context_join_preserves_original_nested_metadata_types(self):
+        original = row("same", metadata={"typed": True})
+        self.assertEqual({"same": original}, merge_cooked_context({"same": original}, {"same": copy.deepcopy(original)}))
+        for value in (1, 1.0, "true"):
+            changed = row("same", metadata={"typed": value})
+            with self.subTest(value=value), self.assertRaisesRegex(StoreError, "changed"):
+                merge_cooked_context({"same": original}, {"same": changed})
+
+    def test_cooked_context_read_refuses_missing_rows_and_oversized_context(self):
+        with patch.object(self.store, "snapshot", return_value={}):
+            with self.assertRaisesRegex(StoreError, "incomplete"):
+                read_cooked_context(self.store, ["missing"])
+        with patch.object(self.store, "snapshot") as snapshot:
+            with self.assertRaisesRegex(StoreError, "4096"):
+                read_cooked_context(self.store, ["row-" + str(i) for i in range(4097)])
+            snapshot.assert_not_called()
+
+    def test_frozen_acknowledgement_only_advances_its_exact_typed_native_write(self):
+        from dataclasses import replace
+        from workspace_dependency import FrozenRecords
+        from workspace_records import RecordError
+        prepared = self.prepare()
+        original = json.loads(prepared.before_bytes)
+        self.store.execute(prepared)
+        resolved = self.store.resolve(prepared)
+        frozen = FrozenRecords(self.store, original)
+        changed = copy.deepcopy(original)
+        changed['payload-row']['metadata']['typed-sibling'][0] = 1
+        wrong_after = copy.deepcopy(resolved)
+        wrong_after['rows']['payload-row']['metadata']['typed-sibling'][0] = 1
+        missing = {key: row for key, row in original.items() if key != 'payload-row'}
+        for request, receipt in (
+                (replace(prepared, binding_bytes=b'{}'), resolved),
+                (replace(prepared, before_bytes=canonical_bytes(changed)), resolved),
+                (replace(prepared, before_bytes=canonical_bytes(missing)), resolved),
+                (prepared, wrong_after),
+                (prepared, dict(resolved, outcome='unknown'))):
+            with self.subTest(binding=request.binding_bytes, outcome=receipt['outcome']), self.assertRaises(RecordError):
+                frozen.acknowledge(request, receipt)
+            self.assertEqual(canonical_bytes(frozen.rows), canonical_bytes(original))
+        frozen.acknowledge(prepared, resolved)
+        self.assertEqual(canonical_bytes(frozen.rows), canonical_bytes(resolved['rows']))
+
+    def branched_writer_chain(self, paired=False):
+        scope, writer_map = self.native_writer_chain()
+        data = writer_map.declaration
+        self.port.rows["z-dead"] = row("z-dead", metadata={"workflow_id": "run-example",
+            "gc.root_store_ref": "rig:example", "gc.step_id": "z-dead", "gc.step_ref": "build.z-dead",
+            "gc.native_step_dependencies.v1": "[]"})
+        data["steps"].append({"bead_id": "z-dead", "step_id": "z-dead", "step_ref": "build.z-dead",
+                              "dependencies": [], "record_kinds": []})
+        for item in data["steps"]:
+            if item["bead_id"] == "close-step":
+                item["dependencies"] = ["record-result", "z-dead"]
+                self.port.rows["close-step"]["metadata"]["gc.native_step_dependencies.v1"] = '["record-result","z-dead"]'
+        if paired:
+            native = self.port.rows["review-step"]["metadata"]
+            native["gc.control_for"] = "independent-acceptance"
+            control = dict(native, **{"gc.kind": "ralph", "gc.step_ref": "review.control"})
+            control.pop("gc.control_for")
+            self.port.rows["review-control"] = row("review-control", metadata=control)
+            data["steps"].append({"bead_id": "review-control", "step_id": "independent-acceptance",
+                "step_ref": "review.control", "dependencies": ["implement"], "record_kinds": []})
+        return scope, CookedWriterMap(canonical_bytes(data))
+
+    def close_handoff(self, scope, writer_map):
+        self.store.execute(self.prepare("workspace", writer_map=writer_map))
+        grant = json.loads(self.port.rows["grant-row"]["metadata"]["gc.workspace_write_grant"])
+        for bead_id in ("writer-step-example", "implement-step", "review-step", "result-step"):
+            self.port.rows[bead_id]["status"] = "closed"
+        self.port.rows["close-step"].update(status="in_progress", assignee="worker")
+        return self.store.accept_replacement(Attempt("session-b", "incarnation-b", "close-step"), scope,
+            "grant-row", [], expected_grant=grant, writer_map=writer_map)
+
+    def test_successor_fences_winning_closed_path_without_traversed_dead_end(self):
+        scope, writer_map = self.branched_writer_chain()
+        prepared = self.close_handoff(scope, writer_map)
+        selected = {item["id"] for item in prepared.request["rows"]}
+        self.assertTrue({"writer-step-example", "implement-step", "review-step", "result-step", "close-step"} <= selected)
+        self.assertNotIn("z-dead", selected)
+        self.port.rows["z-dead"].update(status="open", revision="2")
+        untouched = copy.deepcopy(self.port.rows["z-dead"])
+        self.assertEqual("committed", self.store.execute(prepared)["outcome"])
+        self.assertEqual(untouched, self.port.rows["z-dead"])
+
+    def test_successor_fences_the_control_and_attempt_on_its_closed_path(self):
+        scope, writer_map = self.branched_writer_chain(paired=True)
+        prepared = self.close_handoff(scope, writer_map)
+        self.assertIn("review-control", {item["id"] for item in prepared.request["rows"]})
+        self.port.rows["review-control"]["status"] = "open"
         before = copy.deepcopy(self.port.rows)
         self.assertEqual("unknown", self.store.execute(prepared)["outcome"])
         self.assertEqual(before, self.port.rows)
-        self.assertTrue(all(r["require_change"] for r in prepared.request["rows"]))
 
     def test_same_member_handoff_requires_closed_declared_predecessor(self):
         scope, writer_map = self.native_writer_chain()

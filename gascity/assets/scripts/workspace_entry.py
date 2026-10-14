@@ -106,7 +106,7 @@ def allocate_run_placeholders(store, attempt, *, workflow_root_id: str, input_co
                               writer_map=None, writer_rows=None) -> dict[str, Any]:
     """Retain the source and each native create boundary before effects."""
     from workspace_requests import allocation_directory, require_resolved_scope
-    from workspace_store import transition_locks
+    from workspace_store import read_cooked_context, transition_locks
     from workspace_outputs import immutable_json
     from workspace_allocation import read_packet, writer_origin, admit_writer, allocate_roles
     scope = run_scope(workflow_root_id)
@@ -125,7 +125,7 @@ def allocate_run_placeholders(store, attempt, *, workflow_root_id: str, input_co
                 "retained allocation has no original cooked writer evidence; inspect " + str(path))
         if writer_rows is None and writer_map is not None:
             declared = writer_map.declaration
-            writer_rows = store.snapshot(list(dict.fromkeys([workflow_root_id, declared["source_member_id"],
+            writer_rows = read_cooked_context(store, list(dict.fromkeys([workflow_root_id, declared["source_member_id"],
                 declared["expansion_root_id"], *(step["bead_id"] for step in declared["steps"])])))
         admit_writer(store, attempt, scope, writer_map, writer_rows,
                      origin=original.get("origin") if original else None)

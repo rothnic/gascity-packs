@@ -36,6 +36,7 @@ CLAIM_NONCE_KEY = "gc.workspace_write_nonce"
 TRANSITION_NONCE_KEY = "gc.workspace_transition_nonce"
 CONTINUATION_KEY = "gc.workspace_run_continuation.v1"
 MAX_ROWS = 100
+MAX_COOKED_CONTEXT_ROWS = 4096
 TOPOLOGY = "gc.native_step_dependencies.v1"
 ROOT_KEYS = ("workflow_id", "molecule_id", "gc.root_bead_id")
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
@@ -302,6 +303,37 @@ def _formula_identity(root):
     return name, digest, source
 
 
+def merge_cooked_context(*snapshots):
+    """Join original read-only graph evidence without refreshing any row."""
+    rows = {}
+    for incoming in snapshots:
+        require(isinstance(incoming, dict), "cooked context requires exact original rows")
+        for bead_id, row in incoming.items():
+            require(isinstance(row, dict) and row.get("id") == bead_id,
+                    "cooked context has a different physical ID")
+            require(bead_id not in rows or canonical_bytes(rows[bead_id]) == canonical_bytes(row),
+                    "cooked context changed after its original snapshot")
+            rows[bead_id] = copy.deepcopy(row)
+        require(len(rows) <= MAX_COOKED_CONTEXT_ROWS, "cooked read context exceeds 4096 rows")
+    return rows
+
+
+def read_cooked_context(store, ids):
+    """Hydrate bounded graph evidence; each native snapshot remains at most 100 rows."""
+    require(isinstance(ids, (list, tuple)) and 1 <= len(ids) <= MAX_COOKED_CONTEXT_ROWS
+            and len(set(ids)) == len(ids), "cooked read context requires 1-4096 unique physical IDs")
+    for bead_id in ids:
+        _id(bead_id, "cooked context bead_id")
+    rows = {}
+    snapshot = getattr(store, "cooked_snapshot", store.snapshot)
+    for offset in range(0, len(ids), MAX_ROWS):
+        batch = ids[offset:offset + MAX_ROWS]
+        observed = snapshot(batch)
+        require(isinstance(observed, dict) and set(observed) == set(batch), "incomplete cooked context snapshot")
+        rows = merge_cooked_context(rows, observed)
+    return rows
+
+
 def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_root_id,
                               record_kind, claimed_step_id, read_only=False):
     require(type(read_only) is bool, "read_only requires an explicit boolean")
@@ -323,7 +355,7 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
             workflow_root_id=workflow_root_id, claimed_step_id=claimed_step_id)
         physical_root = binding["child_root_id"]
         require(data["source_member_id"] == binding["member_id"], "map differs from its inherited native source member")
-    require(isinstance(data["steps"], list) and 1 <= len(data["steps"]) <= MAX_ROWS,
+    require(isinstance(data["steps"], list) and 1 <= len(data["steps"]) <= MAX_COOKED_CONTEXT_ROWS,
             "native physical occurrence list is absent or oversized")
     require(data["expansion_root_id"] in snapshots and data["source_member_id"] in snapshots,
             "native expansion or source member is absent from the guarded operation")
@@ -365,12 +397,12 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
     for step_id, occurrences in semantic.items():
         if len(occurrences) == 1:
             continue
-        controls = [item for item in occurrences if snapshots[item["bead_id"]]["metadata"].get("gc.kind") == "retry"]
+        controls = [item for item in occurrences if snapshots[item["bead_id"]]["metadata"].get("gc.kind") in ("retry", "ralph")]
         attempts = [item for item in occurrences if snapshots[item["bead_id"]]["metadata"].get("gc.control_for") == step_id
-                    and snapshots[item["bead_id"]]["metadata"].get("gc.kind") != "retry"]
+                    and snapshots[item["bead_id"]]["metadata"].get("gc.kind") not in ("retry", "ralph")]
         require(len(occurrences) == 2 and len(controls) == len(attempts) == 1
                 and controls[0]["dependencies"] == attempts[0]["dependencies"],
-                "multiple semantic writer occurrences lack exact native retry lineage")
+                "multiple semantic writer occurrences lack exact native retry or iteration lineage")
     require(claimed_step_id in seen_ids, "claimed native step has no exact physical occurrence")
     if not (read_only and record_kind is None):
         require(record_kind in next(item["record_kinds"] for item in data["steps"]
@@ -771,6 +803,8 @@ class WorkspaceStore:
             raise StoreError("incomplete native snapshot")
         result = {}
         for bead_id, row in zip(ids, rows):
+            if isinstance(row, dict) and row.get("metadata", MISSING) is None:
+                row = dict(row, metadata={})
             required = {"id", "revision", "status", "assignee", "type", "labels", "metadata"}
             optional = {"close_reason", "closed_by_session"}
             if (not isinstance(row, dict) or not required <= set(row) or set(row) - required - optional
@@ -879,16 +913,16 @@ class WorkspaceStore:
                 and all(isinstance(item, dict) and "bead_id" in item for item in declaration["steps"])
                 and "expansion_root_id" in declaration and "source_member_id" in declaration,
                 "native occurrence map is incomplete")
-        map_ids = [declaration["expansion_root_id"], declaration["source_member_id"],
-                   *(item["bead_id"] for item in declaration["steps"])]
+        map_ids = [item["bead_id"] for item in declaration["steps"]]
+        binding_ids = [declaration["expansion_root_id"], declaration["source_member_id"]]
         if continuation is not None:
-            map_ids.extend(continuation.row_ids)
+            binding_ids.extend(continuation.row_ids)
         if previous_continuation is not None:
-            map_ids.extend(previous_continuation.row_ids)
-        for bead_id in map_ids:
+            binding_ids.extend(previous_continuation.row_ids)
+        for bead_id in [*map_ids, *binding_ids]:
             _id(bead_id, "writer map bead_id")
         ids = list(dict.fromkeys([authority_id, attempt.claimed_bead_id, root_id,
-                                 *map_ids,
+                                 *binding_ids,
                                  *(w.bead_id for w in writes), *(r.bead_id for r in references),
                                  *(g.bead_id for g in guards),
                                  *(p.workspace_bead_id for p in projections if isinstance(p, (NativeOwnerProjection, NativeWorktreeReference))),
@@ -900,12 +934,11 @@ class WorkspaceStore:
                                  *([expected_grant["attempt"]["claimed_bead_id"],
                                     expected_grant["writer_occurrence"]["expansion_root_id"]] if operation == "replace" else []),
                                  *([successor_relation.source_plan_bead_id, successor_relation.reference_bead_id] if successor_relation else [])]))
-        if len(ids) > MAX_ROWS:
-            raise StoreError("complete guarded request exceeds 100 physical rows; chunking is forbidden")
-        rows = self.snapshot(ids) if expected_rows is None else copy.deepcopy(expected_rows)
-        if not isinstance(rows, dict) or any(i not in rows or rows[i].get("id") != i for i in ids):
+        context_ids = list(dict.fromkeys([*ids, *map_ids]))
+        rows = read_cooked_context(self, context_ids) if expected_rows is None else merge_cooked_context(expected_rows)
+        if any(i not in rows or rows[i].get("id") != i for i in context_ids):
             raise StoreError("expected_rows must contain every exact original snapshot")
-        rows = {i: rows[i] for i in ids}
+        rows = {i: rows[i] for i in context_ids}
         claim = rows[attempt.claimed_bead_id]
         native = claim["metadata"]
         physical_root = root_id
@@ -951,6 +984,7 @@ class WorkspaceStore:
         authority = rows[authority_id]
         self._dedicated(authority)
         old_grant = _metadata_record(authority, GRANT_KEY)
+        predecessor_path = []
         scope_key = hashlib.sha256(canonical_bytes(scope)).hexdigest()
         index = _metadata_record(rows[root_id], GRANT_REFS_KEY)
         if index is None:
@@ -973,7 +1007,7 @@ class WorkspaceStore:
             else:
                 if old_grant != expected_grant:
                     raise StoreError("replacement requires the exact recorded predecessor grant")
-                self._successor(old_grant, attempt, scope, successor_relation, rows, declaration, map_sha256, continuation)
+                predecessor_path = self._successor(old_grant, attempt, scope, successor_relation, rows, declaration, map_sha256, continuation)
         if old_grant is not None and old_grant["operation_nonce"] == nonce:
             raise StoreError("a consumed operation nonce cannot be reused for a new transaction")
         grant = {"version": 1, "scope": scope, "authority_id": authority_id,
@@ -981,6 +1015,16 @@ class WorkspaceStore:
                  "writer_occurrence": {key: declaration[key] for key in
                     ("source_member_id", "expansion_root_id", "formula_name", "formula_hash", "formula_source")}}
         designated = next(item for item in declaration["steps"] if item["bead_id"] == attempt.claimed_bead_id)
+        paired_steps = {designated["step_id"]}
+        if operation == "replace":
+            previous = next((item for item in declaration["steps"]
+                             if item["bead_id"] == expected_grant["attempt"]["claimed_bead_id"]), None)
+            if previous is not None:
+                paired_steps.add(previous["step_id"])
+        ids = list(dict.fromkeys([*ids, *predecessor_path,
+            *(item["bead_id"] for item in declaration["steps"] if item["step_id"] in paired_steps)]))
+        require(len(ids) <= MAX_ROWS, "complete guarded request exceeds 100 physical rows; chunking is forbidden")
+        rows = {bead_id: rows[bead_id] for bead_id in ids}
         grant["writer_occurrence"].update({key: designated[key] for key in ("step_id", "step_ref")})
         if continuation is not None:
             grant["writer_occurrence"]["continuation"] = continuation.binding
@@ -1453,7 +1497,7 @@ class WorkspaceStore:
         if old.claimed_bead_id == attempt.claimed_bead_id:
             if grant["writer_map_sha256"] != map_sha256:
                 raise StoreError("same-step replacement cannot change its cooked writer designation")
-            return
+            return []
         if rows[old.claimed_bead_id]["status"] != "closed":
             raise StoreError("different-step replacement requires a closed native predecessor")
         previous = grant["writer_occurrence"]
@@ -1478,18 +1522,19 @@ class WorkspaceStore:
             semantic = {}
             for item in declaration["steps"]:
                 semantic.setdefault(item["step_id"], []).append(item)
-            pending, seen = list(after["dependencies"]), set()
+            pending, seen = [(step_id, []) for step_id in after["dependencies"]], set()
             while pending:
-                step_id = pending.pop()
+                step_id, path = pending.pop()
                 if step_id in seen:
                     continue
                 seen.add(step_id)
                 occurrences = semantic[step_id]
                 if any(rows[item["bead_id"]]["status"] != "closed" for item in occurrences):
                     continue
+                path = [*path, *(item["bead_id"] for item in occurrences)]
                 if step_id == before["step_id"]:
-                    return
-                pending.extend(occurrences[0]["dependencies"])
+                    return path
+                pending.extend((dependency, path) for dependency in occurrences[0]["dependencies"])
             raise StoreError("same-member replacement lacks a closed declared native predecessor path")
         if not isinstance(relation, SuccessorRelation):
             raise StoreError("different-step replacement requires a recorded source-plan successor relation")
@@ -1521,6 +1566,7 @@ class WorkspaceStore:
         if len(matches) != 1 or not any(a == before_member and b == after_member
                                         for a, b in zip(matches[0]["member_ids"], matches[0]["member_ids"][1:])):
             raise StoreError("replacement is not the declared immediate shared-chain successor")
+        return []
 
     def execute(self, prepared: PreparedWrite) -> dict:
         self._prepared(prepared)

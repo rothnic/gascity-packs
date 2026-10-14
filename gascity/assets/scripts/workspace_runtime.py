@@ -59,6 +59,15 @@ class _ReadFence:
         require(set(rows) == set(ids), "native snapshot did not return the exact requested rows")
         return self.retain(rows)
 
+    def cooked_snapshot(self, ids):
+        """Read graph context without treating every sibling as an operation guard."""
+        rows = self.store.snapshot(ids)
+        require(set(rows) == set(ids), "native snapshot did not return the exact requested rows")
+        require(all(key not in self.rows or canonical_bytes(self.rows[key]) == canonical_bytes(row)
+                    for key, row in rows.items()),
+                "native row changed after qualification during cooked readback")
+        return rows
+
     def read_record(self, kind, bead_id, identity=None, *, continuation=None):
         if kind == "workspace" and continuation is None:
             row = self.snapshot([bead_id])[bead_id]
@@ -140,11 +149,13 @@ class NativeSourceRuntime:
 
     def _writer_map(self, claimed_step_id, *, read_only=False, require_reference=True):
         continuation = self._occurrence_continuation(claimed_step_id, require_reference=require_reference)
-        writer_map, rows = read_cooked_writer_map(self._fence, workflow_root_id=self.run["workflow_root_id"],
+        writer_map, rows = read_cooked_writer_map(self.store, workflow_root_id=self.run["workflow_root_id"],
             claimed_step_id=claimed_step_id, read_only=read_only, continuation=continuation,
             continuation_rows=self.guard_rows if continuation is not None else None)
-        self._fence.retain(rows)
         declaration = writer_map.declaration
+        selected = {claimed_step_id, declaration["source_member_id"], declaration["expansion_root_id"]}
+        selected.update(key for key in rows if key in self._fence.rows)
+        self._fence.retain({key: rows[key] for key in selected})
         self._formula_sources[declaration["formula_source"]] = declaration["formula_hash"]
         return writer_map, rows
 
@@ -319,6 +330,9 @@ class NativeSourceRuntime:
                 "actual cooked roles lack the producer-review-recorder ordering")
         if recorder_step_id:
             require(roles["recorder"]["bead_id"] == recorder_step_id, "result writer is not its actual native recorder")
+        selected = {item["step_id"] for item in roles.values()}
+        self._fence.retain({item["bead_id"]: rows[item["bead_id"]] for item in entries
+                            if item["step_id"] in selected})
         return roles, writer_map
 
     def role_identities(self, recorder_step_id=None):

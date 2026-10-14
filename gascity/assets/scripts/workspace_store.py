@@ -1123,7 +1123,20 @@ class WorkspaceStore:
                     raise StoreError("same logical identity cannot adopt a different physical record")
                 if previous != value and (previous["kind"] != value["kind"] or previous["identity"][0] != root_id
                                           or previous["identity"][1] + 1 != scope["generation"]):
-                    raise StoreError("reference replacement requires the explicit next generation")
+                    prior = (_metadata_record(rows[previous["bead_id"]], contracts()["blocker"]["metadata_key"])
+                             if previous["bead_id"] in rows and reference.key == "gc.workspace_blocker_ref" else None)
+                    if prior is not None:
+                        self._dedicated(rows[previous["bead_id"]])
+                        validate_record("blocker", prior)
+                    blocked = [w for (kind, _), w in published.items() if kind == "workspace" and w["phase"] == "blocked"]
+                    require(prior is not None and previous["kind"] == value["kind"] == "blocker"
+                            and previous["identity"][:-1] == value["identity"][:-1]
+                            and previous["bead_id"] != value["bead_id"]
+                            and previous == record_reference("blocker", previous["bead_id"], prior)
+                            and prior["status"] == "resolved" and prior["resolution"] is not None
+                            and payload["status"] == "open" and len(blocked) == 1
+                            and blocked[0]["workspace_owner_id"] == reference.bead_id,
+                            "reference replacement requires the next generation or a new failure after its resolved blocker")
             put(reference.bead_id, reference.key, canonical_bytes(value).decode())
         policies = [p for p in projections if isinstance(p, RunCheckPolicyProjection)]
         runs = [(bead_id, payload) for (kind, bead_id), payload in published.items() if kind == "run"]

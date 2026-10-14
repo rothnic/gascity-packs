@@ -344,6 +344,10 @@ The city-scoped command `gc gc workspace` exposes the entry, dependency,
 checkout, runtime and flow helpers from the installed pack. Native qualifiers
 supply physical identities and frozen policy. Workers do not construct callbacks.
 
+For a blocked first preparation, use the dependency helper's
+[recovery decision](schemas/workspace/source-inputs.md#retry-first-preparation).
+The retry retains the captured source and recorded workspace layout.
+
 `build-base` is the virtual contract. `build-basic` is the concrete Gas City
 implementation that demonstrates the override surface without vendoring a
 third-party methodology.

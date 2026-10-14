@@ -336,6 +336,48 @@ class WorkspaceStoreTests(unittest.TestCase):
         replay = self.prepare("source-plan", install=False, projections=[projection])
         self.assertEqual("replayed", self.store.execute(replay)["outcome"])
 
+    def test_new_failure_can_replace_only_its_guarded_resolved_blocker(self):
+        scope, workspace, blocked, blocker, reference = self.workspace_block()
+        writer_map = self.writer_map(scope, self.attempt)
+        prepared = self.store.write_records(self.attempt, scope, "grant-row",
+            [RecordWrite("workspace", "payload-row", blocked), RecordWrite("blocker", "blocker-record", blocker)],
+            [reference], writer_map=writer_map)
+        self.store.execute(prepared)
+        self.port.rows["next-blocker"] = row("next-blocker")
+        next_blocker = dict(blocker, blocker_id="next-blocker")
+        next_reference = ReferenceWrite(workspace["workspace_owner_id"], "gc.workspace_blocker_ref",
+                                        record_reference("blocker", "next-blocker", next_blocker))
+        writes = [RecordWrite("workspace", "payload-row", blocked), RecordWrite("blocker", "next-blocker", next_blocker)]
+        guard = GuardRead("blocker-record", "gc.workspace_blocker", canonical_bytes(blocker).decode())
+        with self.assertRaisesRegex(StoreError, "resolved blocker"):
+            self.store.write_records(self.attempt, scope, "grant-row", writes, [next_reference],
+                                     guards=[guard], writer_map=writer_map)
+        resolved = dict(blocker, status="resolved", resolution={"decision_path": "/example/decision.json",
+            "decision_sha256": "0" * 64, "expected_head_oid": workspace["current_oid"]})
+        prepared = self.store.write_records(self.attempt, scope, "grant-row",
+            [RecordWrite("workspace", "payload-row", workspace), RecordWrite("blocker", "blocker-record", resolved)],
+            [reference], writer_map=writer_map)
+        self.assertEqual("committed", self.store.execute(prepared)["outcome"])
+        prior = self.port.rows["blocker-record"]["metadata"]["gc.workspace_blocker"]
+        guard = GuardRead("blocker-record", "gc.workspace_blocker", prior)
+        with self.assertRaisesRegex(StoreError, "resolved blocker"):
+            self.store.write_records(self.attempt, scope, "grant-row", writes, [next_reference], writer_map=writer_map)
+        with self.assertRaisesRegex(StoreError, "resolved blocker"):
+            self.store.write_records(self.attempt, scope, "grant-row", [writes[1]], [next_reference],
+                                     guards=[guard], writer_map=writer_map)
+        prepared = self.store.write_records(self.attempt, scope, "grant-row", writes, [next_reference],
+                                            guards=[guard], writer_map=writer_map)
+        self.port.rows["blocker-record"]["revision"] = str(int(self.port.rows["blocker-record"]["revision"]) + 1)
+        before = copy.deepcopy(self.port.rows)
+        self.assertEqual("unknown", self.store.execute(prepared)["outcome"])
+        self.assertEqual(before, self.port.rows)
+        prepared = self.store.write_records(self.attempt, scope, "grant-row", writes, [next_reference],
+                                            guards=[guard], writer_map=writer_map)
+        self.assertEqual("committed", self.store.execute(prepared)["outcome"])
+        self.assertEqual(prior, self.port.rows["blocker-record"]["metadata"]["gc.workspace_blocker"])
+        self.assertEqual(next_reference.value, json.loads(
+            self.port.rows[workspace["workspace_owner_id"]]["metadata"]["gc.workspace_blocker_ref"]))
+
     def test_source_membership_projection_refuses_conflicts_and_nonmember_rows(self):
         owner = self.samples["source-plan"]["source_plan_owner_id"]
         metadata = {"workflow_id": "run-example", "gc.root_store_ref": "rig:example"}

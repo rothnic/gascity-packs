@@ -250,6 +250,9 @@ original workflow or a verified native child.
   transfer writer authority together with the record update; stale attempts and
   active foreign writers are refused. See
   [record allocation and recovery](../assets/scripts/workspace_run.md#native-record-allocation).
+- **Blocked first preparation:** retry the original input through the dependency helper's
+  [explicit recovery decision](../schemas/workspace/source-inputs.md#retry-first-preparation).
+  The current native claim and recorded blocker must agree before provisioning.
 - **Lost replies:** resolve the original guarded write before further effects.
   Native record allocation can recover one exact match by its original unique
   description. An unavailable or ambiguous lookup blocks another creation.

@@ -265,12 +265,101 @@ def _integration_receipt(path, bundle, workspace):
     return receipt, reference
 
 
+def _recovery_decision(frozen, workspace, blocker, decision_path, artifact_root):
+    from workspace_outputs import artifact, read_artifact
+    reference = artifact(decision_path, artifact_root)
+    decision = read_artifact(reference, artifact_root)
+    exact = {key: workspace[key] for key in ('workflow_root_id', 'generation', 'source_plan_owner_id', 'workspace_owner_id')}
+    exact.update(store_ref=frozen.store.store_ref, blocker_id=blocker['blocker_id'])
+    require(set(decision) == set(exact) | {'expected_head_oid'}
+            and all(type(decision[key]) is type(value) and decision[key] == value for key, value in exact.items())
+            and isinstance(decision['expected_head_oid'], str)
+            and re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', decision['expected_head_oid']),
+            'recovery decision belongs to another exact source, blocker or commit')
+    resolution = dict(decision_path=reference['path'], decision_sha256=reference['sha256'],
+                      expected_head_oid=decision['expected_head_oid'])
+    if blocker['status'] == 'resolved':
+        require(blocker['resolution'] == resolution and workspace['current_oid'] == resolution['expected_head_oid'],
+                'partial recovery changed its recorded decision or HEAD')
+    return reference, resolution
+
+
+def _allocate_preparation_retry_blocker(frozen, workspace, scope, native_runtime):
+    from workspace_allocation import allocate_roles
+    from workspace_entry import allocate_placeholder
+    from workspace_run import native_json
+    reference = parse_record(frozen.metadata(workspace['workspace_owner_id'], 'gc.workspace_blocker_ref'))
+    blocker = frozen.read('blocker', workspace['workspace_owner_id'], 'gc.workspace_blocker_ref')
+    require(blocker['status'] == 'resolved', 'preparation retry requires its resolved blocker')
+    packet = dict(store=parse_record(frozen.store._binding().decode()), scope=scope,
+                  blocker_reference=reference, resolution=blocker['resolution'], input_oid=workspace['input_oid'])
+    ids, rows = allocate_roles(frozen.store, packet, prefix='prepare-retry-' + record_sha256(packet),
+        roles=(('blocker', 'Preparation retry blocker record', None),),
+        allocate=allocate_placeholder, native_read=native_json, admit=native_runtime.recheck_continuation)
+    frozen.merge(rows)
+    return ids['blocker']
+
+
+def _resume_preparation(frozen, attempt, workspace, bundle, *, decision_path, artifact_root,
+        run, gc, city_root, evidence_dir, parent, allow_external_parent, authority_id,
+        writer_map, plan_record_id, native_runtime, launch_step_ids, blocker_record_id=None, blocker_id=None):
+    from workspace_checkout import OWNERSHIP, WorkspaceCheckout, _step_binding
+    from workspace_outputs import read_artifact
+    require(workspace['phase'] in ('blocked', 'preparing') and workspace['native_provenance'] is None
+            and workspace['native_attempt_id'] is None and workspace['output_oid'] is None
+            and workspace['input_oid'] == workspace['current_oid'] == (bundle['input_oid'] or bundle['base_oid'])
+            and workspace['active_member_id'] == bundle['member_id']
+            and workspace['next_member_position'] == bundle['member_position']
+            and workspace['integration_inputs'] == (integration_inputs(bundle) if bundle['strategy'] == 'integration' else None),
+            'recovery requires the exact unfinished first preparation')
+    blocker = frozen.read('blocker', workspace['workspace_owner_id'], 'gc.workspace_blocker_ref')
+    record_id = parse_record(frozen.metadata(workspace['workspace_owner_id'], 'gc.workspace_blocker_ref'))['bead_id']
+    require(blocker_record_id in (None, record_id) and blocker_id in (None, blocker['blocker_id']),
+            'recovery names another recorded blocker')
+    expected = {key: workspace[key] for key in ('workflow_root_id', 'generation', 'source_plan_owner_id',
+                                                'workspace_owner_id', 'work_dir')}
+    expected.update(stage='prepare', blocked_from_phase='preparing', member_id=workspace['active_member_id'],
+        blocked_member_id=workspace['active_member_id'], blocked_member_position=workspace['next_member_position'],
+        blocked_current_oid=workspace['current_oid'], expected_input_oid=workspace['input_oid'], result_absent=True)
+    require(all(blocker[key] == value for key, value in expected.items())
+            and blocker['status'] == ('open' if workspace['phase'] == 'blocked' else 'resolved'),
+            'recorded blocker differs from the first preparation checkpoint')
+    reference, resolution = _recovery_decision(frozen, workspace, blocker, decision_path, artifact_root)
+    require(resolution['expected_head_oid'] == workspace['input_oid'], 'preparation recovery cannot change its recorded input')
+    native_runtime.admit_continuation(workspace, frozen.rows, attempt)
+    frozen.merge(native_runtime.guard_rows)
+    candidate = writer_checkpoint(dict(workspace, phase='preparing'), attempt)
+    checkout = WorkspaceCheckout(run, candidate, store_ref=frozen.store.store_ref, evidence_dir=str(evidence_dir),
+        parent=parent, allow_external_parent=allow_external_parent, gc=gc, city_root=city_root,
+        **checkout_context(writer_map, frozen.rows))
+    owner_keys = set(OWNERSHIP) | {'gc.worktree_placement', 'gc.root_bead_id', 'gc.root_store_ref'}
+    require(not owner_keys.intersection(frozen.rows[workspace['workspace_bead_id']]['metadata']),
+            'first preparation has an unexplained native owner projection')
+    observation = checkout.observe()
+    require(observation['head'] in (None, workspace['input_oid']), 'preparation recovery must preserve its exact input')
+    if observation['state'] == 'registered':
+        checkout._verified()
+    for step_id in launch_step_ids:
+        _step_binding(checkout, frozen.rows[step_id], require_reference=False)
+    native_runtime.recheck_continuation()
+    read_artifact(reference, artifact_root)
+    if workspace['phase'] == 'preparing':
+        return candidate, None
+    resolved = dict(blocker, writer_step_id=attempt.claimed_bead_id, status='resolved', resolution=resolution)
+    receipt = publish_checkpoint(frozen, attempt, candidate, authority_id=authority_id,
+        writer_map=writer_map, plan_record_id=plan_record_id, native_runtime=native_runtime,
+        extra_writes=[RecordWrite('blocker', record_id, resolved)],
+        extra_references=[ReferenceWrite(workspace['workspace_owner_id'], 'gc.workspace_blocker_ref',
+            record_reference('blocker', record_id, resolved))])
+    return candidate, receipt
+
+
 def _resume_integration(frozen, attempt, workspace, bundle, *, decision_path, artifact_root,
         run, gc, city_root, evidence_dir, parent, allow_external_parent, authority_id,
         writer_map, plan_record_id, native_runtime, launch_step_ids, blocker_record_id=None, blocker_id=None):
     from workspace_checkout import WorkspaceCheckout, _step_binding
     from workspace_inputs import inspect_integrated_history
-    from workspace_outputs import artifact, immutable_json, read_artifact
+    from workspace_outputs import immutable_json, read_artifact
 
     require(workspace['strategy'] == bundle['strategy'] == 'integration'
             and workspace['phase'] in ('blocked', 'entry')
@@ -297,20 +386,8 @@ def _resume_integration(frozen, attempt, workspace, bundle, *, decision_path, ar
     else:
         require(blocker['status'] == 'resolved' and blocker['resolution'] is not None,
                 'partial integration recovery requires its resolved blocker')
-    reference = artifact(decision_path, artifact_root)
-    decision = read_artifact(reference, artifact_root)
-    exact = {key: workspace[key] for key in ('workflow_root_id', 'generation', 'source_plan_owner_id', 'workspace_owner_id')}
-    exact.update(store_ref=frozen.store.store_ref, blocker_id=blocker['blocker_id'])
-    require(set(decision) == set(exact) | {'expected_head_oid'}
-            and all(type(decision[key]) is type(value) and decision[key] == value for key, value in exact.items())
-            and isinstance(decision['expected_head_oid'], str)
-            and re.fullmatch(r'(?:[0-9a-f]{40}|[0-9a-f]{64})', decision['expected_head_oid']),
-            'recovery decision belongs to another exact source, blocker or commit')
-    head = decision['expected_head_oid']
-    resolution = dict(decision_path=reference['path'], decision_sha256=reference['sha256'], expected_head_oid=head)
-    if blocker['status'] == 'resolved':
-        require(blocker['resolution'] == resolution and workspace['current_oid'] == head,
-                'partial recovery changed its recorded decision or HEAD')
+    reference, resolution = _recovery_decision(frozen, workspace, blocker, decision_path, artifact_root)
+    head = resolution['expected_head_oid']
     native_runtime.admit_continuation(workspace, frozen.rows, attempt)
     frozen.merge(native_runtime.guard_rows)
     # Verify the resolved source without mutating the blocked native record. The
@@ -508,7 +585,7 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
         if resume_decision is not None:
             require(all(existing[key] == bundle[key] for key in
                         ('workflow_root_id', 'generation', 'source_plan_owner_id', 'workspace_owner_id', 'strategy')),
-                    'integration recovery belongs to another source scope')
+                    'workspace recovery belongs to another source scope')
             workspace = existing
         else:
             workspace = select_checkpoint(existing, bundle, attempt)
@@ -547,7 +624,21 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
             return dict(continued, ok=True, input_oid=existing['input_oid'], authority_id=authority_id,
                 workspace_record_id=workspace_record_id, launch_step_ids=list(launch_step_ids),
                 integration_evidence=integration_evidence, receipts=[])
-    if resume_decision is not None:
+    receipts = []
+    if resume_decision is not None and workspace['native_provenance'] is None:
+        with transition_locks(store.common_git_dir, scope, store.timeout):
+            workspace, receipt = _resume_preparation(frozen, attempt, workspace, bundle,
+                decision_path=resume_decision, artifact_root=artifacts, run=run, gc=gc, city_root=city_root,
+                evidence_dir=directory, parent=parent, allow_external_parent=allow_external_parent,
+                authority_id=authority_id, writer_map=writer_map, plan_record_id=plan_record_id,
+                native_runtime=runtime, launch_step_ids=launch_step_ids,
+                blocker_record_id=blocker_record_id, blocker_id=blocker_id)
+            if receipt is not None:
+                receipts.append(receipt)
+            # A second failure retains the resolved blocker and its exact allocation intent.
+            blocker_record_id = _allocate_preparation_retry_blocker(frozen, workspace, scope, runtime)
+        blocker_id = blocker_record_id
+    elif resume_decision is not None:
         with transition_locks(store.common_git_dir, scope, store.timeout):
             workspace, integration_evidence, receipts = _resume_integration(frozen, attempt, workspace, bundle,
                 decision_path=resume_decision, artifact_root=artifacts, run=run, gc=gc, city_root=city_root,
@@ -563,7 +654,6 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
         blocker_record_id = allocate_placeholder(store, title='Integration blocker record', existing_id=blocker_record_id)
         blocker_id = blocker_id or blocker_record_id
         frozen.ensure([blocker_record_id])
-    receipts = []
     with transition_locks(store.common_git_dir, scope, store.timeout):
         try:
             receipts.append(publish_checkpoint(frozen, attempt, workspace, authority_id=authority_id,

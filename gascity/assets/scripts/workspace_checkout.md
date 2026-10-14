@@ -136,8 +136,10 @@ Provide both blocker IDs to write a dedicated open blocker and mark the workspac
 blocked under the current owner grant. The physical blocker row must already
 exist as a dedicated nondispatch allocation. A stale/unavailable grant cannot
 write a blocker, so private diagnostic evidence also survives independently.
-Blocked or unsupported phases require an explicit recovery decision outside this
-helper; they cannot silently resume.
+Use the [dependency preparation interface](../../schemas/workspace/source-inputs.md#retry-first-preparation)
+with `--resume-decision` for a blocked first preparation.
+The low-level `recover` action handles declared partial checkpoints and results.
+Unsupported phases remain blocked with their diagnostic evidence.
 
 ## CLI
 

@@ -2089,7 +2089,7 @@
     "gascity/assets/scripts/workspace_store.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "4c158eea04c78cc495e9eb1170132c2990f9bed997df6b2807f0a9c94388321d"
+      "sha256": "114cf252ca8b0195c4e0f6d046c3392030281aa69701b8aa245ccc8a0108fb06"
     },
     "gascity/assets/scripts/workspace_entry.py": {
       "classification": "new",
@@ -2159,7 +2159,7 @@
     "gascity/assets/scripts/workspace_dependency.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "31c817ac29e93357b1a369ab4a11a6fd466ffe9758081b2a1bbd7761814441ad"
+      "sha256": "9ff7e30612da8929f012c84476bdf08d3dbbaa04bc63889e1e76758cb338cfd8"
     },
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",

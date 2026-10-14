@@ -133,6 +133,10 @@ retains the checkpoint.
 Resume requires the guarded blocker reference, a resolved decision and its exact
 paused phase and member. The resumed HEAD must match the recorded decision.
 
+Another failure can create a new dedicated blocker after the previous blocker was resolved.
+The transaction guards the resolved record and publishes the new open blocker with its blocked workspace.
+Previous blocker observations and decisions remain unchanged.
+
 Grants retain the cooked map hash and the original physical writer occurrence.
 Grant replacement supports these cases:
 

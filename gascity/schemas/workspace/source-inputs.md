@@ -32,7 +32,7 @@ Optional settings control placement and native record reuse:
 | `--allow-external-parent` | Permit an explicitly configured parent outside the normal rig layout. |
 | `--work-branch` | Create an attached worktree on this branch. Omission uses a detached worktree. |
 | `--workspace-record-id`, `--authority-id` | Reuse exact known native allocations after validating their state. First entry can allocate these automatically. |
-| `--resume-decision` | Resume the recorded integration blocker using an explicit decision file. |
+| `--resume-decision` | Retry the recorded first preparation or resume an integration blocker with an explicit decision file. |
 
 First preparation qualifies accepted sources before allocating native records or creating the worktree.
 The guarded write publishes the initial workspace and owner authority together.
@@ -119,6 +119,51 @@ Project checks and independent review qualify the final member output.
 The merge receipt binds the plan base, merged input and ordered predecessor hashes.
 Dependent preparation checks the receipt against the retained predecessor output records.
 
+## Recovery decisions
+
+Save the recovery decision outside the repository, under the configured artifact root:
+
+```json
+{
+  "workflow_root_id": "ROOT_ID",
+  "generation": 1,
+  "source_plan_owner_id": "PLAN_OWNER_ID",
+  "workspace_owner_id": "OWNER_ID",
+  "store_ref": "rig:project",
+  "blocker_id": "RECORDED_BLOCKER_ID",
+  "expected_head_oid": "FULL_COMMIT_OID"
+}
+```
+
+Use the recorded blocker and source identities.
+The recovery procedure below determines the required commit.
+
+## Retry first preparation
+
+A failed first preparation can record a blocker while the checkout remains absent.
+The workspace retains its original input, owner, member and layout.
+Ordinary preparation refuses the blocked workspace.
+
+To retry under the current native claim:
+
+1. Inspect the recorded blocker and diagnostic evidence. Release the conflicting lock through its owner.
+2. Save a [recovery decision](#recovery-decisions).
+   Set `expected_head_oid` to the workspace's recorded `input_oid`, including when the checkout is absent.
+3. Repeat the preparation command with `--resume-decision /path/to/artifacts/decision.json`.
+
+The helper validates the original source, current claim and exact blocker before any write.
+An existing checkout must remain clean at the recorded input with matching native provenance.
+The guarded transaction resolves the blocker and restores the original preparation checkpoint.
+Native provisioning then retries with the same path and input.
+The retry grants no result acceptance.
+
+Another failure records a new blocker while the previous observation and decision remain intact.
+Use the new blocker ID in a new decision for that failure.
+An interrupted checkpoint restoration requires the original decision path and bytes.
+If creating the retry's blocker loses its reply, the retained allocation journal
+finds that exact native record on the next retry. An absent or ambiguous lookup
+refuses recovery without creating another record.
+
 ## Recover a failed integration
 
 A merge conflict retains the files, index and Git merge state.
@@ -129,20 +174,7 @@ Under the same admitted native ownership:
 
 1. Inspect the retained blocker and accepted source order.
 2. Resolve the conflict and complete the Git merge. Leave the checkout clean.
-3. Save an explicit decision outside the repository, under the configured artifact root:
-
-   ```json
-   {
-     "workflow_root_id": "ROOT_ID",
-     "generation": 1,
-     "source_plan_owner_id": "PLAN_OWNER_ID",
-     "workspace_owner_id": "OWNER_ID",
-     "store_ref": "rig:project",
-     "blocker_id": "RECORDED_BLOCKER_ID",
-     "expected_head_oid": "FULL_RESOLVED_COMMIT_OID"
-   }
-   ```
-
+3. Save a [recovery decision](#recovery-decisions) with `expected_head_oid` set to the completed merge commit.
 4. Repeat the preparation command with `--resume-decision /path/to/artifacts/decision.json`.
 
 Recovery verifies the exact decision, original native owner and ordered merge parents.

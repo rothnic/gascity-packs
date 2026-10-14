@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import fcntl
 import importlib.util
 import json
 import os
@@ -177,8 +178,14 @@ if 'create' in args and 'bd' in args:
     data['allocation_number'] = number
     key = 'native-allocation-' + str(number)
     rows[key] = dict(id=key, revision='1', status='closed', assignee='', type='task', labels=[], metadata={})
+    data.setdefault('allocation_details', {})[key] = dict(title=args[args.index('create') + 1], description=option('description'))
     state_path.write_text(json.dumps(data))
+    if data.get('lose_allocation_ack_at') == number:
+        sys.exit('native protocol fixture: create committed but acknowledgement lost')
     emit(rows[key])
+if 'show' in args and 'bd' in args:
+    key = args[args.index('show') + 1]
+    emit([{**data['stores']['rig:fixture'][key], **data['allocation_details'][key]}])
 if 'worktree' in args:
     action = args[args.index('worktree') + 1]
     if '--help' in args:
@@ -203,6 +210,8 @@ if 'worktree' in args:
             lifecycle=option('lifecycle'), created_at=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'), attempt_id='native-' + option('bead'))
         data.setdefault('provenances', {})[str(path)] = provenance
         state_path.write_text(json.dumps(data))
+        if data.get('lose_first_ensure_ack'):
+            sys.exit('native protocol fixture: provisioned worktree but acknowledgement lost')
     else:
         provenance = data.get('provenances', {}).get(str(path), data['provenance'])
     head = subprocess.check_output(['git', '-C', str(path), 'rev-parse', 'HEAD'], text=True).strip()
@@ -224,6 +233,14 @@ class DependencyNativeCompositionTests(unittest.TestCase):
             "        request = json.loads(pathlib.Path(option('request')).read_text())\n",
             "        request = json.loads(pathlib.Path(option('request')).read_text())\n"
             "        data.setdefault('requests', []).append(copy.deepcopy(request))\n")
+        self.port_source = self.port_source.replace("    key, value = option('metadata-field').split('=', 1)\n", """    if option('desc-contains'):
+        if 'allocation_lookup_response' in data: emit(data['allocation_lookup_response'])
+        value = option('desc-contains')
+        emit([{**data['stores']['rig:fixture'][key], **details}
+              for key, details in data.get('allocation_details', {}).items()
+              if value in (details.get('description') or '')][:2])
+    key, value = option('metadata-field').split('=', 1)
+""")
 
     def prepare_fixture(self, *, integration=False, conflict=False, shared=False):
         from workspace_records import canonical_bytes, contracts, record_sha256
@@ -704,6 +721,288 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         self.assertEqual(head,receipt['output_oid'])
         self.assertEqual(2,len(receipt['merge_oids']))
         self.assertFalse(Path(f.git(work,'rev-parse','--git-path','MERGE_HEAD')).exists())
+
+    def block_initial_prepare(self, *, shared=False, integration=False, child=False):
+        self.prepare_fixture(shared=shared, integration=integration)
+        f = self.fixture
+        if child:
+            f.native_child('child-C', 'C', roles=('prepare-C', 'producer-C', 'reviewer-C', 'recorder-C'),
+                           expansion='expansion-C', published=False)
+        f.rows['prepare-blocker'] = f.row('prepare-blocker', status='closed', scoped=False)
+        f.save()
+        state = self.state()
+        state['provenances'] = self.provenances
+        lock = f.diagnostics / 'prepare.lock'
+        state['prepare_lock_path'] = str(lock)
+        (f.root / 'port.json').write_text(json.dumps(state))
+        port = self.port_source.replace("    created = False\n", """    created = False
+    if action == 'ensure' and data.get('prepare_lock_path'):
+        import fcntl
+        with open(data['prepare_lock_path'], 'a') as handle:
+            try:
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                sys.exit('native protocol fixture: worktree lock timeout')
+""")
+        f.port.write_text(port)
+        with lock.open('a') as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            with self.assertRaisesRegex(self.helper.RecordError, 'ensure failed'):
+                options = dict(workflow_root_id='child-C', input_convoy_id='child-C-unit') if child else {}
+                self.prepare(blocker_record_id='prepare-blocker', blocker_id='prepare-blocker', **options)
+        rows = self.state()['stores']['rig:fixture']
+        ref = json.loads(rows['C']['metadata']['gc.workspace_ref'])
+        workspace = json.loads(rows[ref['bead_id']]['metadata']['gc.workspace'])
+        blocker = json.loads(rows['prepare-blocker']['metadata']['gc.workspace_blocker'])
+        self.assertEqual('blocked', workspace['phase'])
+        self.assertEqual('preparing', blocker['blocked_from_phase'])
+        self.assertEqual('prepare', blocker['stage'])
+        self.assertFalse(Path(workspace['work_dir']).exists())
+        self.assertIsNone(workspace['native_provenance'])
+        decision = {key: workspace[key] for key in
+                    ('workflow_root_id', 'generation', 'source_plan_owner_id', 'workspace_owner_id')}
+        decision.update(store_ref='rig:fixture', blocker_id='prepare-blocker',
+                        expected_head_oid=workspace['input_oid'])
+        path = f.artifacts / 'retry-prepare.json'
+        path.write_text(json.dumps(decision))
+        return workspace, blocker, path
+
+    def test_blocked_first_prepare_retries_exact_input_without_recapturing_source(self):
+        workspace, blocker, decision = self.block_initial_prepare()
+        f = self.fixture
+        before = self.state()['stores']['rig:fixture']
+        result = self.prepare(resume_decision=str(decision))
+        after = self.state()['stores']['rig:fixture']
+        self.assertEqual('active', result['workspace']['phase'])
+        self.assertEqual(workspace['input_oid'], result['input_oid'])
+        for key in ('work_dir', 'workspace_bead_id', 'strategy', 'layout', 'active_member_id'):
+            self.assertEqual(workspace[key], result['workspace'][key])
+        from workspace_store import TRANSITION_NONCE_KEY
+        for row_id in ('run-record', 'plan-record'):
+            unchanged = []
+            for rows in (before, after):
+                record = copy.deepcopy(rows[row_id])
+                record.pop('revision')
+                record['metadata'].pop(TRANSITION_NONCE_KEY)
+                unchanged.append(record)
+            self.assertEqual(*unchanged)
+            self.assertGreater(int(after[row_id]['revision']), int(before[row_id]['revision']))
+            change = next(item for item in self.state()['requests'][-1]['rows'] if item['id'] == row_id)
+            self.assertEqual(change['set'][TRANSITION_NONCE_KEY], after[row_id]['metadata'][TRANSITION_NONCE_KEY])
+        resolved = json.loads(after['prepare-blocker']['metadata']['gc.workspace_blocker'])
+        self.assertEqual('resolved', resolved['status'])
+        self.assertEqual(workspace['input_oid'], resolved['resolution']['expected_head_oid'])
+        self.assertIsNone(result['workspace']['output_oid'])
+        self.assertEqual(workspace['input_oid'], f.git(result['path'], 'rev-parse', 'HEAD'))
+
+    def test_blocked_first_prepare_requires_explicit_exact_decision_before_effects(self):
+        workspace, _, path = self.block_initial_prepare()
+        before = self.state()
+        with self.assertRaisesRegex(self.helper.RecordError, 'workspace is blocked'):
+            self.prepare()
+        self.assertEqual(before, self.state())
+        decision = json.loads(path.read_text())
+        for key, value in (('generation', True), ('workspace_owner_id', 'foreign'),
+                           ('store_ref', 'rig:foreign'), ('blocker_id', 'foreign'),
+                           ('expected_head_oid', self.fixture.base)):
+            with self.subTest(key=key):
+                path.write_text(json.dumps(dict(decision, **{key: value})))
+                with self.assertRaises(self.helper.RecordError):
+                    self.prepare(resume_decision=str(path))
+                self.assertEqual(before, self.state())
+                self.assertFalse(Path(workspace['work_dir']).exists())
+
+    def test_blocked_first_prepare_refuses_stale_native_claim_and_foreign_path(self):
+        workspace, _, decision = self.block_initial_prepare()
+        before = self.state()
+        with patch.dict(os.environ, {'GC_INSTANCE_TOKEN': 'stale-private-instance'}):
+            with self.assertRaises(self.helper.RecordError):
+                self.prepare(resume_decision=str(decision))
+        self.assertEqual(before, self.state())
+        work = Path(workspace['work_dir'])
+        work.mkdir()
+        (work / 'foreign.txt').write_text('preserve foreign work\n')
+        with self.assertRaisesRegex(self.helper.RecordError, 'registration'):
+            self.prepare(resume_decision=str(decision))
+        self.assertEqual(before, self.state())
+        self.assertEqual('preserve foreign work\n', (work / 'foreign.txt').read_text())
+
+    def test_blocked_first_shared_prepare_keeps_original_chain_owner_and_member(self):
+        workspace, _, decision = self.block_initial_prepare(shared=True)
+        result = self.prepare(resume_decision=str(decision))
+        self.assertEqual('shared-chain', result['workspace']['strategy'])
+        self.assertEqual(workspace['active_member_id'], result['workspace']['active_member_id'])
+        self.assertEqual(workspace['next_member_position'], result['workspace']['next_member_position'])
+        self.assertEqual(workspace['workspace_owner_id'], result['workspace']['workspace_owner_id'])
+        self.assertEqual(workspace['input_oid'], result['input_oid'])
+
+    def test_blocked_first_native_child_prepare_keeps_inherited_source_and_physical_owner(self):
+        workspace, _, decision = self.block_initial_prepare(child=True)
+        result = self.prepare(resume_decision=str(decision), workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        rows = self.state()['stores']['rig:fixture']
+        self.assertEqual('root', result['workspace']['workflow_root_id'])
+        self.assertEqual('child-C', rows[workspace['workspace_bead_id']]['metadata']['gc.root_bead_id'])
+        for step in result['launch_step_ids']:
+            self.assertEqual('child-C', json.loads(rows[step]['metadata']['gc.worktree_ref'])['workflow_root_id'])
+
+    def test_blocked_first_integration_prepare_merges_only_after_retry_is_admitted(self):
+        workspace, _, decision = self.block_initial_prepare(integration=True)
+        result = self.prepare(resume_decision=str(decision))
+        self.assertEqual(self.fixture.base, workspace['input_oid'])
+        self.assertNotEqual(workspace['input_oid'], result['input_oid'])
+        self.assertEqual(workspace['integration_inputs'], result['workspace']['integration_inputs'])
+        self.assertEqual('FLAG = 7\n', (Path(result['path']) / 'other.py').read_text())
+        self.assertIsNone(result['workspace']['output_oid'])
+
+    def test_interrupted_first_prepare_resolution_reuses_the_original_decision(self):
+        workspace, _, decision = self.block_initial_prepare()
+        publish = self.helper.publish_checkpoint
+        def interrupt(*args, **kwargs):
+            result = publish(*args, **kwargs)
+            if kwargs.get('extra_writes'):
+                raise self.helper.RecordError('fixture: interrupted after resolved preparation checkpoint')
+            return result
+        with patch.object(self.helper, 'publish_checkpoint', side_effect=interrupt):
+            with self.assertRaisesRegex(self.helper.RecordError, 'interrupted'):
+                self.prepare(resume_decision=str(decision))
+        before = self.state()['stores']['rig:fixture']
+        restored = json.loads(before[workspace['workspace_bead_id']]['metadata']['gc.workspace'])
+        self.assertEqual('preparing', restored['phase'])
+        other = self.fixture.artifacts / 'other-decision.json'
+        other.write_bytes(decision.read_bytes())
+        with self.assertRaisesRegex(self.helper.RecordError, 'changed its recorded decision'):
+            self.prepare(resume_decision=str(other))
+        result = self.prepare(resume_decision=str(decision))
+        after = self.state()['stores']['rig:fixture']
+        self.assertEqual('active', result['workspace']['phase'])
+        self.assertEqual(before['prepare-blocker']['metadata']['gc.workspace_blocker'],
+                         after['prepare-blocker']['metadata']['gc.workspace_blocker'])
+
+    def test_second_prepare_timeout_keeps_prior_resolution_and_records_a_new_blocker(self):
+        workspace, _, decision = self.block_initial_prepare()
+        f = self.fixture
+        with (f.diagnostics / 'prepare.lock').open('a') as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            with self.assertRaisesRegex(self.helper.RecordError, 'ensure failed'):
+                self.prepare(resume_decision=str(decision))
+        rows = self.state()['stores']['rig:fixture']
+        prior = copy.deepcopy(rows['prepare-blocker'])
+        self.assertEqual('resolved', json.loads(prior['metadata']['gc.workspace_blocker'])['status'])
+        ref = json.loads(rows['C']['metadata']['gc.workspace_blocker_ref'])
+        self.assertNotEqual('prepare-blocker', ref['bead_id'])
+        next_blocker = json.loads(rows[ref['bead_id']]['metadata']['gc.workspace_blocker'])
+        self.assertEqual('open', next_blocker['status'])
+        self.assertEqual('blocked', json.loads(rows[workspace['workspace_bead_id']]['metadata']['gc.workspace'])['phase'])
+        before = self.state()
+        with self.assertRaises(self.helper.RecordError):
+            self.prepare(resume_decision=str(decision))
+        self.assertEqual(before, self.state())
+        payload = json.loads(decision.read_text())
+        payload['blocker_id'] = next_blocker['blocker_id']
+        next_decision = f.artifacts / 'retry-next-prepare.json'
+        next_decision.write_text(json.dumps(payload))
+        result = self.prepare(resume_decision=str(next_decision))
+        self.assertEqual('active', result['workspace']['phase'])
+        self.assertEqual(prior['metadata']['gc.workspace_blocker'],
+                         self.state()['stores']['rig:fixture']['prepare-blocker']['metadata']['gc.workspace_blocker'])
+
+    def test_blocked_registered_first_prepare_verifies_original_provisioning_without_another_ensure(self):
+        self.prepare_fixture()
+        f = self.fixture
+        f.rows['prepare-blocker'] = f.row('prepare-blocker', status='closed', scoped=False)
+        f.save()
+        state = self.state()
+        state.update(provenances=self.provenances, lose_first_ensure_ack=True)
+        (f.root / 'port.json').write_text(json.dumps(state))
+        with self.assertRaisesRegex(self.helper.RecordError, 'ensure failed'):
+            self.prepare(blocker_record_id='prepare-blocker', blocker_id='prepare-blocker')
+        before = self.state()
+        rows = before['stores']['rig:fixture']
+        ref = json.loads(rows['C']['metadata']['gc.workspace_ref'])
+        workspace = json.loads(rows[ref['bead_id']]['metadata']['gc.workspace'])
+        work = Path(workspace['work_dir'])
+        original_provenance = before['provenances'][str(work)]
+        self.assertEqual('blocked', workspace['phase'])
+        self.assertIsNone(workspace['native_provenance'])
+        self.assertEqual(workspace['input_oid'], f.git(work, 'rev-parse', 'HEAD'))
+        decision = {key: workspace[key] for key in
+                    ('workflow_root_id', 'generation', 'source_plan_owner_id', 'workspace_owner_id')}
+        decision.update(store_ref='rig:fixture', blocker_id='prepare-blocker', expected_head_oid=workspace['input_oid'])
+        path = f.artifacts / 'registered-prepare-recovery.json'
+        path.write_text(json.dumps(decision))
+        note = work / 'notes.txt'
+        note.write_text('preserve unfinished work\n')
+        with self.assertRaises(self.helper.RecordError):
+            self.prepare(resume_decision=str(path))
+        self.assertEqual(before, self.state())
+        self.assertEqual('preserve unfinished work\n', note.read_text())
+        note.unlink()
+        result = self.prepare(resume_decision=str(path))
+        self.assertEqual('active', result['workspace']['phase'])
+        self.assertEqual(original_provenance, result['workspace']['native_provenance'])
+        self.assertEqual(original_provenance['attempt_id'], result['workspace']['native_attempt_id'])
+        self.assertEqual(workspace['input_oid'], result['input_oid'])
+        self.assertIsNone(result['workspace']['output_oid'])
+        commands = [json.loads(line) for line in (f.root / 'port.commands').read_text().splitlines()]
+        self.assertEqual(1, sum('worktree' in command and 'ensure' in command and '--help' not in command
+                                for command in commands))
+
+    def test_uncertain_retry_blocker_allocation_recovers_exact_native_id_in_fresh_process(self):
+        from workspace_requests import allocation_directory
+        workspace, _, decision = self.block_initial_prepare()
+        f = self.fixture
+        state = self.state()
+        number = state['allocation_number'] + 1
+        state['lose_allocation_ack_at'] = number
+        (f.root / 'port.json').write_text(json.dumps(state))
+        with self.assertRaisesRegex(self.helper.RecordError, 'blocker allocation unresolved'):
+            self.prepare(resume_decision=str(decision))
+        pending = next(allocation_directory(f.store).glob('prepare-retry-*.blocker.pending.json'))
+        pending_bytes = pending.read_bytes()
+        state = self.state()
+        key = 'native-allocation-' + str(number)
+        row = {**state['stores']['rig:fixture'][key], **state['allocation_details'][key]}
+        prior = state['stores']['rig:fixture']['prepare-blocker']['metadata']['gc.workspace_blocker']
+        self.assertEqual('resolved', json.loads(prior)['status'])
+        self.assertEqual('preparing', json.loads(state['stores']['rig:fixture'][workspace['workspace_bead_id']]['metadata']['gc.workspace'])['phase'])
+        command = [sys.executable, '-B', str(SCRIPTS / 'workspace_dependency.py'),
+            '--store-ref', 'rig:fixture', '--city-root', str(f.city), '--gc', str(f.port),
+            '--rig-name', 'fixture', '--workflow-root-id', 'root', '--input-convoy-id', 'convoy',
+            '--generation', '1', '--workspace-owner-id', 'C', '--member-id', 'C',
+            '--claimed-step-id', 'prepare-C', '--artifact-root', str(f.artifacts),
+            '--evidence-dir', str(f.diagnostics), '--parent', str(f.work.parent),
+            '--allow-external-parent', '--worktree-lifecycle', 'new', '--resume-decision', str(decision)]
+        environment = dict(os.environ, PYTHONPATH=str(SCRIPTS))
+        for response in ([], [row, row], row, None, [dict(row, title='foreign')],
+                         [dict(row, description='foreign')], [dict(row, id='')]):
+            with self.subTest(response=response):
+                current = self.state()
+                current['allocation_lookup_response'] = response
+                (f.root / 'port.json').write_text(json.dumps(current))
+                result = subprocess.run(command, text=True, capture_output=True, env=environment, timeout=120)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn('no known physical ID', result.stderr)
+                self.assertEqual(current, self.state())
+                self.assertEqual(pending_bytes, pending.read_bytes())
+                self.assertFalse(Path(workspace['work_dir']).exists())
+        current = self.state()
+        current.pop('allocation_lookup_response')
+        (f.root / 'port.json').write_text(json.dumps(current))
+        result = subprocess.run(command, text=True, capture_output=True, env=environment, timeout=120)
+        self.assertEqual(0, result.returncode, result.stderr)
+        recovered = json.loads(result.stdout)
+        self.assertEqual('active', recovered['workspace']['phase'])
+        self.assertEqual(workspace['input_oid'], recovered['input_oid'])
+        self.assertEqual(number, self.state()['allocation_number'])
+        self.assertEqual(pending_bytes, pending.read_bytes())
+        self.assertEqual(key, json.loads(pending.with_name(pending.name.replace('.pending', '')).read_text())['bead_id'])
+        self.assertEqual(prior, self.state()['stores']['rig:fixture']['prepare-blocker']['metadata']['gc.workspace_blocker'])
+        commands = [json.loads(line) for line in (f.root / 'port.commands').read_text().splitlines()]
+        queries = [command for command in commands if '--desc-contains' in command]
+        self.assertEqual(8, len(queries))
+        for query in queries:
+            self.assertTrue(all(flag in query for flag in ('--all', '--json', '--readonly')))
+            self.assertEqual('2', query[query.index('--limit') + 1])
 
 
 class HistoricalNativeConsumerTests(unittest.TestCase):

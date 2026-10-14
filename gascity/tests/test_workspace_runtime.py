@@ -884,12 +884,13 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertNotEqual(refused.returncode, 0)
         self.assertIn(str(request_path), refused.stderr)
         resolver = """import json,sys
+sys.path.insert(0,sys.argv.pop(1))
 from workspace_store import WorkspaceStore
 from workspace_requests import resolve_request
 store=WorkspaceStore('rig:fixture',gc=sys.argv[1],cwd=sys.argv[2],common_git_dir=sys.argv[3])
 print(json.dumps(resolve_request(store,sys.argv[4])))
 """
-        resolved = subprocess.run([sys.executable, "-B", "-c", resolver, str(self.port), str(self.city),
+        resolved = subprocess.run([sys.executable, "-B", "-c", resolver, str(SCRIPTS), str(self.port), str(self.city),
             str(self.repo / ".git"), str(request_path)], text=True, capture_output=True, timeout=30)
         self.assertEqual(resolved.returncode, 0, resolved.stderr)
         receipt = json.loads(resolved.stdout)

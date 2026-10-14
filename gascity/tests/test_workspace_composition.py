@@ -266,8 +266,8 @@ if 'bd' in args and 'list' in args and '--desc-contains' in args:
         with self.assertRaises(RecordError):
             require_resolved_scope(f.store, scope)
         commands_before = (f.root / "port.commands").read_text().splitlines()
-        script = "from workspace_store import WorkspaceStore; from workspace_requests import resolve_request; import json,sys; store=WorkspaceStore(sys.argv[1],gc=sys.argv[2],cwd=sys.argv[3]); print(json.dumps(resolve_request(store,sys.argv[4])))"
-        resolved = subprocess.run([sys.executable, "-B", "-c", script, f.store.store_ref,
+        script = "import json,sys; sys.path.insert(0,sys.argv.pop(1)); from workspace_store import WorkspaceStore; from workspace_requests import resolve_request; store=WorkspaceStore(sys.argv[1],gc=sys.argv[2],cwd=sys.argv[3]); print(json.dumps(resolve_request(store,sys.argv[4])))"
+        resolved = subprocess.run([sys.executable, "-B", "-c", script, str(REPO / "gascity/assets/scripts"), f.store.store_ref,
             str(f.port), f.store.cwd, str(path)], capture_output=True, text=True, timeout=15)
         self.assertEqual(resolved.returncode, 0, resolved.stderr)
         self.assertEqual(json.loads(resolved.stdout)["outcome"], "committed")

@@ -1394,7 +1394,7 @@ class FormulaAssetTests(unittest.TestCase):
                 self.assertNotIn("catalog", data)
                 self.assertNotIn("extends", data)
                 self.assertEqual(data["target_required"], expected["target_required"])
-                self.assertEqual(set(data.get("vars", {})), expected["vars"] | ({"worktree_lifecycle", "worktree_base_ref", "worktree_checks"} if name in {"code-review-base", "fix-loop-base"} else set()))
+                self.assertEqual(set(data.get("vars", {})), expected["vars"] | ({"worktree_lifecycle", "worktree_base_ref", "worktree_checks", "worktree_parent", "worktree_name_prefix", "worktree_allow_external_parent"} if name in {"code-review-base", "fix-loop-base"} else set()))
                 self.assertEqual([step["id"] for step in data["steps"]], expected["steps"])
                 if "mode" in expected:
                     self.assertEqual(data["mode"], expected["mode"])
@@ -3892,7 +3892,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(route_by_step["finalize"], "gc.run-operator")
 
         design_review = load_formula(root, "github-issue-fix-design-review-work")
-        self.assertEqual(set(design_review.get("vars", {})), {"mode", "worktree_lifecycle", "worktree_base_ref", "worktree_checks"})
+        self.assertEqual(set(design_review.get("vars", {})), {"mode", "worktree_lifecycle", "worktree_base_ref", "worktree_checks", "worktree_parent", "worktree_name_prefix", "worktree_allow_external_parent"})
         design_review_text = effective_formula_text(root, "github-issue-fix-design-review-work")
         for target in (
             "gc.run-operator",
@@ -3970,7 +3970,7 @@ class FormulaAssetTests(unittest.TestCase):
                 self.assertEqual(data["contract"], "graph.v2")
                 self.assertFalse(data["target_required"])
                 self.assertTrue(data["vars"][url_var]["required"])
-                self.assertEqual(set(data["vars"]) - {url_var}, optional_vars | ({"worktree_base_ref", "worktree_checks"} if name == "github-issue-fix" else set()))
+                self.assertEqual(set(data["vars"]) - {url_var}, optional_vars | ({"worktree_base_ref", "worktree_checks", "worktree_parent", "worktree_name_prefix", "worktree_allow_external_parent"} if name == "github-issue-fix" else set()))
                 text = effective_formula_text(root, name)
                 self.assertIn("{{pack_root}}/assets/scripts/github_api.py", text)
                 self.assertNotIn("{{pack_root}}" + "/scripts/", text)
@@ -4372,8 +4372,15 @@ description = "Override sink that writes the base triage report contract."
             data = tomllib.loads(path.read_text(encoding="utf-8"))
             text = effective_formula_text(root, path.name.removesuffix(".formula.toml"))
             for var_name in data.get("vars", {}):
-                if var_name in {"worktree_lifecycle", "worktree_base_ref", "worktree_checks"}:
-                    self.assertEqual(data["vars"][var_name]["default"], "new" if var_name == "worktree_lifecycle" else "@default" if var_name == "worktree_base_ref" else "")
+                if var_name in {"worktree_lifecycle", "worktree_base_ref", "worktree_checks", "worktree_parent", "worktree_name_prefix", "worktree_allow_external_parent"}:
+                    self.assertEqual(data["vars"][var_name]["default"], {
+                        "worktree_lifecycle": "new",
+                        "worktree_base_ref": "@default",
+                        "worktree_checks": "",
+                        "worktree_parent": "",
+                        "worktree_name_prefix": "",
+                        "worktree_allow_external_parent": "false",
+                    }[var_name])
                     continue
                 with self.subTest(formula=path.name, var=var_name):
                     if data.get("type") == "expansion":

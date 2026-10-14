@@ -7,9 +7,8 @@ commands. Preserve the exact output OID and actual receipts for independent-acce
 Leave source closure to the guarded result/checkpoint and close stages.
 The legacy instructions below retain their existing behavior.
 
-Managed lifecycle: retain `{{worktree_lifecycle}}` from the run. Current source
-classifications remain `legacy`; `new` must stop at lifecycle preflight until
-composed helpers, native guards and workflow acceptance are qualified.
+Retain `{{worktree_lifecycle}}` from the captured run. Unknown or conflicting
+selection blocks; a failed managed read never selects the legacy path.
 
 For an admitted managed run, read exact run/source-plan/workspace references through
 `workspace_outputs.referenced_record` and the recorded input prepared by

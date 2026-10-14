@@ -24,7 +24,7 @@ description = "Canonical JSON required_checks [{id, argv}]. Required when worktr
 default = ""
 
 [vars.worktree_lifecycle]
-description = "Retained shared run lifecycle; new remains blocked until composed native acceptance."
+description = "Retained shared run lifecycle; new advances members through accepted workspace checkpoints."
 default = "legacy"
 
 [vars.context_path]

@@ -104,9 +104,11 @@ gc gc workspace flow close-source "${WORKSPACE_ARGS[@]}" --member-id "$MEMBER_ID
 Close the physical workflow step only after successful native readback. Source
 closure supplies no additional acceptance credit.
 
-Native flow writes retain the original guarded request privately under
-`WORKSPACE_EVIDENCE_DIR/writes`. An unresolved request blocks another flow write
-in that same scope. Reconcile the retained request without resubmitting it:
+Native flow writes retain the original guarded request in a private journal
+under the repository's common Git directory, scoped to the captured city and
+store. An unresolved request blocks another flow write in that same scope.
+Use the original request path reported by the command to reconcile the write
+without resubmitting it:
 
 ```bash
 gc gc workspace flow resolve-write "${WORKSPACE_ARGS[@]}" \

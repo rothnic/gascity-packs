@@ -92,12 +92,12 @@
     "gascity/formulas/do-work-item.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "f49b9c14ad6eac47468ad98d647d510004b25b9805d9e619493729bb6bbe2959"
+      "sha256": "e1766c9824548c493674715a4d8bf0215b1e41d37861404d56be64de07cd8332"
     },
     "gascity/formulas/do-work.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "a9ee730ea60347ff1a1e214ab90aa19bbef004acb12126776bb3266c526fd007"
+      "sha256": "35291211b987d8d7ce7b10ec11630c8d9c526746360d11ad5bdebfc8924fd26a"
     },
     "gascity/formulas/fix-convoy.formula.toml": {
       "classification": "legacy",
@@ -397,7 +397,7 @@
     "gascity/assets/workflows/build-from-review-base/prepare-review.md": {
       "classification": "new",
       "responsibility": "canonical-summary,continuation,review",
-      "sha256": "d3f5b892500b8faf1ef89eaba649fb57e2f11b35702bee5cc2d97846dec8d2aa"
+      "sha256": "e369efca77ce939e55fa282b979fdd056c5ef4dbf5dfb958e4bf839765d0063f"
     },
     "gascity/assets/workflows/build-from-review-base/publish.md": {
       "classification": "new",
@@ -417,7 +417,7 @@
     "gascity/assets/workflows/code-review-base/validate-context.md": {
       "classification": "new",
       "responsibility": "review",
-      "sha256": "2bc04c794149211b05d624f57fc614396c6e9ebfa30371af3f2a81bbf9207c8e"
+      "sha256": "c96bcc59b487694943225ebd76bf8f032c1aa6ddb4c4afda990d73b986a011fd"
     },
     "gascity/assets/workflows/code-review-base/write-report.md": {
       "classification": "new",
@@ -452,12 +452,12 @@
     "gascity/assets/workflows/do-work/implement.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,source-writer",
-      "sha256": "e0e412e0a7916dedc5dfc772a53e4f8f8e71772b54403814ba5f0535b3e1405c"
+      "sha256": "f6051b7cc2a5fb6e91ba6aac5d3f04c41ea8127ce3fdc0d59e53aa4a8a2ac091"
     },
     "gascity/assets/workflows/do-work/prepare-worktree.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,workspace-prepare",
-      "sha256": "27d4c9e2f31642dd72f5860a0d68cb33117a136bd4ab776f06b3dcbdbfdc91bb"
+      "sha256": "9c35a4bb85fc33076a2d8d6d32c19681a63a2a38216910fc5b4362b414646c5a"
     },
     "gascity/assets/workflows/do-work-item/implement-item.md": {
       "classification": "new",
@@ -1082,7 +1082,7 @@
     "compound-engineering/assets/workflows/compound-work/implement.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,source-writer",
-      "sha256": "bb9b651a54c71221ab6c2257d28b21d90f2faa73620c7eefd7f3be412bddcade"
+      "sha256": "06bea708ff01b34f6407412153d324fe9d7aeac5fdbd51f5bcf9f8d8adec19f5"
     },
     "compound-engineering/assets/workflows/compound-work-item/implement-item.md": {
       "classification": "new",
@@ -1277,7 +1277,7 @@
     "superpowers/assets/workflows/superpowers-development/close-source-anchor.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,source-close",
-      "sha256": "9ecf4cdd8aa954c5638c65b1410158b7c86706e8b727e2fd362cfa673983962c"
+      "sha256": "cbe24b7a64e0f5e01f2c133e62ea4464d03d5b62e080cfae6740298f8fbec858"
     },
     "superpowers/assets/workflows/superpowers-development/implement-change.md": {
       "classification": "new",
@@ -1932,7 +1932,7 @@
     "gstack/assets/workflows/gstack-work-item/implement-item.md": {
       "classification": "new",
       "responsibility": "implementation-flow,source-writer",
-      "sha256": "ddfe089eaad988f9c7be2d5e11f57a39a2041f27ff3223fdbc89165219e93654"
+      "sha256": "53452a3918e0673c15f8941bf83885ceaf6b82ed884d31056ee48452b3666849"
     },
     "bmad/assets/workflows/workspace-mode/validate.md": {
       "classification": "new",
@@ -1992,7 +1992,7 @@
     "gascity/assets/workflows/workspace-runtime.md": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "5ca4edbfe88d49ca35ff28475013170ef48e7af9d374e92e002a6a29adbedb6b"
+      "sha256": "4bbf8fdeacd5103957b665d773dc9d55100bf5cba296cc74338456f4095f851b"
     },
     "gstack/assets/workflows/workspace-mode/validate.md": {
       "classification": "new",

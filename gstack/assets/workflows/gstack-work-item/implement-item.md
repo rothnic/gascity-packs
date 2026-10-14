@@ -9,9 +9,8 @@ The legacy instructions below retain their existing behavior.
 
 Implement the assigned gstack shared-drain item.
 
-Retain `worktree_lifecycle` {{worktree_lifecycle}}. `new` remains disabled
-until composed shared-workspace acceptance qualifies. In an admitted managed
-run, use the imported Gas City `workspace_checkout.load_workspace_context`
+Retain `worktree_lifecycle` {{worktree_lifecycle}}. In an admitted managed run,
+use the imported Gas City `workspace_checkout.load_workspace_context`
 and `workspace_checkout.manage_workspace(action="path", ...)` APIs with exact
 run/source-plan/workspace and native city/rig/store identities. Require the
 current native claim, admitted owner grant, active `gc.drain_member_id`,

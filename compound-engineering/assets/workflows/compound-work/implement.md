@@ -10,7 +10,6 @@ The legacy instructions below retain their existing behavior.
 Implement this Compound Engineering item with {{implementation_target}}.
 
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
-`new` remains disabled until the composed workflow and native guards qualify.
 For an admitted `new` run, load the run, source-plan and workspace through the
 imported Gas City `workspace_checkout.load_workspace_context` API. Resolve the
 path with `workspace_checkout.manage_workspace(action="path", ...)` using the

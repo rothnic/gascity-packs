@@ -5,9 +5,8 @@ setup only. Do not edit source files in the launcher checkout.
 First select the retained `worktree_lifecycle` from the cooked runtime variables
 (`gc.graphv2_vars.v1`) and the captured run. An absent selector is legacy only
 when no managed run/workspace reference is present. Unknown, mixed or conflicting
-selection blocks. The new route remains opt-in and requires source admission;
-current legacy entrypoint preflights still reject `new` until rollout qualifies
-all participating source paths.
+selection blocks. The managed route is opt-in: its selected lifecycle must match
+the captured run and declared source paths.
 
 For explicit `new`, call the production dependency preparation bridge. Never
 fall through to the legacy preparation below after a failure or missing input:

@@ -5,8 +5,7 @@ native adapter and verify the accepted canonical subject through `workspace_revi
 If the immutable canonical exists without its current pointer, use
 `workspace_outputs.prepare_canonical` to replay that same physical record and bytes
 with the original parent guard. Missing/conflicting pointers block; do not recapture
-base, switch roots or infer a canonical commit from ancestry/closure. New activation
-remains blocked until full composed native acceptance passes.
+base, switch roots or infer a canonical commit from ancestry/closure.
 
 Validate that implementation evidence exists before review runs:
 

@@ -24,7 +24,7 @@ description = "Canonical JSON required_checks [{id, argv}]. Required when worktr
 default = ""
 
 [vars.worktree_lifecycle]
-description = "Retained run source lifecycle; new remains blocked until composed workflow acceptance."
+description = "Retained run source lifecycle; new uses recorded inputs, managed workspaces and accepted outputs."
 default = "legacy"
 
 [vars.context_path]

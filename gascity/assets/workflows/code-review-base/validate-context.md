@@ -3,9 +3,8 @@ This is the `code-review-base` methodology contract context validation step.
 For a managed subject, resolve exact current canonical/member-result/source-plan
 records through the native adapter. Call `workspace_review.begin_canonical_review`
 with frozen required check scope, actual reviewer identity and authoritative path.
-Check clean HEAD and artifact hashes before review. New activation remains blocked
-until full worker acceptance; a component pass cannot enable it. Report/agent modes
-leave source unchanged; interactive changes invalidate the context and require new
+Check clean HEAD and artifact hashes before review. Report/agent modes leave
+source unchanged; interactive changes invalidate the context and require new
 output checks/review before approval.
 
 Concrete methodology packs override this step when their review needs extra

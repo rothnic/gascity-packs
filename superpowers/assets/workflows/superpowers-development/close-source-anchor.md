@@ -14,7 +14,7 @@ foreign or unaccepted evidence blocks without closing any source bead.
 Close only that original member after committed/replayed result readback.
 An already closed member still requires the same evidence on replay.
 Preserve unknown state outside worktrees and never adopt raw metadata or
-recapture a base. `new` remains disabled until composed acceptance qualifies.
+recapture a base.
 
 The fallback rules below apply only to explicit `legacy`.
 

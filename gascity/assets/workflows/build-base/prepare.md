@@ -61,8 +61,20 @@ Read `gc bd show "$CLAIMED_BEAD_ID" --json` and take `gc.root_bead_id` from its
 metadata as `ROOT_ID`. Read `gc bd show "$ROOT_ID" --json` and take the root's
 exact `gc.formula_name` as `RUNNING_FORMULA`. If either metadata value is missing,
 malformed or ambiguous, stop as blocked and do not run formula show.
-Run `gc formula show "$RUNNING_FORMULA" --json` and inspect
-`metadata.gc.methodology` in that output. Never infer the formula name from
+Read the compact native declaration before evaluating supported modes:
+
+```sh
+python3 "{{pack_root}}/assets/scripts/formula_methodology.py" --formula "$RUNNING_FORMULA" \
+  --city-root "$CITY_ROOT" --rig "$RIG_NAME"
+```
+
+The helper parses the complete `gc formula show` JSON before printing only
+the exact formula name, `declared`, and `methodology`. Inspect `methodology`
+only after a successful read. This build requires `declared: true`.
+A nonzero exit or `UNREADABLE` result blocks with
+`gc.blocked_reason=unreadable-methodology:<formula-name>` and the failing
+outcome above. Never infer unsupported modes from missing or truncated output.
+Never infer the formula name from
 `gc.step_ref`; checked attempts can have `gc.step_ref=prepare.iteration.1`.
 Do not inspect pack source directories, repository files, `.beads/config.yaml`,
 session logs, or runtime state to discover methodology metadata.

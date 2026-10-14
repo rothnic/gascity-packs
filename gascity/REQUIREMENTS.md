@@ -620,6 +620,14 @@ Unknown values fail lint/tests. Derived packs choose subsets of the base
 vocabulary. `allowed_drain_policies` may be empty only when
 `implementation_strategy="convoy-step"`.
 
+Compatibility reads parse the complete successful native formula JSON and
+verify the exact selected formula name before projecting methodology metadata.
+The projection excludes step bodies and unrelated metadata so tool output
+limits cannot hide the declaration. CLI errors, malformed JSON and invalid
+declared metadata block as unreadable. Only a successful read may establish
+that metadata is absent. Builds require a declaration. GitHub adapters retain
+their unconstrained policy for verified absence.
+
 ## GitHub Adapter Contract
 
 GitHub adapters do not define the full methodology metadata block, but they must

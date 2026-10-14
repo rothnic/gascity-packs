@@ -1570,7 +1570,7 @@ class FormulaAssetTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         for fragment in (
             "gc.var.interaction_mode",
-            "gc formula show <formula-name> --json",
+            'formula_methodology.py" --formula "<formula-name>"',
             "[metadata.gc.methodology]",
             "allowed_drain_policies",
             "interaction_modes",
@@ -1591,7 +1591,7 @@ class FormulaAssetTests(unittest.TestCase):
             root / "assets/workflows/github-pr-review/snapshot.md"
         ).read_text(encoding="utf-8")
         for fragment in (
-            "gc formula show {{code_review_formula}} --json",
+            'formula_methodology.py" --formula "{{code_review_formula}}"',
             "[metadata.gc.methodology]",
             "review_modes",
             "interaction_modes",
@@ -1631,7 +1631,7 @@ class FormulaAssetTests(unittest.TestCase):
             "gc.root_bead_id",
             'gc bd show "$ROOT_ID" --json',
             "gc.formula_name",
-            'gc formula show "$RUNNING_FORMULA" --json',
+            'formula_methodology.py" --formula "$RUNNING_FORMULA"',
             "prepare.iteration.1",
             "If either metadata value is missing",
             "Do not inspect pack source directories",

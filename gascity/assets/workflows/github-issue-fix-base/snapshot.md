@@ -29,8 +29,19 @@ planning_formula {{planning_formula}}, decomposition_formula
 {{decomposition_formula}}, implementation_formula {{implementation_formula}},
 implementation_item_formula {{implementation_item_formula}},
 code_review_formula {{code_review_formula}}, and review_fix_formula
-{{review_fix_formula}} — read its declared compatibility metadata with
-`gc formula show <formula-name> --json` and inspect `[metadata.gc.methodology]`
+{{review_fix_formula}} — read its compact native compatibility declaration:
+
+Verify `CITY_ROOT` and `RIG_NAME` against the current native claim and rig
+registration as described in [workspace identity](../workspace-entry.md).
+
+```sh
+python3 "{{pack_root}}/assets/scripts/formula_methodology.py" --formula "<formula-name>" \
+  --city-root "$CITY_ROOT" --rig "$RIG_NAME"
+```
+
+Replace `<formula-name>` with the exact selected name. The helper parses the
+complete `gc formula show` JSON before printing the formula name, `declared`,
+and `methodology`. Inspect `methodology`, the projected `[metadata.gc.methodology]`
 (`allowed_drain_policies`, `implementation_strategy`, `interaction_modes`,
 `review_modes`). Enforce, for every formula that declares the metadata:
 
@@ -44,8 +55,12 @@ code_review_formula {{code_review_formula}}, and review_fix_formula
 - declared metadata uses only the allowed vocabulary above; unknown values fail
   this gate.
 
-A selected formula with no `[metadata.gc.methodology]` declares no mode
-constraint and passes this gate. If any requested value is outside the
+A successful `declared: false` result verifies that the selected formula has
+no `[metadata.gc.methodology]` and passes this gate without a mode constraint.
+A nonzero exit or `UNREADABLE` result stops blocked with
+`gc.blocked_reason=unreadable-methodology:<formula-name>` and the failing
+outcome below. Never treat missing or truncated output as an absent declaration.
+If any requested value is outside the
 vocabulary or unsupported by a selected formula, stop blocked before snapshot,
 triage, or planning work: record `gc.github.methodology_compat=blocked` and a
 machine-readable `gc.blocked_reason` (for example

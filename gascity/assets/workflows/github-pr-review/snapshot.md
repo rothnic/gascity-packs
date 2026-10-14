@@ -10,13 +10,28 @@ Resolved post mode: {{post_mode}}
 Methodology compatibility gate. Validate mode inputs before snapshot work:
 `interaction_mode` {{interaction_mode}} must be `interactive`, `autonomous`,
 or `headless`; `review_mode` {{review_mode}} must be `report`, `agent`, or
-`interactive`. Read the selected code-review formula's compatibility metadata
-with `gc formula show {{code_review_formula}} --json` and inspect
-`[metadata.gc.methodology]`. When the formula declares that metadata, the
+`interactive`. Read the selected code-review formula's compact native declaration:
+
+Verify `CITY_ROOT` and `RIG_NAME` against the current native claim and rig
+registration as described in [workspace identity](../workspace-entry.md).
+
+```sh
+python3 "{{pack_root}}/assets/scripts/formula_methodology.py" --formula "{{code_review_formula}}" \
+  --city-root "$CITY_ROOT" --rig "$RIG_NAME"
+```
+
+The helper parses the complete `gc formula show` JSON before printing the
+exact formula name, `declared`, and `methodology`. Inspect `methodology`, the
+projected `[metadata.gc.methodology]`, only after a successful read.
+When `declared: true`, the
 requested review mode must be listed in `review_modes` and the requested
 interaction mode must be listed in `interaction_modes`; declared metadata must
-use only the allowed vocabulary. A formula with no declared metadata passes
-this gate. In `headless` interaction mode, `post_mode` must not be
+use only the allowed vocabulary. A successful `declared: false` result verifies
+absent metadata and passes this gate without a mode constraint.
+A nonzero exit or `UNREADABLE` result stops blocked with
+`gc.blocked_reason=unreadable-methodology:{{code_review_formula}}` and the
+failing outcome below. Never treat missing or truncated output as an absent
+declaration. In `headless` interaction mode, `post_mode` must not be
 `human_gate`: headless runs never wait on a human comment gate. If any check
 fails, stop blocked before snapshot work: record
 `gc.github.methodology_compat=blocked` and a machine-readable

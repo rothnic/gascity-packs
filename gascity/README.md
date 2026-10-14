@@ -304,6 +304,12 @@ Use these mode inputs when designing or launching methodology formulas:
   whose caller applies fixes, and `interactive` preserves a raw top-level review
   experience that may apply safe fixes when the methodology allows it.
 
+Build preparation and GitHub adapters read compatibility through
+`assets/scripts/formula_methodology.py`. It parses the complete native formula
+result and prints only the formula name and methodology declaration. An
+unreadable result blocks the workflow. Builds require a declaration. GitHub
+adapters treat verified absence as unconstrained and validate declared modes.
+
 The current cross-framework audit and follow-up proposal lives in
 [`docs/design/build-methodology-framework-audit.md`](../docs/design/build-methodology-framework-audit.md).
 

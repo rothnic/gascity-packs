@@ -12,72 +12,72 @@
     "gascity/formulas/build-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,implementation-delegator,path-reader,publish,review,review-fix,source-writer",
-      "sha256": "6e56abce612c6bbbd74fa22598da94dcea91ab12b93c5ce8cdb1b17c3420d773"
+      "sha256": "2c8f53f704364aa6177a91a1922f2437f552f56b63feb78193d5353b0389cf77"
     },
     "gascity/formulas/build-basic-review.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "bbf918fa287ef5e5b437d0aa757214e878d144a9f5f318bf32151f72c9602347"
+      "sha256": "a083c09e485e435c11498acce9c814917775e9ea10b1191c6d5fbe1a277be1f9"
     },
     "gascity/formulas/build-basic.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,publish,review-delegator",
-      "sha256": "61ef9be66033e848e8a5859223185564bfabf49c62da093854bf63159cc73073"
+      "sha256": "da9b7edd8034fb063064d0d16a8362b13f97a27e8600b952ba2a6bfff91d5150"
     },
     "gascity/formulas/build-from-convoy-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,continuation,implementation-delegator",
-      "sha256": "3a0686292c91192bf0c9427bd041b97e95ae3fa3308fc70f6c78764afb394ba7"
+      "sha256": "b47d2431fb04f9d59bf30a76ed72249d2ee1bdd8893c3e24603f0fc38494d20b"
     },
     "gascity/formulas/build-from-convoy.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review",
-      "sha256": "efa0958173855c48b66b68080d7778b49c16692f891d57bc5f1839f597811d4d"
+      "sha256": "eb820a7c4254a57f6d656fdfb5e170924be8e779530f732845be07683c9e5dd9"
     },
     "gascity/formulas/build-from-decompose-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,continuation",
-      "sha256": "fbf20041ff0a6374653b6de0bb25dffb092c009906b6fbf5c16d237b6a9ec4ba"
+      "sha256": "9ab10339f8b842ccc3e378fdcf345ec66991b4c2c0e3d90fca5dff7f68f54b54"
     },
     "gascity/formulas/build-from-decompose.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review",
-      "sha256": "51df565b73073b0bfbf2c2f0363fc3d370beacbe25efda35f9fe10ed114d67a9"
+      "sha256": "63d6083f0049ac4a5704cf9da5624d632f34b770be3aba1f6e4b15750dc277c2"
     },
     "gascity/formulas/build-from-plan-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,continuation",
-      "sha256": "11690a5d4b6efdcf7a571ddc4a812707e81412b6152b801a31df35da2e7582a2"
+      "sha256": "f6345d3bbd7861e5fa6eeefd2ff7aa2a1f85e000e63b2cc3b130c75beea2fd70"
     },
     "gascity/formulas/build-from-plan.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review",
-      "sha256": "20be714f9c96fbc9134c9dd45837728759d88345a59365608630c1246faa8c26"
+      "sha256": "4fb49de057bac5e442a6d1a97c4720117045fe6c2e91dec44386f4b83d3a66c9"
     },
     "gascity/formulas/build-from-requirements-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,continuation",
-      "sha256": "05eded9e3086636e6cc30be9ef3b8963c24d238f62b2970e3318043aa6172125"
+      "sha256": "22ae94f6c65e7592ccec924269c1a06d657e62f97374bd8e24fb81fcb4c086bc"
     },
     "gascity/formulas/build-from-requirements.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review",
-      "sha256": "b436c6b6ab37fadf0006905b8780b418cfb9ce65268a9a35a007a96d2064d5c3"
+      "sha256": "5adf14ebd44093c63ab42adc87695f3a0f5d1253cf8cda76ab810d3bf137787a"
     },
     "gascity/formulas/build-from-review-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,continuation,publish,review",
-      "sha256": "59034e6e9cd3dd1b997b385cb9db1fd731aff0c7fdb1d904dbbdf0dc9c741e88"
+      "sha256": "1cdca0d66f4899214ae263e8ad4913ce028abc1aa12e8800a71c58b04d6dd693"
     },
     "gascity/formulas/build-from-review.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review",
-      "sha256": "c229c127215f29fa24d56bba9580dae635edd5ca57ba18171b4f7a6b8fb39211"
+      "sha256": "99bcd8703a1742b34e9344ec087e32860574754dc128205d826227aa43f585d5"
     },
     "gascity/formulas/code-review-base.formula.toml": {
       "classification": "new",
       "responsibility": "review",
-      "sha256": "c0c8ae3c2d33553cbf67d25c26e3d54eacd90580260d90ce888da148ae7cd1a8"
+      "sha256": "9153e173d6285e0560a2d65567cc3e91d97301710a6fcd6650500b6cee8d2560"
     },
     "gascity/formulas/decomposition-base.formula.toml": {
       "classification": "reference",
@@ -92,12 +92,12 @@
     "gascity/formulas/do-work-item.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "e1766c9824548c493674715a4d8bf0215b1e41d37861404d56be64de07cd8332"
+      "sha256": "2857347aaeff6d6187c0eba478a4d336e9ccac5b6ee2ecc9c18d278fec69800c"
     },
     "gascity/formulas/do-work.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "35291211b987d8d7ce7b10ec11630c8d9c526746360d11ad5bdebfc8924fd26a"
+      "sha256": "777a11ac644526e77aa806cbe93fbf29025868b29dc53c17050c7efe4be2178d"
     },
     "gascity/formulas/fix-convoy.formula.toml": {
       "classification": "legacy",
@@ -107,7 +107,7 @@
     "gascity/formulas/fix-loop-base.formula.toml": {
       "classification": "new",
       "responsibility": "fix-generation,implementation-delegator,review-delegator",
-      "sha256": "23e552f7ad98234fa712eba3906b773773948b52aa2905782a3d4e3338e6f38f"
+      "sha256": "0c64e219dd91327841dea2a6643e5209ed60e9dc48375bb02bd990bb8491ab7a"
     },
     "gascity/formulas/gap-analysis.formula.toml": {
       "classification": "legacy",
@@ -117,17 +117,17 @@
     "gascity/formulas/github-issue-fix-base.formula.toml": {
       "classification": "new",
       "responsibility": "publish",
-      "sha256": "f32044ca4f5f6e0fa0834cab0c4c5283aac2fdfd09dcb445c5b7d7155b2167b2"
+      "sha256": "81e5f02c2285fc823ecf7c6e4bf1e1bab0cb1ff399cbf29c63f729fbc57d34c9"
     },
     "gascity/formulas/github-issue-fix-design-review-work.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "3cfd1f6e04bedec9555287376669298f9b5dd2f8b211d55e24701e585597b7db"
+      "sha256": "6c44d17632694a1365d91bfff3ffa7b8e4d261cda8ebf4b3ee7a1b22a2391093"
     },
     "gascity/formulas/github-issue-fix.formula.toml": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "a13183a8f22ce4d4f23401653f5fdd1845737fc9bb4ff681dc4f3fd179d8525d"
+      "sha256": "d3f0f9de212214d6a7d59b4f5bd67272bd769957aedd4931b2cfd2f39c0981ec"
     },
     "gascity/formulas/github-issue-triage-base.formula.toml": {
       "classification": "reference",
@@ -147,7 +147,7 @@
     "gascity/formulas/implement.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,implementation-delegator,path-reader,publish",
-      "sha256": "247e2916f1e19cfc83a33cb387e50a561d9a751d849cd656ec963b10fff562d1"
+      "sha256": "ab3202db05e0482eae20498cdc0e41e3886bfd2bd1b8337eeada7ae9481e0071"
     },
     "gascity/formulas/implementation-base.formula.toml": {
       "classification": "legacy",
@@ -167,12 +167,12 @@
     "gascity/formulas/publish.formula.toml": {
       "classification": "new",
       "responsibility": "publish",
-      "sha256": "3fdb714af610ada211ef53f6d607300766c4cbb2f49df410b435532aff567888"
+      "sha256": "37d5a202a7dcf3103ea053fb32462633bfb1c8ddc65378a4370423335d97d372"
     },
     "gascity/formulas/review.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review",
-      "sha256": "f7f60829ba9392f6139e906b20fce3d9eee5ff9228f041b1c063ed3fe8e3fca4"
+      "sha256": "35d2e658432df86df4b1b1cec2ca03dffa6669d6e37fe1f2cd4abb1928c9093a"
     },
     "gascity/formulas/same-session-implement.formula.toml": {
       "classification": "legacy",
@@ -457,7 +457,7 @@
     "gascity/assets/workflows/do-work/prepare-worktree.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,workspace-prepare",
-      "sha256": "9c35a4bb85fc33076a2d8d6d32c19681a63a2a38216910fc5b4362b414646c5a"
+      "sha256": "d946e234a35903d2a818a40f1e0474c8c98841dea74906e1aeb47e7f0547bd77"
     },
     "gascity/assets/workflows/do-work-item/implement-item.md": {
       "classification": "new",
@@ -772,12 +772,12 @@
     "compound-engineering/formulas/compound-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,review-delegator",
-      "sha256": "d9620e81b49a64ba3252bb3afba04a914d25ac00ee3e3d99520a113a8a67d965"
+      "sha256": "49121589db7e4d68a1d90dfb7ee21c1a506786a51552b430c87260768c322adb"
     },
     "compound-engineering/formulas/compound-code-review.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "f5f05670dbf7c36bc7a5575393eff4e965895734025917951a776caf3a40ec6d"
+      "sha256": "ac85819d6018566b5582a0540ff07378e87406d66a30ed731c991edc28d73371"
     },
     "compound-engineering/formulas/compound-decomposition.formula.toml": {
       "classification": "reference",
@@ -787,17 +787,17 @@
     "compound-engineering/formulas/compound-fix-loop.formula.toml": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "2b87f31a3790eb1ed5fe8c28a370c8ab4b794fcba1f855b4fdba1c8e27e5c1d9"
+      "sha256": "f4e07e824aa2be02d9ef1d137a04783c444995095377af8a26fa6fc98a3c2d51"
     },
     "compound-engineering/formulas/compound-implementation.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,implementation-delegator",
-      "sha256": "8adb8543828a44c7a958fe05972cdc7742bc76c821ed3aed714e880467b08d50"
+      "sha256": "e38bcff79ecb77a6f79be5e2e914a1cc1fdd21f2d74df737917b5794d4e13fbe"
     },
     "compound-engineering/formulas/compound-plan-review.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "1417d4862ebaea53e881da34c252c10f01029640bf67fae9d81792d17b742ac2"
+      "sha256": "47d0a7a391e804f7e77c027fb00aa7b074db3bb19a080ac23ea394a45743db2c"
     },
     "compound-engineering/formulas/compound-planning.formula.toml": {
       "classification": "reference",
@@ -807,22 +807,22 @@
     "compound-engineering/formulas/compound-resolution.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "ee6cf6d194bbd19233972681ec89802bcbcf23f85f16678589e4a547c4901191"
+      "sha256": "a0a12c22150c268b2882302e387dd39940698bdf853a13508b1b0c0d03fd37c3"
     },
     "compound-engineering/formulas/compound-review.formula.toml": {
       "classification": "new",
       "responsibility": "review,review-delegator",
-      "sha256": "4b8316cd6677baa44be0f7189777e6bc12686fb858e156cc2985e5e3742b911d"
+      "sha256": "cadb16007c3b90ba263d4db39cde33f6486741e46de33e9656b79edf8cf8b976"
     },
     "compound-engineering/formulas/compound-work-item.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "a9715bb83eab4fd53e5e221a08eeee7cd701811c7d80111682d5f052e59cf509"
+      "sha256": "469b8615432d0766545a4482c25534ff3f57dccdd3a73ac7b7b1f654ef84d451"
     },
     "compound-engineering/formulas/compound-work.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "b03f8c1e45a524a24dbd225c4beac39f28c881b76e1adbfbe078d39f95937afc"
+      "sha256": "f09aff89fdbc1127ecaeccbe3eec0648741ff18b147bd65edc55373c3751b491"
     },
     "compound-engineering/assets/workflows/compound-build/finalize.md": {
       "classification": "reference",
@@ -1092,17 +1092,17 @@
     "superpowers/formulas/superpowers-brainstorming.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "c1e216c75dadd0eb477e92a0dcaf278d9c1ca8a4f78196ec4db2d691e9382a96"
+      "sha256": "e62cae1128ca861d93e2bdb627baa2dc136c98c5d91cb3de044898b40cacc438"
     },
     "superpowers/formulas/superpowers-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,review-delegator",
-      "sha256": "b17dcdde92f1f18e89dec64b9150e3709616a027f46d2371c2fed78cdb89367a"
+      "sha256": "bfd67cda41cb6302f636a33ebf781bccc763b8deb2bd7d3f9f31092a71744938"
     },
     "superpowers/formulas/superpowers-code-review.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "a98231dea99a10f6b3cac8ca33052310962efb10855b5f6d42c76d8cff49cdf3"
+      "sha256": "12bd9661a6de7b7ce86c94b4e1e451575b305dcd124546ebee3fd99699aecc6b"
     },
     "superpowers/formulas/superpowers-decomposition.formula.toml": {
       "classification": "reference",
@@ -1112,27 +1112,27 @@
     "superpowers/formulas/superpowers-development-item.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,review-delegator,source-close,source-writer,workspace-prepare",
-      "sha256": "61381fb5e241ca06e9bc1d98005bac22329b48d17db7f1558309956334b215c8"
+      "sha256": "dd07e629e5fe5656524936ea48b1bfd25136d421391c345e38b6f63e2ded47e9"
     },
     "superpowers/formulas/superpowers-development.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,review-delegator,source-close,source-writer,workspace-prepare",
-      "sha256": "642f039bc3280e11f89ddadfa8205cb059fd0b22e5753ee55f83aecbec6d1d2a"
+      "sha256": "2c98234b3b4481775e3d07a61e90ff534158e8eb7cce4e4c22720ae5f92b3fe3"
     },
     "superpowers/formulas/superpowers-fix-loop.formula.toml": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "5dd4a06258cd6fa4189bdc9db4245d588db80cb47badc99a49b3164164868363"
+      "sha256": "912b22a65ea1ddcc90d25b4592443f8d2012c8f7cb27f4a5c59c2a7c674ab081"
     },
     "superpowers/formulas/superpowers-implementation.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,implementation-delegator",
-      "sha256": "6792790cf67a53bcf740732c64a24a6f25d9ed69c955b6dab787b2f2f27e03e4"
+      "sha256": "039bd37bcff543ec2b1fe7d994e912f82a60ca0ab626af1c15f2704e2d6ee029"
     },
     "superpowers/formulas/superpowers-plan-review.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "66944224164a04050d0da3c80f8f4adf4044fb7b3bebe30b7ba7ff93c72e1037"
+      "sha256": "28a8d93a1c9a9fa56f9307118ca352d6e0a5df01864dde7d2b844b7a88b01c8e"
     },
     "superpowers/formulas/superpowers-planning.formula.toml": {
       "classification": "reference",
@@ -1142,12 +1142,12 @@
     "superpowers/formulas/superpowers-review.formula.toml": {
       "classification": "new",
       "responsibility": "review,review-delegator",
-      "sha256": "01dca243dc2f6fc10d3639d4ed4232cd8ebb422f1af61f9b64bb9c77c7d21a9a"
+      "sha256": "fcd2d0987ef2333fd835e1e9a9a98d2f1c734a3cf76d75b499c66e0345178d97"
     },
     "superpowers/formulas/superpowers-task-review.formula.toml": {
       "classification": "new",
       "responsibility": "review,review-fix,source-writer",
-      "sha256": "2e649095ce691c4521bcc2a92c00a9672b7e727d1c25d269b50c8114589efc5a"
+      "sha256": "291bcc401f6b33cc6905852a0458c1ed9bdbfade5542e34ec086ebce88f9dc97"
     },
     "superpowers/assets/workflows/superpowers-brainstorming/{target}.apply-spec-feedback.md": {
       "classification": "reference",
@@ -1412,12 +1412,12 @@
     "bmad/formulas/bmad-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,review-delegator",
-      "sha256": "2fa0bcc46c66499de1b8beb44fa949c05aef5640236ef8f2c1f51747b04b5c70"
+      "sha256": "89c30c9088d070ba727863e9708533e5d0bbafc249291f770ba1032422658a73"
     },
     "bmad/formulas/bmad-code-review-flow.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "538440b47d74eefad720afb5980afc61d39ec879c5455c8810966522f48d1f9f"
+      "sha256": "0279ff6944e1e4ca11207651ec3aa615f0679f7c144099f2242dddb85d0702bf"
     },
     "bmad/formulas/bmad-decomposition.formula.toml": {
       "classification": "reference",
@@ -1427,12 +1427,12 @@
     "bmad/formulas/bmad-fix-loop.formula.toml": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "e7992ac0e0f06d853985c874eb9857962054a9f60a9b9268861653e233701e90"
+      "sha256": "871cc2409fb893269a225c86320ebf9654230decf428e66be64dba560cadb1ad"
     },
     "bmad/formulas/bmad-implementation.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,implementation-delegator",
-      "sha256": "8abc0d7af69d18a0d30baa8edb95f237c25ffdfc64f80be388f52d02c1775263"
+      "sha256": "82c1e8512b903cdb13f7cb873053b8af89ffdafa3fecea564d81e5e1ba355065"
     },
     "bmad/formulas/bmad-planning.formula.toml": {
       "classification": "reference",
@@ -1442,17 +1442,17 @@
     "bmad/formulas/bmad-review.formula.toml": {
       "classification": "new",
       "responsibility": "review,review-delegator",
-      "sha256": "aa2efa806c661ccc5523e14c3ebc866f1b865e10d2263f4d252a6f3c97e68a19"
+      "sha256": "b6135d990330e09ed7474f82dde96891a297f6fc2b24844b42be4182f3f38f5d"
     },
     "bmad/formulas/bmad-story-development-item.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "e4a1676fac87bba9a02d4c67b3c3b1ad7fd658b0858d1ba0d53e3cacf0121e3d"
+      "sha256": "762f8b88589e713f38b45425a0f925d8682e4998c4d1b2d0bbf4ea32389f8f79"
     },
     "bmad/formulas/bmad-story-development.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "12563294469935a476acaecda354c32c2b41bad37c6c01ba574ce57cfd94d3ff"
+      "sha256": "8946e1ddc843bc6b081e624914f1f7d355e6879ec824b635b9ada23da7aa5033"
     },
     "bmad/assets/workflows/bmad-build/decompose.md": {
       "classification": "reference",
@@ -1617,12 +1617,12 @@
     "gstack/formulas/gstack-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,publish,review-delegator",
-      "sha256": "b9932083a9269e6a36b06f60d14955b0e6081fd495647c4d1e6321fdf5e07b11"
+      "sha256": "6cc4e24948feebc367a3e82038679efb6ec657babd84dbc7a4a74e2a2f9302c0"
     },
     "gstack/formulas/gstack-code-review.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "8b02a6f7da55764a5af18fed811ac6005bb476fb828addc73ecb6b6b138130d8"
+      "sha256": "62683cd8bcc2e5f564e458464b74bd91b1cf2d31eb0303e9f4f055c5b5011a33"
     },
     "gstack/formulas/gstack-decomposition.formula.toml": {
       "classification": "reference",
@@ -1632,17 +1632,17 @@
     "gstack/formulas/gstack-fix-loop.formula.toml": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "74f62aff01502350b9147df7afb6b7e53ca41bcc81dcd7805d5a9d2eacf4cc78"
+      "sha256": "2b3b1a62c5ad3d0bc629ac4eda0286f7d0e521fda3c68715cd5cf9b13961d41b"
     },
     "gstack/formulas/gstack-implementation.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,implementation-delegator",
-      "sha256": "62d4b2233a488951e853ad801846a6789d355d330dbf2d968f24afbed458a518"
+      "sha256": "d1d394d3b27c1e5e42705a6b8c02c0be7232c35c38132bc5fc4f4f1be12610c9"
     },
     "gstack/formulas/gstack-plan-review.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "84c94ecfe0c87efec2904cf500dcacce24269847b29a0f465c93d33472f1d24a"
+      "sha256": "367b1ba4e3ec3b689faaeb215a2bbf6ccf20947d92ca913011f4234ea89898d6"
     },
     "gstack/formulas/gstack-planning.formula.toml": {
       "classification": "reference",
@@ -1652,27 +1652,27 @@
     "gstack/formulas/gstack-qa-review.formula.toml": {
       "classification": "new",
       "responsibility": "review,review-fix,source-writer",
-      "sha256": "579de6342801e449862efc72f5e8fbb15693f7249e486da61380efa3ff8e77c1"
+      "sha256": "4d345c5631e74c0f189729c408190a934b3d5616c90a4bedc685a62a54d1407c"
     },
     "gstack/formulas/gstack-release-readiness.formula.toml": {
       "classification": "new",
       "responsibility": "source-writer",
-      "sha256": "8004dc64075ea559b8f422a5773fc753262de403be09f323ece930a6fdcb548f"
+      "sha256": "57b09a2aa277799af6f10995d211b55b78a1c14f84ad353358ca642f5c29acb5"
     },
     "gstack/formulas/gstack-review.formula.toml": {
       "classification": "new",
       "responsibility": "review,review-delegator",
-      "sha256": "b917411a295233592504fc1be71fcba59b798930ca4dbec0e05e231ec2102107"
+      "sha256": "21d3acfaa2351e31d4c27df3b71e1fd98a4f667ec44c7a8abc68b684fa4661b1"
     },
     "gstack/formulas/gstack-work-item.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "c32058a4549dc72bb51a272acc00cda17cb5d2f2a618a19c9e33d158a50cc41a"
+      "sha256": "06e70ba644e0f6f1b06e496561be1073141e05ccbdc3ae6df4a3dd7d409bfaa5"
     },
     "gstack/formulas/gstack-work.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "73d819826a47db84818032c9e181e4d9a73883edf43a57efea80bae49456cc0f"
+      "sha256": "f06b85d7259142b9abdfc430ab284b0641d6072e92725060734e2683a482b735"
     },
     "gstack/assets/workflows/gstack-build/decompose.md": {
       "classification": "reference",
@@ -2044,7 +2044,7 @@
     "gascity/assets/scripts/workspace_records.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "f0dffe0c0729f1788b98342668d6190473b1aceab6d5ed3a73e36c4053ebddf0"
+      "sha256": "f9094db5cb8f67ab937e429db9f8d8f3a54b24d1345ee7827f41aa8ace74d0d4"
     },
     "gascity/assets/scripts/workspace_review.py": {
       "classification": "new",
@@ -2089,7 +2089,7 @@
     "gascity/assets/scripts/workspace_store.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "5a844771363564b2a3ac6886ea0b1743afff58aaf6b10aacf1e66ec3f485478c"
+      "sha256": "4c158eea04c78cc495e9eb1170132c2990f9bed997df6b2807f0a9c94388321d"
     },
     "gascity/assets/scripts/workspace_entry.py": {
       "classification": "new",
@@ -2099,7 +2099,7 @@
     "gascity/assets/scripts/workspace_flow.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "e26d20052dc0c664b095942601de704ab68bab06ecb379871a3b18893f4f5d0c"
+      "sha256": "db8ae35c5f4e05a67bec4d16c1848b776ca10d987fc539e7c764c9bc2e9d543d"
     },
     "gascity/assets/scripts/workspace_acceptance_fixture.py": {
       "classification": "new",
@@ -2154,17 +2154,17 @@
     "gascity/assets/scripts/workspace_checkout.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "4c55e210c8b6449e749d135ee10e8d96cba71ff64f24771c6f4faa5f42088bcb"
+      "sha256": "6b57d398d0342592fc4a77a37ca4b200ea8169603d34612a2002e8ca7c706754"
     },
     "gascity/assets/scripts/workspace_dependency.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "2ba6bac7430f407778c387907c3afb6233540d6bcc9245392e928bc91faf4db5"
+      "sha256": "31c817ac29e93357b1a369ab4a11a6fd466ffe9758081b2a1bbd7761814441ad"
     },
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",
       "responsibility": "native claim/session and exact-commit project check, review and accepted-output qualification",
-      "sha256": "0a043da7e446a73d5155ccebd8af1d6d28d9f4e16ad811aeceb58b87d28d6ce0"
+      "sha256": "b47df183b88ef45ec6bb8894e017edd9ef16ba106c6f6c1b6fb98a92d67902a0"
     },
     "gascity/assets/scripts/workspace_requests.py": {
       "classification": "new",

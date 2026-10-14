@@ -80,6 +80,13 @@ def validate_record(kind: str, record: dict[str, Any]) -> dict[str, Any]:
     if kind == "workspace":
         if any(record["claim_binding"][field] != record[field] for field in ("workflow_root_id", "generation", "workspace_owner_id", "writer_step_id", "writer_attempt_id")):
             raise RecordError("identity conflict: claim binding must retain the run, generation, stable owner, and exact writer attempt")
+        if "layout" in record:
+            layout = record["layout"]
+            name = layout["name_prefix"] + record["workspace_owner_id"] + "-g" + str(record["generation"])
+            parent = Path(layout["parent"])
+            if (str(parent) != layout["parent"] or any(part in (".", "..") for part in layout["parent"].split("/"))
+                    or len(name.encode()) > 255 or str(parent / name) != record["work_dir"]):
+                raise RecordError("workspace path must match its complete recorded layout")
     if kind == "publish" and record["status"] == "observed" and record["observed_oid"] != record["output_oid"]:
         raise RecordError("observed_oid must equal the intended output_oid")
     return record

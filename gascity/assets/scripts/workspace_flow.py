@@ -164,7 +164,8 @@ class WorkspaceFlow:
             run_record_id=self.runtime.run_record_id, plan_record_id=self.runtime.plan_record_id,
             workspace_record_id=workspace["workspace_bead_id"], evidence_dir=self.runtime.evidence_dir,
             selected_mode="new", authority_id=authority_id,
-            parent=str(Path(workspace["work_dir"]).parent), allow_external_parent=True,
+            parent=str(Path(workspace["work_dir"]).parent),
+            allow_external_parent=workspace.get("layout", {}).get("allow_external_parent", True),
             launch_step_ids=(self.attempt.claimed_bead_id,), result_record_id=result_ref["bead_id"],
             writer_map=self.writer_map, writer_rows=frozen.rows, native_runtime=self.runtime,
             artifact_root=str(self.runtime.artifact_root))

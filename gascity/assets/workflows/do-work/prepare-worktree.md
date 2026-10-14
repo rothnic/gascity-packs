@@ -35,9 +35,19 @@ fall through to the legacy preparation below after a failure or missing input:
     --evidence-dir '<existing-evidence-directory-outside-worktrees>'
   ```
 
-  Repeat `--launch-step-id` for each physical consumer. Carry a recorded
-  nondefault `--parent`, explicit `--allow-external-parent` and `--work-branch`
-  when configured. For known allocations, carry `--workspace-record-id` and
+  Repeat `--launch-step-id` for each physical consumer. The bridge reads layout
+  from the original logical workflow root:
+
+  - `gc.var.worktree_parent`: empty selects the rig's default parent.
+  - `gc.var.worktree_name_prefix`: empty preserves the owner/generation name.
+  - `gc.var.worktree_allow_external_parent`: only `true` permits an external parent.
+
+  Preparation validates layout before record allocation and stores its complete
+  selection in `workspace.layout`. Resumes and shared members reuse that tuple.
+  Optional `--parent`, `--name-prefix` and external-permission flags must agree
+  with the original root and recorded layout. Preserve `--work-branch` when
+  configured. Do not derive layout from the child's defaults or caller CWD.
+  For known allocations, carry `--workspace-record-id` and
   `--authority-id` from the exact prior receipt. Existing native references take
   priority. On first entry, the bridge allocates closed records and atomically
   publishes the preparing payload, owner reference and first writer grant.

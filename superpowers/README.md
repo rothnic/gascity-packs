@@ -285,6 +285,10 @@ entry, checkout, runtime and record helpers. Configure its fixed base and requir
 checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
 Native worker execution and installation require separate matched-pair validation.
 
+Use the shared [layout settings](../gascity/docs/worktree-dependencies.md#configure-layout)
+for a custom parent, directory prefix, or explicit external-parent permission.
+Resumes and shared members retain the recorded owner layout.
+
 The managed contract retains the run base, source-plan, workspace owner and
 accepted input for each task. Separate tasks use their declared source.
 Shared tasks start from the preceding accepted checkpoint in one serial

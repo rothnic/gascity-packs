@@ -66,6 +66,43 @@ Inspect the selected formula before launch:
 gc formula show build-basic --json
 ```
 
+## Configure layout
+
+In new mode, all five build packs accept the same workspace layout variables.
+Set them under the rig's `[rigs.formula_vars]`, or pass explicit `--var` values
+at launch:
+
+| Variable | Default | Behavior |
+| --- | --- | --- |
+| `worktree_parent` | empty | Uses `<rig>/worktrees`, or `<rig>/workspaces` for a bare rig root. A custom parent must be an absolute, existing directory. |
+| `worktree_name_prefix` | empty | Prepends a prefix to `<workspace-owner>-g<generation>`. Empty preserves that name. |
+| `worktree_allow_external_parent` | `"false"` | `"true"` explicitly permits a parent outside the rig. |
+
+For example, create `/srv/project-workspaces` before launch, then configure:
+
+```toml
+[rigs.formula_vars]
+worktree_parent = "/srv/project-workspaces"
+worktree_name_prefix = "feature-"
+worktree_allow_external_parent = "true"
+```
+
+The parent may contain spaces. Prefixes may contain letters, digits, dots,
+underscores, and hyphens. A nonempty prefix must begin with a letter or digit.
+Symlinks, traversal, Git administration directories, and parents inside another
+checkout refuse preparation before record allocation. External opt-in preserves
+the same checks.
+
+Preparation records the selected layout for each workspace. Resumes and shared
+members retain that layout and stable owner name. Changed parent, prefix, or
+permission settings refuse reuse. Native drain children use the original
+workflow's settings, even when their own formula defaults differ.
+
+Older records without a layout tuple retain their recorded path and provenance.
+They cannot acquire a prefix or external permission from new formula defaults.
+Use their original explicit layout arguments when required, after checking the
+original authorization.
+
 ## Choose the workspace
 
 Choose how tasks share source before the workflow creates implementation tasks:

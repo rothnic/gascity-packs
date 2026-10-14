@@ -1241,6 +1241,8 @@ print(json.dumps(receipt))
     def bridge_context(self):
         from workspace_store import GRANT_REFS_KEY
         store, attempt, kwargs = self.managed_context()
+        store.rows['root-1']['metadata'].update({'gc.var.worktree_parent': str(self.parent),
+                                               'gc.var.worktree_allow_external_parent': 'true'})
         store.rows['record-1']['metadata'].clear()
         store.rows['authority-1']['metadata'].clear()
         store.rows['owner-1']['metadata'].pop('gc.workspace_ref')

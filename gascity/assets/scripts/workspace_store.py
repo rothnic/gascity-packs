@@ -578,6 +578,8 @@ def validate_transition(kind: str, stored: dict, candidate: dict) -> bool:
         stable = ("source_plan_owner_id", "workspace_owner_id", "workspace_bead_id", "strategy", "work_dir", "work_branch")
         if any(stored[k] != candidate[k] for k in stable):
             raise StoreError("workspace transition cannot relocate or change its stable owner")
+        if stored.get("layout") != candidate.get("layout"):
+            raise StoreError("workspace transition cannot change or infer its recorded layout")
         if stored["native_provenance"] is not None and any(stored[k] != candidate[k] for k in ("native_attempt_id", "native_provenance")):
             raise StoreError("native provisioning provenance is immutable for its attempt")
         phases = {("preparing", "entry"), ("entry", "active"), ("active", "result"), ("result", "entry")}

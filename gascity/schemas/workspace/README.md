@@ -86,6 +86,13 @@ authorization and live accepted-input checks belong to the source-plan writer.
 
 Workspace records keep the stable `workspace_owner_id`, native physical
 `workspace_bead_id`, active member, current source OIDs and lifecycle phase.
+New preparation also records `layout`: canonical `parent`, `name_prefix` and
+boolean `allow_external_parent`. The validator requires `work_dir` to match that
+tuple and the stable owner/generation name. Guarded transitions cannot change,
+remove or add a layout tuple on an existing record. Older records without the
+field retain their original path/provenance contract. See
+[layout configuration](../../docs/worktree-dependencies.md#configure-layout).
+
 `claim_binding` repeats root, generation, stable owner, exact `writer_step_id`
 and `writer_attempt_id`; the validator requires equality with the payload.
 Runtime writers must verify the current native claim under the selected lock.

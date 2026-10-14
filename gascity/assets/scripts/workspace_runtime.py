@@ -418,7 +418,8 @@ class NativeSourceRuntime:
         inherited = {"continuation": continuation, "native_rows": self.guard_rows} if continuation is not None else {}
         checkout = WorkspaceCheckout(self.run, expected, store_ref=self.store.store_ref,
             evidence_dir=self.evidence_dir, gc=self.gc, city_root=self.city_root,
-            parent=str(Path(workspace["work_dir"]).parent), allow_external_parent=True, **inherited)
+            parent=str(Path(workspace["work_dir"]).parent),
+            allow_external_parent=workspace.get("layout", {}).get("allow_external_parent", True), **inherited)
         observed = checkout.verify()
         row = self._fence.snapshot([workspace["workspace_bead_id"]])[workspace["workspace_bead_id"]]
         require(all(row["metadata"].get(key) == value for key, value in observed["owner_metadata"].items()),

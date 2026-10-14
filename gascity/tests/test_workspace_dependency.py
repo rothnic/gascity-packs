@@ -230,6 +230,8 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         from workspace_store import Attempt, TOPOLOGY
         import workspace_outputs as outputs
         f = self.fixture
+        f.rows['root']['metadata'].update({'gc.var.worktree_parent': str(f.work.parent),
+                                         'gc.var.worktree_allow_external_parent': 'true'})
         f.git(f.repo,'config','user.name','Fixture')
         f.git(f.repo,'config','user.email','fixture@example.invalid')
         f.rows['recorder'].update(status='closed', assignee='')

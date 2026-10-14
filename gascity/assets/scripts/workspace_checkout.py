@@ -86,6 +86,96 @@ def registrations(repo: Path | str) -> list[dict]:
     return result
 
 
+def validate_layout_paths(repo, common, path, parent, evidence_dir, allow_external_parent):
+    """One layout preflight for selection, provisioning and later observation."""
+    def require(condition, message):
+        if not condition:
+            raise CheckoutError(message)
+
+    require(path.parent == parent and path.name not in ('.git', '.gc', '.beads'),
+            'workspace path must be a safe direct child of the selected parent')
+    if common == repo:
+        relative = path.relative_to(repo) if path.is_relative_to(repo) else None
+        require(relative is None or (relative.parts and relative.parts[0] not in
+                ('objects', 'refs', 'hooks', 'info', 'logs', 'branches', 'worktrees')),
+                'workspace path is inside bare Git administration')
+    else:
+        require(not path.is_relative_to(common), 'workspace path is inside Git administration')
+    require(parent.is_relative_to(repo) or allow_external_parent,
+            'external workspace parent requires explicit permission')
+    require(not evidence_dir.is_relative_to(repo) and not evidence_dir.is_relative_to(common)
+            and not evidence_dir.is_relative_to(path),
+            'evidence directory must be outside managed worktrees and repository administration')
+    records = registrations(repo)
+    matches = [r for r in records if r['path'] == str(path)]
+    require(len(matches) <= 1, 'ambiguous workspace registration')
+    require(not matches or not any(k in matches[0] for k in ('prunable', 'bare', 'locked')),
+            'foreign, locked or prunable registration')
+    for registration in records:
+        location = Path(registration['path'])
+        require(not evidence_dir.is_relative_to(location), 'evidence directory is inside a registered worktree')
+        if location not in (repo, path):
+            require(not path.is_relative_to(location), 'workspace is nested in another linked worktree')
+    for ancestor in (parent, *parent.parents):
+        if not ancestor.is_dir():
+            continue
+        observed = git(ancestor, 'rev-parse', '--path-format=absolute', '--git-common-dir', optional=True)
+        if observed is not None:
+            require(observed == str(common), 'workspace parent is inside a foreign repository')
+            break
+    return 'within-repo-root' if any(Path(r['path']) == repo and path.is_relative_to(repo)
+                                   for r in records) else 'outside-worktrees'
+
+
+def select_workspace_layout(run, owner_id, generation, metadata, *, workspace=None,
+                            parent=None, name_prefix=None, allow_external_parent=None, evidence_dir):
+    """Select from the original native root, then compare the recorded owner layout."""
+    def require(condition, message):
+        if not condition:
+            raise CheckoutError(message)
+
+    repo = canonical_path(run['rig_root'], directory=True)
+    common = canonical_path(run['common_git_dir'], directory=True)
+    default_parent = repo / ('workspaces' if common == repo else 'worktrees')
+    saved = workspace.get('layout') if workspace is not None else None
+    selected = {'parent': str(default_parent), 'name_prefix': '', 'allow_external_parent': False}
+    keys = {'parent': 'worktree_parent', 'name_prefix': 'worktree_name_prefix',
+            'allow_external_parent': 'worktree_allow_external_parent'}
+    supplied = dict(parent=parent, name_prefix=name_prefix, allow_external_parent=allow_external_parent)
+    require(allow_external_parent is None or type(allow_external_parent) is bool,
+            'external parent selection must be a boolean')
+    for key, variable in keys.items():
+        native = 'gc.var.' + variable
+        # Native graph creation omits empty formula values. Absence still
+        # selects the original root's default; it is not override authority.
+        value = metadata.get(native, 'false' if key == 'allow_external_parent' else '')
+        require(isinstance(value, str), variable + ' must be a formula string')
+        if key == 'allow_external_parent':
+            require(value in ('true', 'false'), variable + ' must be true or false')
+            value = value == 'true'
+        elif key == 'parent':
+            value = value or str(default_parent)
+        require(saved is None or value == saved[key], 'recorded workspace layout changed: ' + variable)
+        selected[key] = value
+        if supplied[key] is not None:
+            require(supplied[key] == selected[key],
+                    'explicit layout override conflicts with native ' + variable)
+    require(isinstance(selected['name_prefix'], str)
+            and (not selected['name_prefix'] or ID.fullmatch(selected['name_prefix'])), 'unsafe workspace name prefix')
+    require(type(selected['allow_external_parent']) is bool, 'external parent selection must be a boolean')
+    parent_path = canonical_path(selected['parent'], directory=Path(selected['parent']) != default_parent)
+    require(bool(ID.fullmatch(owner_id)) and type(generation) is int and generation > 0, 'unsafe owner or generation')
+    name = selected['name_prefix'] + owner_id + '-g' + str(generation)
+    require(len(name.encode()) <= 255, 'workspace child name is too long')
+    path = canonical_path(str(parent_path / name))
+    require(saved is None or workspace['work_dir'] == str(path), 'recorded workspace path conflicts with its layout')
+    validate_layout_paths(repo, common, path, parent_path, Path(evidence_dir), selected['allow_external_parent'])
+    if workspace is None:
+        require(not path.exists() and not any(r['path'] == str(path) for r in registrations(repo)),
+                'unowned workspace target already exists or is registered')
+    return selected, str(path)
+
+
 def diagnostic_directory(value: str) -> Path:
     path = canonical_path(value, directory=True)
     if any((ancestor / '.git').exists() or (ancestor / '.git').is_symlink() for ancestor in (path, *path.parents)):
@@ -114,7 +204,7 @@ def save_diagnostic(directory: Path, evidence: dict) -> str:
 class WorkspaceCheckout:
     """Component engine. Durable publication is performed by manage_workspace."""
     def __init__(self, run: dict, workspace: dict, *, store_ref: str, evidence_dir: str,
-                 parent: str | None = None, allow_external_parent=False, gc='gc',
+                 parent: str | None = None, allow_external_parent=None, name_prefix=None, gc='gc',
                  city_root: str | None = None, timeout=15, lock_timeout=2,
                  continuation=None, native_rows=None):
         self.run, self.workspace = copy.deepcopy(run), copy.deepcopy(workspace)
@@ -160,6 +250,19 @@ class WorkspaceCheckout:
                 self.require(isinstance(native_rows, dict), 'native rows must be an exact snapshot dictionary')
             for field in ('workflow_root_id', 'source_plan_owner_id', 'workspace_owner_id', 'workspace_bead_id', 'writer_step_id', 'writer_attempt_id'):
                 self.require(bool(ID.fullmatch(self.workspace[field])) and self.workspace[field] not in ('.', '..'), f'unsafe {field}')
+            layout = self.workspace.get('layout')
+            if layout is not None:
+                for key, value in (('parent', parent), ('name_prefix', name_prefix),
+                                   ('allow_external_parent', allow_external_parent)):
+                    self.require(value is None or value == layout[key], 'recorded workspace layout changed: ' + key)
+                parent, allow_external_parent = layout['parent'], layout['allow_external_parent']
+                expected_name = layout['name_prefix'] + self.workspace['workspace_owner_id'] + '-g' + str(self.workspace['generation'])
+                self.require(Path(self.workspace['work_dir']).name == expected_name,
+                             'recorded workspace name conflicts with its layout')
+            else:
+                self.require(name_prefix in (None, ''), 'historical workspace has no recorded name prefix')
+                allow_external_parent = False if allow_external_parent is None else allow_external_parent
+            self.allow_external_parent = allow_external_parent
             self.require(type(allow_external_parent) is bool, 'external parent selection must be a boolean')
             self.require(type(lock_timeout) is int and type(timeout) is int and 0 < lock_timeout < timeout <= 120,
                          'native and lock timeouts must be positive bounded integers')
@@ -175,21 +278,7 @@ class WorkspaceCheckout:
             self.path_value = canonical_path(self.workspace['work_dir'])
             default_parent = self.repo / ('workspaces' if self.common == self.repo else 'worktrees')
             self.parent = canonical_path(parent or str(default_parent), directory=parent is not None and Path(parent) != default_parent)
-            self.require(self.path_value.parent == self.parent and self.path_value.name not in ('.git', '.gc', '.beads'), 'workspace path must be a safe direct child of the selected parent')
-            if self.common == self.repo:
-                relative = self.path_value.relative_to(self.repo) if self.path_value.is_relative_to(self.repo) else None
-                self.require(relative is None or (relative.parts and relative.parts[0] not in
-                             ('objects', 'refs', 'hooks', 'info', 'logs', 'branches', 'worktrees')),
-                             'workspace path is inside bare Git administration')
-            else:
-                self.require(not self.path_value.is_relative_to(self.common), 'workspace path is inside Git administration')
-            self.require(self.parent.is_relative_to(self.repo) or allow_external_parent, 'external workspace parent requires explicit permission')
-            nested_control = any(Path(r['path']) == self.repo and self.path_value.is_relative_to(self.repo)
-                                 for r in registrations(self.repo))
-            self.placement = 'within-repo-root' if nested_control else 'outside-worktrees'
-            self.require(not self.evidence_dir.is_relative_to(self.repo) and not self.evidence_dir.is_relative_to(self.common)
-                         and not self.evidence_dir.is_relative_to(self.path_value), 'evidence directory must be outside managed worktrees and repository administration')
-            self._layout()
+            self.placement = self._layout()
             provenance = self.workspace['native_provenance']
             self.require((provenance is None) == (self.workspace['native_attempt_id'] is None), 'partial native provenance metadata')
             self.require(provenance is None or isinstance(provenance, dict), 'malformed native provenance')
@@ -225,22 +314,11 @@ class WorkspaceCheckout:
             self.fail(message)
 
     def _layout(self):
-        records = registrations(self.repo)
-        matches = [r for r in records if r['path'] == str(self.path_value)]
-        self.require(len(matches) <= 1, 'ambiguous workspace registration')
-        self.require(not matches or not any(k in matches[0] for k in ('prunable', 'bare', 'locked')), 'foreign, locked or prunable registration')
-        for registration in records:
-            location = Path(registration['path'])
-            self.require(not self.evidence_dir.is_relative_to(location), 'evidence directory is inside a registered worktree')
-            if location not in (self.repo, self.path_value):
-                self.require(not self.path_value.is_relative_to(location), 'workspace is nested in another linked worktree')
-        for ancestor in (self.parent, *self.parent.parents):
-            if not ancestor.is_dir():
-                continue
-            common = git(ancestor, 'rev-parse', '--path-format=absolute', '--git-common-dir', optional=True)
-            if common is not None:
-                self.require(common == str(self.common), 'workspace parent is inside a foreign repository')
-                break
+        try:
+            return validate_layout_paths(self.repo, self.common, self.path_value, self.parent,
+                                         self.evidence_dir, self.allow_external_parent)
+        except CheckoutError as exc:
+            self.fail(str(exc))
 
     def _command(self, action: str, *, help_only=False) -> dict | str:
         argv = [str(self.gc)]
@@ -866,7 +944,7 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
                      workflow_root_id: str, input_convoy_id: str, run_record_id: str,
                      plan_record_id: str, workspace_record_id: str, evidence_dir: str,
                      selected_mode: str, claimed_step_id: str | None = None,
-                     parent: str | None = None, allow_external_parent=False,
+                     parent: str | None = None, allow_external_parent=None, name_prefix=None,
                      authority_id: str | None = None, launch_step_ids=(), result_record_id: str | None = None,
                      declared_result: dict | None = None, result_authority_id: str | None = None,
                      blocker_record_id: str | None = None, blocker_id: str | None = None,
@@ -942,7 +1020,7 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
                                'workspace_record_id': workspace_record_id})
         raise CheckoutError(str(exc), path) from exc
     checkout = WorkspaceCheckout(run, workspace, store_ref=store.store_ref, evidence_dir=evidence_dir,
-                                 parent=parent, allow_external_parent=allow_external_parent, gc=gc, city_root=city_root,
+                                 parent=parent, name_prefix=name_prefix, allow_external_parent=allow_external_parent, gc=gc, city_root=city_root,
                                  continuation=workspace_continuation, native_rows=rows)
     try:
         owner_keys = set(OWNERSHIP) | {'gc.worktree_placement', 'gc.root_bead_id', 'gc.root_store_ref'}
@@ -1060,7 +1138,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.add_argument('--' + flag, required=True)
     parser.add_argument('--worktree-lifecycle', choices=('new',), required=True)
     parser.add_argument('--parent')
-    parser.add_argument('--allow-external-parent', action='store_true')
+    parser.add_argument('--name-prefix')
+    parser.add_argument('--allow-external-parent', action=argparse.BooleanOptionalAction, default=None)
     parser.add_argument('--claimed-step-id')
     parser.add_argument('--authority-id')
     parser.add_argument('--artifact-root')
@@ -1086,7 +1165,7 @@ def main(argv: list[str] | None = None) -> int:
                                   workflow_root_id=args.workflow_root_id, input_convoy_id=args.input_convoy_id,
                                   run_record_id=args.run_record_id, plan_record_id=args.plan_record_id,
                                   workspace_record_id=args.workspace_record_id, evidence_dir=args.evidence_dir,
-                                  selected_mode=args.worktree_lifecycle, claimed_step_id=claimed_step, parent=args.parent, allow_external_parent=args.allow_external_parent,
+                                  selected_mode=args.worktree_lifecycle, claimed_step_id=claimed_step, parent=args.parent, name_prefix=args.name_prefix, allow_external_parent=args.allow_external_parent,
                                   authority_id=args.authority_id, launch_step_ids=args.launch_step_id,
                                   result_record_id=args.result_record_id, declared_result=declaration,
                                   result_authority_id=args.result_authority_id,

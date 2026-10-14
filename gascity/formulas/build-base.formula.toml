@@ -46,6 +46,19 @@ default = "@default"
 description = "Canonical JSON required_checks [{id, argv}]. Required when worktree_lifecycle is new; captured once on the run."
 default = ""
 
+[vars.worktree_parent]
+description = "Managed workspace parent. Empty selects the rig default; a nonempty value must be an absolute existing directory."
+default = ""
+
+[vars.worktree_name_prefix]
+description = "Safe prefix prepended to the stable workspace owner/generation name. Empty preserves the default name."
+default = ""
+
+[vars.worktree_allow_external_parent]
+description = "Explicit true permits a managed workspace parent outside the rig. Recorded layout cannot change on resume."
+default = "false"
+enum = ["false", "true"]
+
 [vars.worktree_lifecycle]
 description = "Source lifecycle for this run. New mode requires the composed native workspace helpers and frozen check policy."
 default = "new"

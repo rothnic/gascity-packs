@@ -12,7 +12,7 @@ launch/resume acceptance. Command-double tests supply component evidence only.
 ## Callable API
 
 `WorkspaceCheckout(run, workspace, *, store_ref, evidence_dir, parent=None,
-allow_external_parent=False, gc="gc", city_root=None, timeout=15, lock_timeout=2,
+allow_external_parent=None, name_prefix=None, gc="gc", city_root=None, timeout=15, lock_timeout=2,
 continuation=None, native_rows=None)`
 provides the Git/native component operations:
 
@@ -66,7 +66,7 @@ the guarded writer still publishes and revalidates the complete handoff.
 `manage_workspace(store, attempt=None, *, action, gc, city_root, rig_name,
 workflow_root_id, input_convoy_id, run_record_id, plan_record_id,
 workspace_record_id, evidence_dir, selected_mode, claimed_step_id=None, parent=None,
-allow_external_parent=False, authority_id=None, launch_step_ids=(),
+allow_external_parent=None, name_prefix=None, authority_id=None, launch_step_ids=(),
 result_record_id=None, declared_result=None, result_authority_id=None,
 blocker_record_id=None, blocker_id=None, writer_map=None, writer_rows=None,
 source_rows=None, artifact_root=None, native_runtime=None)` is the durable caller. The `store` is a
@@ -163,8 +163,12 @@ partial-work path and requires `--authority-id` plus `--artifact-root` and the
 retained native session environment. `prepare` and `recover` also
 require `--claimed-step-id`, `--authority-id` and one or more `--launch-step-id`
 values. Session ID and incarnation token come from the native environment.
-`--parent` retains a nondefault parent; `--allow-external-parent` explicitly admits
-an external parent. `--blocker-record-id` and `--blocker-id` enable blocker-record
+For records with `layout`, omitted flags reuse the saved parent, prefix and
+external permission. Explicit `--parent`, `--name-prefix`,
+`--allow-external-parent` or `--no-allow-external-parent` must match that tuple.
+Older records retain their original explicit layout arguments. The helper cannot
+infer missing historical prefix or external permission.
+`--blocker-record-id` and `--blocker-id` enable blocker-record
 publication.
 
 For a recorded result awaiting its checkpoint, pass `recover --result-record-id`.
@@ -187,6 +191,14 @@ repository whose common Git directory equals the rig root uses
 `<rig>/workspaces`, because `<bare>/worktrees` holds Git administration. Direct
 children and custom parents are supported by the adapter. Nondefault parents
 must already exist. External parents require explicit permission.
+
+The production dependency helper selects layout from the original logical root's
+`gc.var.worktree_parent`, `gc.var.worktree_name_prefix` and
+`gc.var.worktree_allow_external_parent`. It validates the selected path before
+native record allocation. New workspace records retain a complete immutable
+`layout` tuple. Empty prefixes preserve `<owner>-g<generation>` names. Shared
+members retain the same owner's name and directory. See
+[layout configuration](../../docs/worktree-dependencies.md#configure-layout).
 
 Paths must have absolute canonical spelling, no traversal or symlink components,
 and one safe child below the selected parent. Registration, common Git directory,

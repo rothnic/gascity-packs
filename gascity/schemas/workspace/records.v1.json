@@ -654,6 +654,9 @@
             "object",
             "null"
           ]
+        },
+        "layout": {
+          "$ref": "#/$defs/workspace-layout"
         }
       },
       "required": [
@@ -1287,6 +1290,27 @@
           }
         }
       ]
+    },
+    "workspace-layout": {
+      "type": "object",
+      "properties": {
+        "parent": {
+          "$ref": "#/$defs/path"
+        },
+        "name_prefix": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9][A-Za-z0-9._-]*)?$(?![\\s\\S])"
+        },
+        "allow_external_parent": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "parent",
+        "name_prefix",
+        "allow_external_parent"
+      ],
+      "additionalProperties": false
     }
   },
   "x-records": {

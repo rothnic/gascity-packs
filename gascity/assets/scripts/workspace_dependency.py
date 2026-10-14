@@ -117,7 +117,7 @@ def integration_inputs(bundle):
             for source in bundle['predecessors']]
 
 
-def initial_workspace(bundle, attempt, *, workspace_record_id, work_dir, work_branch):
+def initial_workspace(bundle, attempt, *, workspace_record_id, work_dir, work_branch, layout=None):
     source = bundle['input_oid'] or bundle['base_oid']
     workspace = dict(version=1, workflow_root_id=bundle['workflow_root_id'], generation=bundle['generation'],
         source_plan_owner_id=bundle['source_plan_owner_id'], workspace_owner_id=bundle['workspace_owner_id'],
@@ -126,6 +126,8 @@ def initial_workspace(bundle, attempt, *, workspace_record_id, work_dir, work_br
         next_member_position=bundle['member_position'], output_oid=None,
         integration_inputs=integration_inputs(bundle) if bundle['strategy'] == 'integration' else None,
         native_attempt_id=None, native_provenance=None)
+    if layout is not None:
+        workspace['layout'] = copy.deepcopy(layout)
     return validate_record('workspace', writer_checkpoint(workspace, attempt))
 
 
@@ -203,7 +205,8 @@ def publish_checkpoint(frozen, attempt, workspace, *, authority_id, writer_map, 
             frozen.merge(native_runtime.guard_rows)
             checkout = WorkspaceCheckout(native_runtime.run, retained, store_ref=store.store_ref,
                 evidence_dir=native_runtime.evidence_dir, parent=str(Path(retained['work_dir']).parent),
-                allow_external_parent=True, gc=native_runtime.gc, city_root=native_runtime.city_root,
+                allow_external_parent=retained.get('layout', {}).get('allow_external_parent', True),
+                gc=native_runtime.gc, city_root=native_runtime.city_root,
                 **(dict(continuation=old_context, native_rows=frozen.rows) if old_context is not None else {}))
             native = checkout.successor_projection(workspace, continuation=context,
                 native_rows=frozen.rows, writer_map=writer_map)
@@ -382,7 +385,7 @@ def _block_integration(frozen, attempt, workspace, exc, *, authority_id, writer_
 def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, workflow_root_id,
         input_convoy_id, generation, workspace_owner_id, member_id, artifact_root, evidence_dir,
         workspace_record_id=None, authority_id=None, launch_step_ids=(), parent=None,
-        allow_external_parent=False, work_branch=None, blocker_record_id=None, blocker_id=None,
+        allow_external_parent=None, name_prefix=None, work_branch=None, blocker_record_id=None, blocker_id=None,
         resume_decision=None):
     """Use actual run/plan/role/policy records to prepare one dependency input.
 
@@ -390,7 +393,7 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
     carries retained original rows and actual cooked writer admission. Git
     integration retains conflicts; it never grants result acceptance.
     """
-    from workspace_checkout import WorkspaceCheckout, diagnostic_directory, manage_workspace
+    from workspace_checkout import WorkspaceCheckout, diagnostic_directory, manage_workspace, select_workspace_layout
     from workspace_cooked import read_cooked_writer_map
     from workspace_entry import allocate_placeholder, healthy, read_entry
     from workspace_inputs import materialize_integration, resolve_member_input
@@ -479,9 +482,23 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
             and all(step in map_steps for step in launch_step_ids), 'launch steps must be exact actual cooked occurrences')
     frozen.ensure(launch_step_ids)
     repo = Path(run['rig_root'])
-    default_parent = repo / ('workspaces' if Path(run['common_git_dir']) == repo else 'worktrees')
-    selected_parent = Path(parent) if parent is not None else default_parent
-    require(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', workspace_owner_id), 'workspace owner has an unsafe path spelling')
+    layout = None
+    if existing is None or 'layout' in existing:
+        layout, work_dir = select_workspace_layout(run, workspace_owner_id, generation, root['metadata'],
+            workspace=existing, parent=parent, name_prefix=name_prefix,
+            allow_external_parent=allow_external_parent, evidence_dir=directory)
+        parent, allow_external_parent = layout['parent'], layout['allow_external_parent']
+    else:
+        # Old records retain their original path/provenance. Missing historical
+        # prefix or external permission is not inferred from new formula defaults.
+        require(name_prefix in (None, '') and root['metadata'].get('gc.var.worktree_name_prefix', '') == '',
+                'historical workspace has no recorded name prefix; resume its original layout')
+        configured_parent = root['metadata'].get('gc.var.worktree_parent', '')
+        require(not configured_parent or configured_parent == str(Path(existing['work_dir']).parent),
+                'historical workspace parent conflicts with its recorded path')
+        if configured_parent:
+            require(parent is None or parent == configured_parent, 'historical workspace parent override changed')
+            parent = configured_parent
     # Validate layout before allocating native records. Existing ownership has
     # priority over any optional creation arguments.
     if existing is not None:
@@ -507,16 +524,11 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
         require(recorded_authority is None, 'owner authority exists without its published workspace; resolve its original intent')
         # Physical IDs always come from native allocation/readback. The selected
         # path is a stable owner/generation name, independent of control IDs.
-        work_dir = str(selected_parent / (workspace_owner_id + '-g' + str(generation)))
-        # A lexical preview validates the real layout without inventing a native
-        # physical ID or publishing a placeholder payload.
-        require(selected_parent.is_absolute() and str(selected_parent) == str(selected_parent.resolve()),
-                'workspace parent must use canonical absolute spelling')
         require(not artifacts.is_relative_to(repo) and not directory.is_relative_to(repo), 'evidence must be outside the repository')
         workspace_record_id = allocate_placeholder(store, title='Managed workspace record', existing_id=workspace_record_id)
         authority_id = allocate_placeholder(store, title='Managed workspace authority', existing_id=authority_id)
         workspace = initial_workspace(bundle, attempt, workspace_record_id=workspace_record_id, work_dir=work_dir,
-                                      work_branch=work_branch)
+                                      work_branch=work_branch, layout=layout)
         WorkspaceCheckout(run, workspace, store_ref=store.store_ref, evidence_dir=str(directory), parent=parent,
                           allow_external_parent=allow_external_parent, gc=gc, city_root=city_root,
                           **checkout_context(writer_map, frozen.rows))
@@ -624,10 +636,10 @@ def main(argv=None):
     parser.add_argument('--generation', required=not resolving, type=int)
     parser.add_argument('--resolve-request')
     parser.add_argument('--gc', default='gc')
-    for name in ('workspace-record-id', 'authority-id', 'parent', 'work-branch', 'blocker-record-id', 'blocker-id', 'resume-decision'):
+    for name in ('workspace-record-id', 'authority-id', 'parent', 'name-prefix', 'work-branch', 'blocker-record-id', 'blocker-id', 'resume-decision'):
         parser.add_argument('--' + name)
     parser.add_argument('--launch-step-id', action='append', default=[])
-    parser.add_argument('--allow-external-parent', action='store_true')
+    parser.add_argument('--allow-external-parent', action=argparse.BooleanOptionalAction, default=None)
     args = parser.parse_args(argv)
     try:
         store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city_root)
@@ -641,7 +653,8 @@ def main(argv=None):
             input_convoy_id=args.input_convoy_id, generation=args.generation, workspace_owner_id=args.workspace_owner_id,
             member_id=args.member_id, artifact_root=args.artifact_root, evidence_dir=args.evidence_dir,
             workspace_record_id=args.workspace_record_id, authority_id=args.authority_id,
-            launch_step_ids=args.launch_step_id, parent=args.parent, allow_external_parent=args.allow_external_parent,
+            launch_step_ids=args.launch_step_id, parent=args.parent, name_prefix=args.name_prefix,
+            allow_external_parent=args.allow_external_parent,
             work_branch=args.work_branch, blocker_record_id=args.blocker_record_id, blocker_id=args.blocker_id,
             resume_decision=args.resume_decision)
         print(json.dumps(result, sort_keys=True))

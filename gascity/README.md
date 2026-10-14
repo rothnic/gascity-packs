@@ -155,9 +155,14 @@ launch or pin them in a rig's `formula_vars`:
 | `worktree_lifecycle` | `new` | Recorded source inputs, owned workspaces and qualified output handoff. Explicit `legacy` is deprecated. |
 | `worktree_base_ref` | `@default` | Captures the registered checkout HEAD once. Empty is invalid. |
 | `worktree_checks` | empty | Canonical JSON `required_checks: [{id, argv}]`, required only for `new` and captured on the run. |
+| `worktree_parent` | empty | Default rig workspace parent, or an absolute existing directory. |
+| `worktree_name_prefix` | empty | Prefix for the stable `<owner>-g<generation>` directory name. |
+| `worktree_allow_external_parent` | `false` | Explicit permission for a parent outside the rig. |
 
 For recorded bases, source dependencies, shared workspaces, and recovery, see
 [Worktree dependencies](docs/worktree-dependencies.md).
+Custom parent and prefix settings are recorded per workspace. See
+[layout configuration](docs/worktree-dependencies.md#configure-layout).
 
 When variables are not enough, every stage prompt can be replaced by dropping
 a Markdown file at the same relative path in a higher-priority layer, and

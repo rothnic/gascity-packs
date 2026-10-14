@@ -10,7 +10,8 @@ This module is the shared harness for tests that close that gap. It offers three
 things a caller composes:
 
 `write_city` builds a throwaway city that imports whatever packs the caller
-names, at city scope, rig scope, or both.
+names, at city scope, rig scope, or both. These configuration checks use the
+file-backed bead store, so asking doctor about a pack does not start a database.
 
 `attributable` runs `gc doctor` twice -- once against that city, once against a
 baseline city with the same shape and no packs under test -- and returns the
@@ -285,6 +286,9 @@ def write_city(
     city_dir.joinpath("city.toml").write_text(
         textwrap.dedent(
             """\
+            [beads]
+            provider = "file"
+
             [workspace]
             provider = "claude"
 

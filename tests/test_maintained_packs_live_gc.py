@@ -37,6 +37,7 @@ from gc_live_city import (
     discover_agents,
     discover_command_words,
     discover_formulas,
+    doctor_findings,
     gc_output,
     gc_test_bin,  # noqa: F401 -- pytest fixture, used by name
     write_canary_pack,
@@ -141,6 +142,24 @@ def test_the_doctor_delta_can_surface_a_finding(canary_delta: frozenset[str]) ->
         f"did not add {CANARY_CHECK!r} to the doctor delta, so every delta "
         f"asserted in this file proves nothing. Delta was: {sorted(canary_delta)}"
     )
+
+
+@pytest.mark.parametrize("with_canary", (False, True), ids=("baseline", "loaded"))
+def test_configuration_doctor_does_not_initialize_database_storage(
+    tmp_path: Path, gc_test_bin: Path, with_canary: bool  # noqa: F811
+) -> None:
+    imports = {}
+    if with_canary:
+        imports[CANARY_BINDING] = write_canary_pack(tmp_path / "fixture")
+    workspace = write_city(tmp_path / "workspace", imports)
+
+    findings = doctor_findings(gc_test_bin, workspace)
+    if with_canary:
+        assert CANARY_CHECK in findings, "doctor must still inspect loaded formulas"
+    for scope in (workspace.city_dir, workspace.rig_dir):
+        assert not scope.joinpath(".beads").exists(), (
+            f"configuration-only doctor initialized database storage under {scope}"
+        )
 
 
 @pytest.mark.parametrize("pack", MAINTAINED_PACKS)

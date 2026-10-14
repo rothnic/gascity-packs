@@ -2842,13 +2842,22 @@ class DiscordIntakeCommonTests(unittest.TestCase):
             common,
             "list_city_sessions",
             return_value=[],
-        ), mock.patch.object(
+        ) as list_sessions, mock.patch.object(
             common,
             "create_agent_session",
             return_value={"alias": "dc-123-sky"},
-        ), mock.patch.object(common.time, "sleep"):
+        ) as create_session, mock.patch.object(common.time, "sleep") as sleep, mock.patch.object(
+            common.time,
+            "monotonic",
+            side_effect=[0.0, common.ROOM_LAUNCH_IDENTITY_RESOLVE_TIMEOUT_SECONDS + 1.0],
+        ) as clock:
             with self.assertRaisesRegex(common.GCAPIError, "created launch session is not routable yet"):
                 common.ensure_room_launch_session(launch)
+
+        create_session.assert_called_once()
+        self.assertEqual(clock.call_count, 2)
+        self.assertLessEqual(list_sessions.call_count, 5)
+        sleep.assert_not_called()
 
     def test_ensure_room_launch_session_for_handle_creates_secondary_participant(self) -> None:
         common.save_room_launch(

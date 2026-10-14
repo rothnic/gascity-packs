@@ -10,8 +10,7 @@ terminal summary with `workspace_outputs.prepare_canonical`, then execute/read b
 the frozen request before review. An aggregate human summary may reference that
 accepted artifact; it cannot replace its hash with newly written unreviewed bytes.
 No missing terminal result, multiple unintegrated outputs or stale parent generation
-may proceed. Never infer acceptance from closed anchors. Current new activation
-remains blocked pending full composed native acceptance. Legacy retains the stage
+may proceed. Never infer acceptance from closed anchors. Legacy retains the stage
 below.
 
 This build-base stage may be inherited by concrete build methodology packs.

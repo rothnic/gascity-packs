@@ -178,8 +178,9 @@ PY
 
 ## Managed workspaces
 
-The GC-METH-017 through GC-METH-019 contract preserves the legacy default and
-forwards base/check policy through reached formula expansions. New mode uses
+The GC-METH-017 through GC-METH-019 contract defaults fresh supported work to
+new, preserves recorded modes and explicit deprecated legacy compatibility,
+and forwards base/check policy through reached formula expansions. New mode uses
 the imported native preparation, continuation, acceptance and record helpers.
 The concrete final producer completes before independent-acceptance and
 record-result. Shared members checkpoint before advancement. Canonical

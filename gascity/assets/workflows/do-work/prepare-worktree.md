@@ -2,13 +2,13 @@
 Resolve and publish the isolated worktree for this item. This is infrastructure
 setup only. Do not edit source files in the launcher checkout.
 
-First select the retained `worktree_lifecycle` from the cooked runtime variables
-(`gc.graphv2_vars.v1`) and the captured run. An absent selector is legacy only
-when no managed run/workspace reference is present. Unknown, mixed or conflicting
-selection blocks. The managed route is opt-in: its selected lifecycle must match
-the captured run and declared source paths.
+First read `worktree_lifecycle` from the captured run. Before run capture, require
+an explicit cooked mode from the native runtime variables (`gc.graphv2_vars.v1`).
+Fresh supported entries cook `new` by default. Existing runs keep their recorded
+mode. Cooked selections must agree with the captured run. Missing, unknown, mixed
+or conflicting modes or source classifications block before allocation.
 
-For explicit `new`, call the production dependency preparation bridge. Never
+For selected `new`, call the production dependency preparation bridge. Never
 fall through to the legacy preparation below after a failure or missing input:
 
 - Read the exact registered city/rig/store, original workflow root, current
@@ -63,7 +63,7 @@ fall through to the legacy preparation below after a failure or missing input:
   the exact recorded result or an explicit declaration under admitted native
   authority. Missing, failed or unknown evidence cannot earn a preparation pass.
 
-For legacy selection, preserve this existing preparation:
+For explicit or recorded `legacy` selection, preserve this existing preparation:
 
 1. Read current step bead metadata and get `gc.root_bead_id`; hard-fail if it is
    missing. Read that do-work root with `gc bd show <root-bead-id> --json`. If

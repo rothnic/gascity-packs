@@ -25,13 +25,13 @@ class ComposedFormulaTests(unittest.TestCase):
     def resolve(self, name):
         return resolve_formula_from_dirs(DIRECTORIES, name)
 
-    def test_actual_entries_preserve_policy_and_legacy_defaults(self):
+    def test_actual_entries_preserve_policy_and_new_defaults(self):
         names = ("build-basic", "compound-build", "superpowers-build", "bmad-build", "gstack-build",
                  "implement", "build-from-convoy", "build-from-review", "github-issue-fix")
         for name in names:
             with self.subTest(formula=name):
                 variables = self.resolve(name)["vars"]
-                self.assertEqual(variables["worktree_lifecycle"]["default"], "legacy")
+                self.assertEqual(variables["worktree_lifecycle"]["default"], "new")
                 self.assertEqual(variables["worktree_base_ref"]["default"], "@default")
                 self.assertEqual(variables["worktree_checks"]["default"], "")
 
@@ -44,6 +44,23 @@ class ComposedFormulaTests(unittest.TestCase):
                         with self.subTest(path=path.name, step=step["id"]):
                             for variable in POLICY_VARS:
                                 self.assertEqual(step["expand_vars"][variable], "{{" + variable + "}}")
+
+    def test_loaded_pack_imports_default_to_new_and_retain_explicit_legacy(self):
+        for pack in PACKS:
+            directories = [REPO / "gascity/formulas"]
+            if pack != "gascity":
+                definition = tomllib.loads((REPO / pack / "pack.toml").read_text())
+                imported = (REPO / pack / definition["imports"]["gc"]["source"]).resolve()
+                self.assertEqual(imported, REPO / "gascity")
+                directories.append(REPO / pack / "formulas")
+            for path in (REPO / pack / "formulas").glob("*.formula.toml"):
+                name = path.name.removesuffix(".formula.toml")
+                formula = resolve_formula_from_dirs(directories, name)
+                mode = formula.get("vars", {}).get("worktree_lifecycle")
+                if mode is not None:
+                    with self.subTest(pack=pack, formula=name):
+                        self.assertEqual(mode["default"], "new")
+                        self.assertEqual(mode["enum"], ["legacy", "new"])
 
     def test_both_drain_contexts_prepare_before_implementation_and_accept_before_close(self):
         for name, producer in (("do-work", "implement"), ("do-work-item", "implement-item"),

@@ -15,7 +15,7 @@ internal = true
 [vars]
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle. New mode consumes the original native run and policy."
-default = "legacy"
+default = "new"
 enum = ["legacy", "new"]
 
 [vars.worktree_base_ref]

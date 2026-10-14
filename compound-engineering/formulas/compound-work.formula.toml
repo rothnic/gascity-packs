@@ -21,7 +21,7 @@ default = "@default"
 
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle. New uses the composed native workspace helpers and captured policy."
-default = "legacy"
+default = "new"
 enum = ["legacy", "new"]
 
 [vars.implementation_target]

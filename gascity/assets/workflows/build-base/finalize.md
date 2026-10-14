@@ -8,8 +8,7 @@ For captured `new` mode, read current canonical and approved review records and
 call `workspace_review.validate_approval` against actual terminal requirement
 evidence and unchanged source/artifacts before recording pass. Missing review,
 stale X approval after Y, exhaustion or unresolved setup/failed/skipped/unrun evidence
-remains blocked. Disabled publication cannot turn this into success. New activation
-still requires full composed acceptance; legacy retains finalization below.
+remains blocked. Disabled publication cannot turn this into success. Legacy retains finalization below.
 
 Synthesize the workflow result from the requirements, plan, decomposition, implementation, and review artifacts. Record pass/fail outcome, artifact paths, and any remaining follow-up work.
 

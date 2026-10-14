@@ -25,7 +25,8 @@ default = ""
 
 [vars.worktree_lifecycle]
 description = "Retained run source lifecycle; new uses recorded inputs, managed workspaces and accepted outputs."
-default = "legacy"
+default = "new"
+enum = ["legacy", "new"]
 
 [vars.context_path]
 description = "Optional context bundle path."

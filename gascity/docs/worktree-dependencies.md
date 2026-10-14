@@ -9,9 +9,18 @@ checkout must contain before the task starts.
 
 `worktree_lifecycle` selects source handling for a run:
 
-- **`legacy`:** the default. Uses the existing formula's source preparation.
-- **`new`:** requires a recorded base commit, explicit task inputs, required
-  project checks, and accepted outputs for dependent work.
+- **`new`:** the default for fresh supported work. Requires a recorded base
+  commit, explicit task inputs, required project checks, and accepted outputs
+  for dependent work.
+- **`legacy`:** explicit deprecated compatibility through
+  `--var worktree_lifecycle=legacy`. Uses the existing formula's source
+  preparation and emits a deprecation warning.
+
+Existing workflows retain their recorded mode. The task-creation CLI inherits
+the native workflow's mode when its selector is omitted. An explicit conflicting
+selector refuses creation. A workflow without a recorded or explicitly cooked
+mode refuses admission and requires deliberate migration. Old `work_dir` or
+artifact paths alone cannot establish a mode.
 
 New-mode workflow execution and installation remain unverified. The examples
 below describe the source contract under development. Use a matched core/pack
@@ -24,7 +33,6 @@ Add defaults under the existing rig entry in `city.toml`:
 
 ```toml
 [rigs.formula_vars]
-worktree_lifecycle = "new"
 worktree_base_ref = "refs/heads/main"
 worktree_checks = '{"required_checks":[{"argv":["make","test"],"id":"project-tests"}]}'
 drain_policy = "separate"
@@ -54,8 +62,7 @@ with the build target from the Quick Start and `<request-id>` with the real task
 
 ```sh
 gc sling <run-target> <request-id> --on build-basic \
-  --var artifact_root=plans/export-json/build \
-  --var worktree_lifecycle=new
+  --var artifact_root=plans/export-json/build
 ```
 
 This launch uses the rig defaults above. Builds require a real task or convoy
@@ -176,6 +183,10 @@ final report cannot convert blocked implementation or review into a pass.
 Report-only review preserves source. Interactive source edits require fresh
 checks and approval of the replacement commit.
 
+The GitHub PR review adapter uses explicit deprecated legacy compatibility for
+artifact-only methodology reports. Its snapshot does not establish a managed
+source run.
+
 ## Continue existing work
 
 Keep the original run, base, source plan, and workspace when work continues.
@@ -189,7 +200,9 @@ original workflow or a verified native child.
   original run. Artifact paths cannot establish that relationship. Inheritance
   between separate workflows remains under native validation.
 - **Legacy work:** retain `worktree_lifecycle=legacy`. Captured-run validation
-  rejects a changed mode. Keep the original run's mode unchanged.
+  rejects a changed mode. Supply the explicit legacy selector for a separately
+  launched legacy continuation. A source plan or artifact path cannot convert
+  the old run to new mode.
 - **Refused continuation:** inspect the recorded checkout and original failure.
   Preserve dirty files, commits, and unfinished Git operations. The
   [checkout recovery interface](../assets/scripts/workspace_checkout.md#cli)

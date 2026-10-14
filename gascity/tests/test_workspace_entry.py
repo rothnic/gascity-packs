@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+import contextlib
+import io
 import json
 import os
 from pathlib import Path
@@ -281,6 +283,9 @@ class EntryTests(unittest.TestCase):
         args = dict(gc="gc", city_root=str(self.root), rig_name="example", workflow_root_id="root-1", entrypoint="convoy")
         attempt = Attempt("session-1", "instance-1", "step-1")
         saved_reference = self.rows["root-1"]["metadata"].pop(entry.RUN_REF)
+        with self.assertRaisesRegex(entry.EntryError, "lifecycle"):
+            entry.gate_entry(self.store, attempt, **args)
+        self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
         self.assertEqual(entry.gate_entry(self.store, attempt, **args)["state"], "legacy")
         self.rows["root-1"]["metadata"][entry.RUN_REF] = saved_reference
         with self.assertRaises(entry.EntryError):
@@ -291,18 +296,16 @@ class EntryTests(unittest.TestCase):
         with self.assertRaises(entry.EntryError):
             entry.gate_entry(self.store, attempt, worktree_lifecycle="legacy", **args)
 
-    def test_recorded_mode_cannot_be_bypassed_by_legacy_default_or_native_mode_change(self):
+    def test_recorded_mode_is_inherited_and_rejects_native_mode_change(self):
         from workspace_store import Attempt
         args = dict(gc="gc", city_root=str(self.root), rig_name="example", workflow_root_id="root-1",
                     entrypoint="convoy")
         attempt = Attempt("session-1", "instance-1", "step-1")
-        for mode in (None, "legacy"):
-            with self.subTest(mode=mode), self.assertRaises(entry.EntryError):
-                if mode is None:
-                    self.rows["root-1"]["metadata"].pop("gc.var.worktree_lifecycle", None)
-                else:
-                    self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = mode
-                entry.gate_entry(self.store, attempt, **args)
+        with patch.object(entry, "registered_rig", return_value=str(self.repo)):
+            self.assertEqual(entry.gate_entry(self.store, attempt, **args)["run"], self.record)
+        self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
+        with self.assertRaises(entry.EntryError):
+            entry.gate_entry(self.store, attempt, **args)
 
     def test_placeholder_is_closed_unassigned_empty_and_uses_native_id(self):
         self.rows["allocated-1"] = self.row("allocated-1", status="closed")
@@ -354,6 +357,7 @@ class EntryTests(unittest.TestCase):
         from workspace_store import Attempt
         self.drain_child()
         self.rows["root-1"]["metadata"].pop(entry.RUN_REF)
+        self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
         self.rows["child-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
         args = dict(gc="gc", city_root=str(self.root), rig_name="example", workflow_root_id="child-1", entrypoint="convoy")
         with patch.object(entry, "allocate_placeholder") as create:
@@ -362,6 +366,123 @@ class EntryTests(unittest.TestCase):
         self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "new"
         with self.assertRaisesRegex(entry.EntryError, "cannot bypass"):
             entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), **args)
+
+    def test_task_creation_defaults_to_new_and_requires_native_inputs_before_creation(self):
+        with patch.object(tasks, "create_from_tasks") as create, contextlib.redirect_stderr(io.StringIO()) as stderr:
+            self.assertEqual(tasks.main([str(self.root / "tasks.md"), "--dry-run"]), 1)
+        self.assertIn("new source expansion requires", stderr.getvalue())
+        create.assert_not_called()
+
+    def test_entry_cli_read_and_prepare_inherit_the_recorded_mode(self):
+        from workspace_store import Attempt
+        args = ["--city-root", str(self.root), "--store-ref", "rig:example", "--rig", "example",
+                "--claimed-step", "step-1"]
+        for child in (False, True):
+            if child:
+                self.drain_child()
+            for mode in (("new",) if child else ("new", "legacy")):
+                self.record["worktree_lifecycle"] = mode
+                self.rows["record-1"]["metadata"][contracts()["run"]["metadata_key"]] = canonical_bytes(self.record).decode()
+                if child:
+                    self.rows["child-1"]["metadata"]["gc.var.worktree_lifecycle"] = mode
+                for workflow_root in (("root-1", "child-1") if child else ("root-1",)):
+                    for action in ("read", "prepare"):
+                        with self.subTest(mode=mode, child=child, root=workflow_root, action=action), \
+                             patch("workspace_store.WorkspaceStore", return_value=self.store), \
+                             patch("workspace_store.Attempt.from_env", return_value=Attempt("session-1", "instance-1", "step-1")), \
+                             patch.object(entry, "registered_rig", return_value=str(self.repo)), \
+                             contextlib.redirect_stdout(io.StringIO()) as stdout, \
+                             contextlib.redirect_stderr(io.StringIO()) as stderr:
+                            before = copy.deepcopy(self.rows)
+                            self.assertEqual(entry.main([action, *args, "--workflow-root", workflow_root]), 0, stderr.getvalue())
+                            self.assertEqual(json.loads(stdout.getvalue())["run"]["worktree_lifecycle"], mode)
+                            self.assertEqual(self.rows, before)
+
+    def test_task_creation_explicit_legacy_cannot_allocate_in_recorded_new_run(self):
+        args = [str(self.root / "tasks.md"), "--city", str(self.root), "--store-ref", "rig:example",
+                "--claimed-step", "step-1", "--worktree-lifecycle", "legacy"]
+        for child in (False, True):
+            if child:
+                self.drain_child()
+            for workflow_root in (("root-1", "child-1") if child else ("root-1",)):
+                before = copy.deepcopy(self.rows)
+                with self.subTest(child=child, root=workflow_root), \
+                     patch("workspace_store.WorkspaceStore", return_value=self.store), \
+                     patch.object(tasks, "create_from_tasks", return_value=0) as create, \
+                     contextlib.redirect_stderr(io.StringIO()) as stderr:
+                    self.assertEqual(tasks.main([*args, "--workflow-root", workflow_root]), 1)
+                    self.assertIn("lifecycle", stderr.getvalue())
+                    create.assert_not_called()
+                self.assertEqual(self.rows, before)
+
+    def test_task_creation_inherits_recorded_mode_and_refuses_explicit_changes(self):
+        from workspace_store import Attempt
+        path = self.root / "tasks.md"
+        path.write_text("## Bead Creation Payload\n```yaml\n" + tasks.yaml.safe_dump(source_payload()) + "```\n")
+        args = [str(path), "--city", str(self.root), "--store-ref", "rig:example",
+                "--workflow-root", "root-1", "--claimed-step", "step-1", "--dry-run"]
+        for mode in ("new", "legacy"):
+            with self.subTest(mode=mode):
+                self.record["worktree_lifecycle"] = mode
+                self.rows["record-1"]["metadata"][contracts()["run"]["metadata_key"]] = canonical_bytes(self.record).decode()
+                before = copy.deepcopy(self.rows)
+                with patch("workspace_store.WorkspaceStore", return_value=self.store), \
+                     patch("workspace_store.Attempt.from_env", return_value=Attempt("session-1", "instance-1", "step-1")), \
+                     patch.object(entry, "registered_rig", return_value=str(self.repo)), \
+                     patch.object(tasks, "create_from_tasks", return_value=0) as create, \
+                     contextlib.redirect_stderr(io.StringIO()) as stderr:
+                    self.assertEqual(tasks.main(args), 0, stderr.getvalue())
+                    workspace = create.call_args.kwargs["workspace"]
+                    if mode == "new":
+                        self.assertEqual(workspace["state"]["run"], self.record)
+                        self.assertEqual(stderr.getvalue(), "")
+                    else:
+                        self.assertIsNone(workspace)
+                        self.assertIn("deprecated", stderr.getvalue())
+                    create.reset_mock()
+                    self.assertEqual(tasks.main(args + ["--worktree-lifecycle", "legacy" if mode == "new" else "new"]), 1)
+                    create.assert_not_called()
+                self.assertEqual(self.rows, before)
+
+    def test_task_creation_explicit_standalone_legacy_warns_and_partial_native_binding_refuses(self):
+        args = [str(self.root / "tasks.md"), "--worktree-lifecycle", "legacy", "--dry-run"]
+        with patch.object(tasks, "create_from_tasks", return_value=0) as create, \
+             contextlib.redirect_stderr(io.StringIO()) as stderr:
+            self.assertEqual(tasks.main(args), 0)
+            self.assertIsNone(create.call_args.kwargs["workspace"])
+            self.assertIn("deprecated", stderr.getvalue())
+            create.reset_mock()
+            self.assertEqual(tasks.main(args + ["--workflow-root", "root-1"]), 1)
+            create.assert_not_called()
+
+    def test_task_creation_inherits_cooked_legacy_and_refuses_unclassified_or_uncaptured_new(self):
+        from workspace_store import Attempt
+        path = self.root / "tasks.md"
+        path.write_text("## Bead Creation Payload\n```yaml\n" + tasks.yaml.safe_dump(source_payload()) + "```\n")
+        args = [str(path), "--city", str(self.root), "--store-ref", "rig:example",
+                "--workflow-root", "root-1", "--claimed-step", "step-1", "--dry-run"]
+        self.rows["root-1"]["metadata"].pop(entry.RUN_REF)
+        with patch("workspace_store.WorkspaceStore", return_value=self.store), \
+             patch("workspace_store.Attempt.from_env", return_value=Attempt("session-1", "instance-1", "step-1")), \
+             patch.object(tasks, "create_from_tasks", return_value=0) as create, \
+             contextlib.redirect_stderr(io.StringIO()) as stderr:
+            before = copy.deepcopy(self.rows)
+            self.assertEqual(tasks.main(args), 1)
+            self.assertIn("no valid recorded worktree lifecycle", stderr.getvalue())
+            create.assert_not_called()
+            self.assertEqual(self.rows, before)
+            for mode in ("legacy", "new"):
+                self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = mode
+                before = copy.deepcopy(self.rows)
+                with self.subTest(mode=mode):
+                    self.assertEqual(tasks.main(args), 0 if mode == "legacy" else 1)
+                    if mode == "legacy":
+                        self.assertIsNone(create.call_args.kwargs["workspace"])
+                        self.assertIn("deprecated", stderr.getvalue())
+                    else:
+                        create.assert_not_called()
+                    self.assertEqual(self.rows, before)
+                    create.reset_mock()
 
     def test_claimed_new_lifecycle_cannot_bypass_required_capture_through_legacy_root_mode(self):
         from workspace_store import Attempt

@@ -29,7 +29,7 @@ default = "@default"
 
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle. New uses native owned workspaces and captured project checks."
-default = "legacy"
+default = "new"
 enum = ["legacy", "new"]
 
 [vars.planning_formula]

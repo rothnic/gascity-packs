@@ -37,6 +37,9 @@ def main() -> int:
             verify_source_modes("new", declared)
         else:
             verify_source_modes(mode, declared)
+        if mode == "legacy":
+            print("workspace-lifecycle-check: worktree_lifecycle=legacy is deprecated; retain the original mode for legacy work",
+                  file=sys.stderr)
         print(json.dumps({"ok": True, "worktree_lifecycle": mode}, sort_keys=True))
         return 0
     except (RecordError, OSError, subprocess.SubprocessError, UnicodeError) as exc:

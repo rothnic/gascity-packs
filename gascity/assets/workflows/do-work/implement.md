@@ -25,7 +25,7 @@ Include summary and frozen requirement artifacts with their actual hashes.
 This step emits test evidence; only `record-result` may publish acceptance after
 `independent-acceptance` completes. A summary schema pass supplies no acceptance.
 
-For the default legacy run, retain the following source-anchor behavior.
+For explicit deprecated legacy work, retain the following source-anchor behavior.
 
 Resolve `<source-anchor-id>` as described below: the root's stamped
 `gc.source_anchor_id`, else the same rules as `prepare-worktree`. For a

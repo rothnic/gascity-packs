@@ -7,9 +7,10 @@ containing its ancestors does not establish acceptance.
 
 The `workspace_flow.py` callable and installed `gc gc workspace flow` command
 connect these helpers to `NativeSourceRuntime`. Required policy and physical
-identities come from native records. Legacy remains the default. Native workflow
-acceptance at matched core/pack/project revisions remains separate from component
-fixtures and source validation.
+identities come from native records. Fresh supported work defaults to `new`.
+Existing runs keep their recorded mode. Explicit `legacy` remains deprecated
+compatibility. Native workflow acceptance at matched core/pack/project revisions
+remains separate from component fixtures and source validation.
 
 ## Producer completion
 

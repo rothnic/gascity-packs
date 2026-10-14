@@ -72,15 +72,22 @@ run.
 
    [rigs.imports.gc]
    source = "https://github.com/gastownhall/gascity-packs.git//gascity/roles"
+
+   [rigs.formula_vars]
+   worktree_checks = '{"required_checks":[{"argv":["make","test"],"id":"project-tests"}]}'
    ```
 
    Contributors working on the packs themselves can clone
    `https://github.com/gastownhall/gascity-packs` and point either `source`
    at the local path (for example `../gascity-packs/superpowers`) instead.
 
+   Replace `make test` with your project's checks. The registered repository
+   must contain a commit. See [worktree configuration](../gascity/docs/worktree-dependencies.md#configure-the-run)
+   for the base commit and required-check contract.
+
 5. **Run your first build.** `superpowers-build` is a targeted formula
    (`target_required = true`): create a bead describing the goal, then sling
-   the formula against it. `artifact_root` is the only required variable:
+   the formula against it. Set `artifact_root` for the stage reports:
 
    ```sh
    gc bd create "Add a --json flag to the export command"
@@ -279,9 +286,10 @@ converge before the post-implementation review fan-out.
 
 ### Source workspaces
 
-`worktree_lifecycle=legacy` is the default for builds, item formulas and
-continuations. `new` selects the managed source contract with the imported native
-entry, checkout, runtime and record helpers. Configure its fixed base and required
+`worktree_lifecycle=new` is the default for fresh source work. Continuations
+retain the original run's mode. Explicit `legacy` remains deprecated
+compatibility and emits a warning. New mode uses the imported native entry,
+checkout, runtime and record helpers. Configure its fixed base and required
 checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
 Native worker execution and installation require separate matched-pair validation.
 

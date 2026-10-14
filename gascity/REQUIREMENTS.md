@@ -390,11 +390,12 @@ states.
 
 ## Mode Contracts
 
-`worktree_lifecycle` selects one source lifecycle for a run. Its development
-default is `legacy`. Entry preflight checks require explicit source
+`worktree_lifecycle` selects one source lifecycle for a run. Fresh supported
+work defaults to `new`. Explicit `legacy` retains deprecated compatibility and
+emits a warning. Entry preflight checks require explicit source
 classifications and refuse unknown or mixed modes before implementation.
-Current source paths declare `legacy`, so a `new` request stops at preflight.
-The later Stage A rollout selects the qualified default.
+New-mode capture requires the original base and nonempty canonical project
+check policy. Native worker and installation acceptance require a matched pair.
 
 Run records require `worktree_lifecycle: legacy|new`. The read-only
 `verify_run_mode` helper checks the selected mode against the supplied run and
@@ -405,9 +406,11 @@ continuations must read that record before effects. These durable writer and
 workflow checks remain separate implementation requirements.
 
 Delegators retain the selected value. Native drains inherit parent runtime
-variables. Manual formula launches must pass `worktree_lifecycle` explicitly.
-Existing formulas retain their legacy source paths until their source owners
-migrate and pass workflow acceptance.
+variables. Task creation reads the retained run or explicitly cooked native
+mode before allocation. An omitted selector inherits that mode. A conflicting
+override or unclassified workflow refuses creation. Existing legacy runs and
+their continuations retain legacy behavior. Separately launched legacy work
+requires an explicit selector.
 
 `interaction_mode` values:
 
@@ -876,7 +879,7 @@ Proof expectation: validation requires `workflow.formula`, `producer.formula`,
 | GC-METH-014 | Coverage matrix consistency | YAML coverage is authoritative, markdown coverage mirrors IDs/statuses, and all non-covered statuses include rationale. | this ledger; future schema/gate tests |
 | GC-METH-015 | Neutral artifact metadata | Artifacts record workflow, methodology, and producer metadata without owner or role fields. | this ledger; future schema/gate tests |
 | GC-METH-016 | Nested continuation suffixes | `build-from-requirements-base -> build-from-plan-base -> build-from-decompose-base -> build-from-convoy-base -> build-from-review-base` form a nested suffix chain. Each suffix validates its prerequisite, performs its owned work, and hands off to the next suffix. Cataloged `build-from-*` wrappers expose the default Gas City behavior. | `formulas/build-from-*-base.formula.toml`; `formulas/build-from-*.formula.toml`; `tests/test_formula_assets.py::FormulaAssetTests::test_build_continuation_bases_form_nested_suffix_chain`; `tests/test_formula_assets.py::FormulaAssetTests::test_default_continuation_entrypoints_extend_suffix_bases` |
-| GC-METH-017 | Source lifecycle mode | Build, implementation, issue-fix and continuation entries expose `worktree_lifecycle: legacy|new`, default to legacy, reject conflicting source declarations at preflight and retain the value through delegation. Initial native capture freezes the original run/base and nonempty canonical project check policy in one guarded batch. Continuations and mutations consume exact native maps and original rows. Native worker acceptance remains a separate matched-pair gate. | `schemas/workspace/records.v1.json`; `assets/scripts/workspace_records.py`; `tests/test_workspace_lifecycle.py`; `formulas/REQUIREMENTS.md` |
+| GC-METH-017 | Source lifecycle mode | Fresh supported entries default `worktree_lifecycle: legacy|new` to new, retain explicit deprecated legacy with a warning, reject conflicting source declarations at preflight and retain the recorded mode through delegation. Task creation inherits native mode and rejects an incompatible selector before allocation. Initial native capture freezes the original run/base and nonempty canonical project check policy in one guarded batch. Continuations and mutations consume exact native maps and original rows. Native worker acceptance remains a separate matched-pair gate. | `schemas/workspace/records.v1.json`; `assets/scripts/workspace_records.py`; `tests/test_workspace_lifecycle.py`; `tests/test_workspace_entry.py`; `formulas/REQUIREMENTS.md` |
 
 | GC-METH-018 | Qualified source handoff | New-mode members publish executed project checks, actual independent native review and an exact output commit before checkpoint, source close or dependent integration. Canonical review and publication consume that same accepted terminal generation. Legacy retains direct producer dependencies when managed stages skip. | `assets/scripts/workspace_flow.py`; `assets/scripts/workspace_runtime.py`; `tests/test_workspace_composition.py`; `tests/test_workspace_results.py` |
 | GC-METH-019 | Native source authority | Writer kinds are fixed by actual cooked physical occurrences. Read-only occurrence admission cannot install, write or replace a grant. Original row revisions, source selection, run policy and scope remain guarded through each native batch. | `assets/scripts/workspace_store.py`; `assets/scripts/workspace_cooked.py`; `tests/test_workspace_store.py`; `tests/test_workspace_cooked.py` |

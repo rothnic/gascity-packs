@@ -12,7 +12,8 @@ own helpers. With the `gc` binding, use `gc gc workspace`.
 Each helper's `--help` lists its exact arguments. Commands require explicit native
 city, store, registered rig, root and claimed step. Start from a real intake task
 or convoy. New mode requires the captured project policy and qualified core APIs.
-Legacy remains the default workflow mode.
+Fresh supported work defaults to `new`. Existing runs keep their recorded mode.
+Explicit `legacy` remains deprecated compatibility.
 
 Unknown writes or effects require readback of the original operation. Keep the
 private allocation journals and guarded requests outside source checkouts.

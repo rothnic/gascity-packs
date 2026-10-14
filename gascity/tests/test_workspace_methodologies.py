@@ -62,7 +62,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                 gate = steps["validate-workspace-mode"]
                 self.assertEqual(gate["check"]["max_attempts"], 1)
                 self.assertEqual(Path(gate["check"]["check"]["path"]).name, "workspace-lifecycle-valid.py")
-                self.assertEqual(formula["vars"]["worktree_lifecycle"]["default"], "legacy")
+                self.assertEqual(formula["vars"]["worktree_lifecycle"]["default"], "new")
                 declared = json.loads(gate["metadata"]["gc.lifecycle.source_modes"])
                 self.assertEqual(records.verify_source_modes("new", declared), "new")
                 self.assertEqual(gate["metadata"]["gc.lifecycle.compatibility"], "legacy")
@@ -97,6 +97,10 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                             result = subprocess.run([sys.executable, "-S", str(check)], env=env,
                                                     capture_output=True, text=True, timeout=5)
                             self.assertEqual(result.returncode, 0 if mode in ("legacy", "new") else 1, result.stderr)
+                            if mode == "legacy":
+                                self.assertIn("deprecated", result.stderr)
+                            elif mode == "new":
+                                self.assertEqual(result.stderr, "")
                             if mode not in ("legacy", "new"):
                                 self.assertEqual(result.stdout, "")
                     snapshot.write_text(json.dumps([{"id": "foreign-check", "metadata": gate["metadata"]}]))
@@ -241,7 +245,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
             for stage in ("plan", "decompose", "convoy", "review"):
                 formula = resolve_formula_from_dirs(DIRS, "build-from-" + stage)
                 prepare = next(step for step in formula["steps"] if step["id"] == "prepare-" + stage)
-                self.assertEqual(formula["vars"]["worktree_lifecycle"]["default"], "legacy")
+                self.assertEqual(formula["vars"]["worktree_lifecycle"]["default"], "new")
                 declared = json.loads(prepare["metadata"]["gc.lifecycle.source_modes"])
                 self.assertEqual(records.verify_source_modes("new", declared), "new")
                 self.assertEqual(prepare["metadata"]["gc.lifecycle.compatibility"], "legacy")

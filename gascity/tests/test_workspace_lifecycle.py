@@ -72,7 +72,7 @@ class WorkspaceLifecycleTests(unittest.TestCase):
                     with self.assertRaisesRegex(records.RecordError, "lifecycle"):
                         records.verify_source_modes(mode, surfaces)
 
-    def test_actual_entries_render_legacy_default_and_check_before_delegation(self):
+    def test_actual_entries_render_new_default_and_check_before_delegation(self):
         directories = [REPO / name / "formulas" for name in ("gascity", "compound-engineering", "superpowers", "bmad", "gstack")]
         entries = [(name, "prepare") for name in ("build-basic", "compound-build", "superpowers-build", "bmad-build", "gstack-build")]
         entries += [(f"build-from-{stage}", f"prepare-{stage}") for stage in ("requirements", "plan", "decompose", "convoy", "review")]
@@ -80,7 +80,7 @@ class WorkspaceLifecycleTests(unittest.TestCase):
         for name, first in entries:
             with self.subTest(entry=name):
                 formula = resolve_formula_from_dirs(directories, name)
-                self.assertEqual(formula["vars"]["worktree_lifecycle"]["default"], "legacy")
+                self.assertEqual(formula["vars"]["worktree_lifecycle"]["default"], "new")
                 self.assertEqual(formula["vars"]["worktree_lifecycle"]["enum"], ["legacy", "new"])
                 step = next(step for step in formula["steps"] if step["id"] == first)
                 self.assertEqual(step["metadata"]["gc.lifecycle"], "{{worktree_lifecycle}}")
@@ -124,8 +124,13 @@ class WorkspaceLifecycleTests(unittest.TestCase):
                     self.assertEqual(json.loads(calls.read_text()), ["bd", "show", "fixture-check", "--json"])
                     if ok:
                         self.assertEqual(json.loads(result.stdout)["worktree_lifecycle"], selected)
+                        if selected == "legacy":
+                            self.assertIn("deprecated", result.stderr)
+                        else:
+                            self.assertEqual(result.stderr, "")
                     else:
                         self.assertIn("lifecycle", result.stderr)
+                        self.assertNotIn("deprecated", result.stderr)
 
     def test_admission_check_refuses_ambiguous_or_failed_native_read(self):
         with tempfile.TemporaryDirectory(prefix="workspace-lifecycle-invalid-") as scratch:

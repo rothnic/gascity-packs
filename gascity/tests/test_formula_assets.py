@@ -1425,7 +1425,7 @@ class FormulaAssetTests(unittest.TestCase):
                     expected_steps += ["independent-acceptance", "record-result"]
                     if name == "do-work-item":
                         expected_steps = [expected_steps[0], "prepare-worktree", *expected_steps[1:], "close-source-anchor"]
-                    self.assertEqual(resolved["vars"]["worktree_lifecycle"]["default"], "legacy")
+                    self.assertEqual(resolved["vars"]["worktree_lifecycle"]["default"], "new")
                     steps = {step["id"]: step for step in resolved["steps"]}
                     self.assertEqual(steps["independent-acceptance"]["needs"], ["implement" if name == "do-work" else "implement-item"])
                     self.assertEqual(steps["record-result"]["needs"], ["independent-acceptance"])
@@ -4061,6 +4061,31 @@ class FormulaAssetTests(unittest.TestCase):
             with self.subTest(step="render-comment", fragment=fragment):
                 self.assertIn(fragment, render_comment)
 
+    def test_github_pr_report_delegation_preserves_explicit_legacy_compatibility(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1]
+        adapter = resolve_formula(root, "github-pr-review")
+        delegation = node_description(root, next(step for step in adapter["steps"] if step["id"] == "run-review"))
+        self.assertIn("--var worktree_lifecycle=legacy", delegation)
+        self.assertIn("does not declare `worktree_lifecycle`", delegation)
+        self.assertIn("deprecated", delegation)
+        selectors = {"gascity": "review", **{
+            pack: methodology_selector_defaults(expected)["code_review_formula"]
+            for pack, expected in THIRD_PARTY_BUILD_PACKS.items()
+        }}
+        for pack, formula_name in selectors.items():
+            directories = [root / "formulas"]
+            if pack != "gascity":
+                directories.append(root.parent / pack / "formulas")
+            with self.subTest(pack=pack, formula=formula_name):
+                selected = resolve_formula_from_dirs(directories, formula_name)
+                self.assertFalse(selected["target_required"])
+                self.assertEqual(selected["vars"]["worktree_lifecycle"]["default"], "new")
+                self.assertIn("legacy", selected["vars"]["worktree_lifecycle"]["enum"])
+                self.assertEqual(load_formula_from_dirs(directories, formula_name)["mode"], "report")
+        generic = effective_formula_text(root, "review")
+        self.assertNotIn("gc workspace", generic)
+        self.assertNotIn("--var worktree_lifecycle=legacy", generic)
+
     def test_github_issue_fix_uses_implementation_plan_artifact_contract(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
         text = effective_formula_text(root, "github-issue-fix")
@@ -4348,7 +4373,7 @@ description = "Override sink that writes the base triage report contract."
             text = effective_formula_text(root, path.name.removesuffix(".formula.toml"))
             for var_name in data.get("vars", {}):
                 if var_name in {"worktree_lifecycle", "worktree_base_ref", "worktree_checks"}:
-                    self.assertEqual(data["vars"][var_name]["default"], "legacy" if var_name == "worktree_lifecycle" else "@default" if var_name == "worktree_base_ref" else "")
+                    self.assertEqual(data["vars"][var_name]["default"], "new" if var_name == "worktree_lifecycle" else "@default" if var_name == "worktree_base_ref" else "")
                     continue
                 with self.subTest(formula=path.name, var=var_name):
                     if data.get("type") == "expansion":

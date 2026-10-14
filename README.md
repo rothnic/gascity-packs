@@ -61,6 +61,9 @@ this is the shortest path. Each step is copy-pasteable; swap names to taste.
 
    [rigs.imports.gc]
    source = "https://github.com/gastownhall/gascity-packs.git//gascity/roles"
+
+   [rigs.formula_vars]
+   worktree_checks = '{"required_checks":[{"argv":["make","test"],"id":"project-tests"}]}'
    ```
 
    The city-level import provides the workflow formulas and the `gc.mayor`
@@ -68,6 +71,10 @@ this is the shortest path. Each step is copy-pasteable; swap names to taste.
    (`gc.implementation-worker`, `gc.requirements-planner`, and friends) that
    the formulas route work to. Run `gc import install` after editing to
    fetch anything newly referenced.
+
+   Replace `make test` with your project's checks. Fresh builds use recorded
+   source workspaces by default. See [worktree configuration](./gascity/docs/worktree-dependencies.md#configure-the-run)
+   for the base commit and required-check contract.
 
 5. **Run your first build.** Create a bead describing the goal, then launch
    the starter factory against it:

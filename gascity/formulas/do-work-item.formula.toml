@@ -25,7 +25,8 @@ default = ""
 
 [vars.worktree_lifecycle]
 description = "Retained shared run lifecycle; new advances members through accepted workspace checkpoints."
-default = "legacy"
+default = "new"
+enum = ["legacy", "new"]
 
 [vars.context_path]
 description = "Optional context bundle path."

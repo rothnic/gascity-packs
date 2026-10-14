@@ -35,6 +35,9 @@ and your project added as a rig (`gc rig add .` inside the repo). See the
 
    [rigs.imports.gc]
    source = "https://github.com/gastownhall/gascity-packs.git//gascity/roles"
+
+   [rigs.formula_vars]
+   worktree_checks = '{"required_checks":[{"argv":["make","test"],"id":"project-tests"}]}'
    ```
 
    Both imports are required. The rig-scoped roles pack supplies agents but,
@@ -43,6 +46,10 @@ and your project added as a rig (`gc rig add .` inside the repo). See the
    command. Keep the top-level Gas City pack imported at city scope.
 
    (Contributors hacking on packs can point this source at a local clone.)
+
+   Replace `make test` with your project's checks. The registered repository
+   must contain a commit. See [worktree configuration](docs/worktree-dependencies.md#configure-the-run)
+   for the base commit and required-check contract.
 
 2. Create a bead describing what you want built, and sling the starter
    factory at it:
@@ -145,7 +152,7 @@ launch or pin them in a rig's `formula_vars`:
 | `implementation_target` | `gc.implementation-worker` | The rig role that implements each work item. |
 | `push` / `open_pr` | `false` | Allow the publish stage to push and open a PR after all checks pass. |
 | `max_iterations` | `10` | Bound on implementation/review fix attempts. |
-| `worktree_lifecycle` | `legacy` | `new` selects recorded source inputs, owned workspaces and qualified output handoff. |
+| `worktree_lifecycle` | `new` | Recorded source inputs, owned workspaces and qualified output handoff. Explicit `legacy` is deprecated. |
 | `worktree_base_ref` | `@default` | Captures the registered checkout HEAD once. Empty is invalid. |
 | `worktree_checks` | empty | Canonical JSON `required_checks: [{id, argv}]`, required only for `new` and captured on the run. |
 
@@ -168,6 +175,7 @@ gc sling gc.run-operator <request-id> --on build-from-decompose \
   --var requirements_path=<artifact-dir>/requirements.md \
   --var plan_path=<artifact-dir>/implementation-plan.md \
   --var plan_review_path=<artifact-dir>/plan-review.md \
+  --var worktree_lifecycle=legacy \
   --var drain_policy=separate
 ```
 
@@ -272,11 +280,13 @@ and resume each step independently.
 
 Use these mode inputs when designing or launching methodology formulas:
 
-- `worktree_lifecycle` defaults to `legacy`. New mode uses the native entry,
+- `worktree_lifecycle` defaults to `new` for fresh work. Explicit `legacy`
+  retains deprecated compatibility and emits a warning. New mode uses the native entry,
   source-selection, checkout, acceptance and guarded record helpers. Initial
   capture freezes the registered base and project check policy atomically.
   Native drains and explicit child launches retain the original mode and policy.
   Continuations must prove the original run and current source generation.
+  A recorded legacy run keeps its mode after the default changes.
   Use a matched core/pack revision qualified for the intended workflow.
   Native worker execution and installation remain unverified in this candidate.
 
@@ -310,7 +320,8 @@ asset tests fail if a formula exists without a requirements row.
 
 New mode wires accepted source selection through owned checkout preparation,
 independent project checks/review, result checkpoints, canonical review and
-publication. Legacy remains the default. The candidate's source and component
+publication. Fresh work defaults to new mode, with explicit deprecated legacy
+compatibility. The candidate's source and component
 checks do not establish native worker execution or installation acceptance.
 
 - **Configuration and recovery:** [Worktree dependencies](docs/worktree-dependencies.md).
@@ -781,7 +792,8 @@ Create `assets/workflows/do-work/implement.md`:
 ```markdown
 Implement only the assigned source anchor.
 
-- Read `work_dir` from source-anchor metadata and `cd` there before editing.
+- Read the exact path through the managed checkout interface with the retained
+  run and workspace identities before editing.
 - Select tests based on the changed area and explain why they are sufficient.
 - For Go changes, prefer package-level tests first, then `make test-fast-parallel`
   before closing if the change spans packages.
@@ -1003,6 +1015,10 @@ The mayor uses `assets/scripts/create_beads_from_tasks.py` after approving a
 task plan. The script requires Python 3 with PyYAML available, invokes `gc bd --rig
 <target_rig>` for runnable beads, invokes `gc convoy --rig <target_rig>` for
 convoy heads and membership, and records the created mapping in `tasks.md`.
+New source expansion requires the existing native workflow, claimed step and
+recorded run. The script inherits that run's mode and refuses an incompatible
+override before creation. Standalone legacy creation requires explicit
+`--worktree-lifecycle legacy` and emits a deprecation warning.
 
 The `tasks.md` payload uses nested `convoys[]` and `beads[]`; `epics[]` is a
 hard validation error. `convoys[].dependencies` expands to runnable bead edges

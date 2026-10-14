@@ -443,24 +443,31 @@ def prepare_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
     return result
 
 
-def gate_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
-               workflow_root_id: str, entrypoint: str, generation: int = 1,
-               worktree_lifecycle: str | None = None, **kwargs) -> dict[str, Any]:
-    """Apply the mode recorded by native cooking at the real entry boundary."""
-    observed = store.snapshot(list(dict.fromkeys([workflow_root_id, attempt.claimed_bead_id])))
+def read_entry_mode(store, *, workflow_root_id: str, claimed_step_id: str,
+                    worktree_lifecycle: str | None = None):
+    """Read the retained run or explicit cooked mode before source effects."""
+    observed = store.snapshot(list(dict.fromkeys([workflow_root_id, claimed_step_id])))
     root = observed[workflow_root_id]
-    metadata = root["metadata"]
-    mode = metadata.get("gc.var.worktree_lifecycle", "legacy")
-    claimed_mode = observed[attempt.claimed_bead_id]["metadata"].get("gc.lifecycle")
-    require(claimed_mode is None or claimed_mode == mode,
-            "claimed native lifecycle conflicts with the workflow mode")
-    require(mode in ("legacy", "new"), "native workflow has an invalid worktree lifecycle")
-    require(worktree_lifecycle is None or worktree_lifecycle == mode,
-            "rendered lifecycle conflicts with the native workflow")
+    step = observed[claimed_step_id]
+    healthy(root)
+    healthy(step)
+    physical_root_id = native_root(step)
+    require(isinstance(physical_root_id, str) and bool(physical_root_id), "claimed entry step has no native workflow")
+    physical_root = root if physical_root_id == workflow_root_id else store.snapshot([physical_root_id])[physical_root_id]
+    healthy(physical_root)
+    metadata = physical_root["metadata"]
+    require(root["metadata"].get("gc.kind") == "workflow" and root["metadata"].get("gc.root_store_ref") == store.store_ref
+            and metadata.get("gc.kind") == "workflow" and metadata.get("gc.root_store_ref") == store.store_ref
+            and (physical_root_id == workflow_root_id or metadata.get("gc.drain_control_id"))
+            and step["metadata"].get("gc.root_store_ref") == store.store_ref
+            and step["status"] == "in_progress" and bool(step["assignee"]),
+            "lifecycle selection requires the exact native workflow, store and claimed step")
+    mode = metadata.get("gc.var.worktree_lifecycle")
     if metadata.get("gc.drain_control_id"):
         control = store.snapshot([metadata["gc.drain_control_id"]])[metadata["gc.drain_control_id"]]
         original_root_id = native_root(control)
-        require(original_root_id and original_root_id != workflow_root_id
+        require(original_root_id and original_root_id != physical_root_id
+                and workflow_root_id in (physical_root_id, original_root_id)
                 and control["metadata"].get("gc.kind") == "drain"
                 and control["metadata"].get("gc.root_store_ref") == store.store_ref,
                 "native legacy or inherited child has no exact original root/store")
@@ -469,24 +476,45 @@ def gate_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
                 and original_root["metadata"].get("gc.root_store_ref") == store.store_ref,
                 "native child original root/store changed")
         if RUN_REF in original_root["metadata"]:
-            continuation, inherited_rows = read_native_continuation(store, claimed_step_id=attempt.claimed_bead_id,
+            continuation, inherited_rows = read_native_continuation(store, claimed_step_id=claimed_step_id,
                                                                   requested_root_id=workflow_root_id)
             inherited = inherited_rows[continuation.binding["run_ref"]["bead_id"]]
             retained = parse_record(inherited["metadata"][contracts()["run"]["metadata_key"]])
-            require(retained["worktree_lifecycle"] == mode,
+            mode = retained["worktree_lifecycle"] if mode is None else mode
+            require(retained["worktree_lifecycle"] == mode
+                    and original_root["metadata"].get("gc.var.worktree_lifecycle", mode) == mode,
                     "native child mode conflicts with its immutable inherited run")
         else:
-            require(mode == "legacy" and original_root["metadata"].get("gc.var.worktree_lifecycle", "legacy") == "legacy"
+            original_mode = original_root["metadata"].get("gc.var.worktree_lifecycle")
+            mode = original_mode if mode is None else mode
+            require(mode == "legacy" and original_mode == "legacy"
                     and RUN_REF not in metadata,
                     "native child cannot bypass an original managed run or its required capture")
             retained = None
     elif RUN_REF in metadata:
         retained = _load(store, "run", reference(metadata[RUN_REF], "run"))
+        mode = retained["worktree_lifecycle"] if mode is None else mode
         require(retained["workflow_root_id"] == workflow_root_id
                 and retained["worktree_lifecycle"] == mode,
                 "native workflow mode conflicts with its immutable recorded run")
     else:
         retained = None
+    require(mode in ("legacy", "new"),
+            "native workflow has no valid recorded worktree lifecycle; resume its original classified workflow or migrate explicitly")
+    claimed_mode = step["metadata"].get("gc.lifecycle")
+    require(claimed_mode is None or claimed_mode == mode,
+            "claimed native lifecycle conflicts with the workflow mode")
+    require(worktree_lifecycle is None or worktree_lifecycle == mode,
+            "rendered lifecycle conflicts with the native workflow")
+    return mode, retained
+
+
+def gate_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
+               workflow_root_id: str, entrypoint: str, generation: int = 1,
+               worktree_lifecycle: str | None = None, **kwargs) -> dict[str, Any]:
+    """Apply the mode recorded by native cooking at the real entry boundary."""
+    mode, retained = read_entry_mode(store, workflow_root_id=workflow_root_id,
+        claimed_step_id=attempt.claimed_bead_id, worktree_lifecycle=worktree_lifecycle)
     if retained is not None:
         from workspace_requests import require_resolved_scope
         rig_root = registered_rig(gc, canonical_path(city_root), rig_name, store.store_ref)
@@ -496,7 +524,7 @@ def gate_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
         require_resolved_scope(store, run_scope(retained["workflow_root_id"]))
     if mode == "legacy":
         return {"state": "legacy", "workflow_root_id": workflow_root_id, "store_ref": store.store_ref}
-    base = metadata.get("gc.var.worktree_base_ref", "@default")
+    base = store.snapshot([workflow_root_id])[workflow_root_id]["metadata"].get("gc.var.worktree_base_ref", "@default")
     return prepare_entry(store, attempt, gc=gc, city_root=city_root, rig_name=rig_name,
         workflow_root_id=workflow_root_id, entrypoint=entrypoint, generation=generation,
         worktree_lifecycle=mode, base_ref=base, **kwargs)
@@ -533,8 +561,12 @@ def main(argv: list[str] | None = None) -> int:
             result = {"bead_id": allocate_placeholder(store, title=args.title, existing_id=args.run_record_id)}
         else:
             require(bool(args.workflow_root) and bool(args.claimed_step), "entry requires exact workflow root and claimed step")
+            mode = args.worktree_lifecycle
+            if args.action != "gate":
+                mode, _ = read_entry_mode(store, workflow_root_id=args.workflow_root,
+                    claimed_step_id=args.claimed_step, worktree_lifecycle=mode)
             kwargs = dict(gc=args.gc, city_root=args.city_root, rig_name=args.rig,
-                workflow_root_id=args.workflow_root, worktree_lifecycle=args.worktree_lifecycle or "new",
+                workflow_root_id=args.workflow_root, worktree_lifecycle=mode,
                 generation=args.generation, input_convoy_id=args.input_convoy_id, require_plan=args.require_plan)
             if args.action == "read":
                 result = read_entry(store, claimed_step_id=args.claimed_step,

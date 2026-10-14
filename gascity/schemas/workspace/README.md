@@ -3,9 +3,9 @@
 The base pack defines version 1 JSON records for source lifecycle state and a
 read-only validator. These contracts bind run identity, source OIDs and evidence.
 The [record-access adapter](access.md) publishes validated records with native
-writer admission, guarded transactions and bounded local locks. Existing formulas
-retain their current lifecycle until their workflow writers are connected and
-qualified.
+writer admission, guarded transactions and bounded local locks. Fresh supported
+formulas default to new; existing runs retain their recorded lifecycle. Native
+workflow acceptance requires the matched source pair.
 
 ## Validate
 
@@ -169,8 +169,8 @@ entry preflights use the executable `workspace-lifecycle-valid.py` check with
 `gc.lifecycle` and JSON-string `gc.lifecycle.source_modes` step metadata. The
 check reads the exact check bead through `gc bd show`; it makes no store writes.
 Composed entry declarations select `new` source support with explicit
-`gc.lifecycle.compatibility=legacy`. The selector still defaults to legacy.
-A legacy fallback requires that explicit compatibility declaration.
+`gc.lifecycle.compatibility=legacy`. Fresh work defaults to new. Explicit legacy
+execution requires that compatibility declaration and emits a deprecation warning.
 This checks supplied declarations. Installed-layer priority, shadowed source
 admission and new-workflow acceptance require separate runtime verification.
 

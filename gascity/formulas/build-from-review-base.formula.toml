@@ -29,7 +29,7 @@ default = ""
 
 [vars.worktree_lifecycle]
 description = "Source lifecycle for this run. New mode requires the composed native workspace helpers and frozen check policy."
-default = "legacy"
+default = "new"
 enum = ["legacy", "new"]
 
 [vars.artifact_root]

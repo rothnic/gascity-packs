@@ -20,7 +20,7 @@ default = "@default"
 
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle; new requires composed methodology acceptance."
-default = "legacy"
+default = "new"
 enum = ["legacy", "new"]
 
 [vars.review_mode]

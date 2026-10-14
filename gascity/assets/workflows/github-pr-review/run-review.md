@@ -33,7 +33,27 @@ gate. Pass review_mode {{review_mode}} and interaction_mode
 {{interaction_mode}} through when the selected formula accepts them; the PR
 adapter itself never mutates code regardless of review mode.
 
-```bash
+This snapshot review has no managed source run. Select explicit deprecated
+`legacy` compatibility when the selected formula declares `worktree_lifecycle`.
+Keep the snapshot and report inputs; do not manufacture a source run.
+
+If the selected formula declares `worktree_lifecycle`, launch with the legacy
+selector and warning:
+
+```sh
+printf '%s\n' 'worktree_lifecycle=legacy is deprecated for artifact-only PR review' >&2
+gc sling gc.run-operator {{code_review_formula}} --formula \
+  --var context_path="{{context_path}}" \
+  --var subject_path="$SUBJECT_PATH" \
+  --var report_path="$REPORT_PATH" \
+  --var worktree_lifecycle=legacy \
+  --var interaction_mode="{{interaction_mode}}" \
+  --var review_mode="{{review_mode}}"
+```
+
+If the selected formula does not declare `worktree_lifecycle`, use this launch:
+
+```sh
 gc sling gc.run-operator {{code_review_formula}} --formula \
   --var context_path="{{context_path}}" \
   --var subject_path="$SUBJECT_PATH" \
@@ -42,8 +62,8 @@ gc sling gc.run-operator {{code_review_formula}} --formula \
   --var review_mode="{{review_mode}}"
 ```
 
-If the selected formula does not declare the mode vars, omit the two mode
-`--var` arguments rather than failing the launch.
+In either case, omit each interaction/review mode `--var` argument that the
+selected formula does not declare.
 
 Do not close this step until `REPORT_PATH` exists and validates through
 `{{pack_root}}/assets/scripts/github_reports.py review-outcome "$REPORT_PATH"`.

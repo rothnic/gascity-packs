@@ -60,11 +60,18 @@ gc rig add .
 
    [rigs.imports.gc]
    source = "https://github.com/gastownhall/gascity-packs.git//gascity/roles"
+
+   [rigs.formula_vars]
+   worktree_checks = '{"required_checks":[{"argv":["make","test"],"id":"project-tests"}]}'
    ```
 
    Contributors working on the packs themselves can clone
    `https://github.com/gastownhall/gascity-packs` and point either `source`
    at the local path (for example `../gascity-packs/bmad`) instead.
+
+   Replace `make test` with your project's checks. The registered repository
+   must contain a commit. See [worktree configuration](../gascity/docs/worktree-dependencies.md#configure-the-run)
+   for the base commit and required-check contract.
 
 3. **Launch your first build.** `bmad-build` is targeted
    (`target_required = true`), so create a bead describing the goal first,
@@ -77,8 +84,8 @@ gc rig add .
      --var drain_policy=separate
    ```
 
-   `artifact_root` is the only required variable; everything else has a
-   default (see Customization below).
+   `artifact_root` identifies the stage reports. The rig configuration supplies
+   the required project checks (see Customization below).
 
 4. **What happens next.** The workflow walks these stages in order: prepare,
    PRD requirements, architecture plan, architecture handoff review,
@@ -216,9 +223,10 @@ step between reviewers.
 
 ### Source workspaces
 
-`worktree_lifecycle=legacy` is the default for builds, story formulas and
-continuations. `new` selects the managed source contract with the imported native
-entry, checkout, runtime and record helpers. Configure its fixed base and required
+`worktree_lifecycle=new` is the default for fresh source work. Continuations
+retain the original run's mode. Explicit `legacy` remains deprecated
+compatibility and emits a warning. New mode uses the imported native entry,
+checkout, runtime and record helpers. Configure its fixed base and required
 checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
 Native worker execution and installation require separate matched-pair validation.
 

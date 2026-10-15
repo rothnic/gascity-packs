@@ -18,5 +18,5 @@ marker reservation. Lost responses reconcile the same intent through actual
 provider readback. An uncertain effect is never retried automatically.
 
 When publication is disabled, retain the local approved result. A no-op cannot
-convert a blocked review or incomplete checkpoint into success. Legacy keeps the
-existing publication policy.
+convert a blocked review or incomplete checkpoint into success. Older or
+unclassified state requires explicit migration before publication.

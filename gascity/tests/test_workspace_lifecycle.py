@@ -62,10 +62,10 @@ class WorkspaceLifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(records.RecordError, "conflicting replay"):
             records.verify_replay("run", stored, candidate)
 
-    def test_mixed_unclassified_or_missing_source_modes_fail(self):
+    def test_only_new_sources_are_accepted_and_old_or_unknown_sources_refuse(self):
         records = records_module()
-        for mode in ("legacy", "new"):
-            self.assertEqual(records.verify_source_modes(mode, {"owner": mode, "plan": "reference"}), mode)
+        self.assertEqual(records.verify_source_modes("new", {"owner": "new", "plan": "reference"}), "new")
+        for mode in ("legacy", "new", "", None):
             for surfaces in ({}, {"owner": ""}, {"owner": "unclassified"},
                              {"one": "legacy", "two": "new"}, {"plan": "reference"}):
                 with self.subTest(mode=mode, surfaces=surfaces):
@@ -81,11 +81,11 @@ class WorkspaceLifecycleTests(unittest.TestCase):
             with self.subTest(entry=name):
                 formula = resolve_formula_from_dirs(directories, name)
                 self.assertEqual(formula["vars"]["worktree_lifecycle"]["default"], "new")
-                self.assertEqual(formula["vars"]["worktree_lifecycle"]["enum"], ["legacy", "new"])
+                self.assertEqual(formula["vars"]["worktree_lifecycle"]["enum"], ["new"])
                 step = next(step for step in formula["steps"] if step["id"] == first)
                 self.assertEqual(step["metadata"]["gc.lifecycle"], "{{worktree_lifecycle}}")
                 self.assertEqual(step["metadata"]["gc.lifecycle.source_modes"], '{"workflow":"new"}')
-                self.assertEqual(step["metadata"]["gc.lifecycle.compatibility"], "legacy")
+                self.assertNotIn("gc.lifecycle.compatibility", step["metadata"])
                 self.assertEqual(step["check"]["max_attempts"], 1)
                 self.assertEqual(Path(step["check"]["check"]["path"]).name, CHECK.name)
 
@@ -99,7 +99,7 @@ class WorkspaceLifecycleTests(unittest.TestCase):
         repair = (PACK / "assets/workflows/build-from-review-base/repair-review.md").read_text()
         self.assertIn("gc.restart.worktree_lifecycle={{worktree_lifecycle}}", repair)
 
-    def test_admission_check_accepts_legacy_and_refuses_current_new_request(self):
+    def test_admission_check_requires_new_and_compatibility_cannot_bypass_it(self):
         with tempfile.TemporaryDirectory(prefix="workspace-lifecycle-") as scratch:
             scratch = Path(scratch)
             snapshot = scratch / "step.json"
@@ -111,14 +111,14 @@ class WorkspaceLifecycleTests(unittest.TestCase):
             stub.chmod(0o755)
             env = dict(os.environ, PATH=f"{scratch}:{os.environ['PATH']}", GC_BEAD_ID="fixture-check",
                        GC_TEST_STEP=str(snapshot), GC_TEST_CALLS=str(calls))
-            for selected, sources, ok in (("legacy", {"workflow": "legacy"}, True),
+            for selected, sources, ok in (("legacy", {"workflow": "legacy"}, False),
                                           ("new", {"workflow": "legacy"}, False),
                                           ("new", {"qualified-component": "new"}, True),
                                           ("legacy", {"one": "legacy", "two": "new"}, False),
                                           ("legacy", {}, False), ("", {"workflow": "legacy"}, False)):
                 with self.subTest(selected=selected, sources=sources):
                     snapshot.write_text(json.dumps([{"id": "fixture-check", "metadata": {
-                        "gc.lifecycle": selected, "gc.lifecycle.source_modes": json.dumps(sources)}}]))
+                        "gc.lifecycle": selected, "gc.lifecycle.source_modes": json.dumps(sources), "gc.lifecycle.compatibility": "legacy"}}]))
                     result = subprocess.run([sys.executable, "-S", str(CHECK)], env=env, text=True, capture_output=True)
                     self.assertEqual(result.returncode, 0 if ok else 1, result.stderr)
                     self.assertEqual(json.loads(calls.read_text()), ["bd", "show", "fixture-check", "--json"])

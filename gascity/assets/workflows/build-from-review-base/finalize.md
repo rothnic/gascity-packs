@@ -1,15 +1,14 @@
-For `new`, run `gc gc workspace flow verify` using
+Run `gc gc workspace flow verify` using
 [the native runtime arguments](../workspace-runtime.md) before finalization.
 The command requires the exact canonical approval and actual native reviewer.
 
 This is the `build-from-review-base` finalize stage.
 
-For captured `new` mode, require `workspace_review.validate_approval` on the exact
+Require `workspace_review.validate_approval` on the exact
 current canonical and terminal requirement evidence. A fix to Y invalidates X
 approval; missing evidence, dirty source, changed hashes and exhaustion remain
 blocked regardless of publishing flags. Preserve the original failure/restart
-metadata. New activation requires complete composed native acceptance; legacy
-retains continuation finalization below.
+metadata.
 
 Synthesize the continuation result from the prerequisite artifacts,
 implementation evidence, review reports, fix attempts, drift checks, and

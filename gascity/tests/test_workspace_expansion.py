@@ -41,7 +41,7 @@ class ExpansionCompositionTests(unittest.TestCase):
         formula.write_text('formula = "build"\n')
         self.record = run.capture_payload(workflow_root_id="root-1", input_convoy_id="initial-1",
             source_anchor_id="initial-1", rig_root=str(self.repo), writer_step_id="prepare-1",
-            worktree_lifecycle="new")
+            worktree_lifecycle="new", base_ref="@default")
         self.run_ref = {"kind": "run", "identity": list(record_identity("run", self.record)), "bead_id": "run-record"}
         policy = run.capture_check_policy(self.record, "run-record", canonical_bytes({
             "required_checks": [{"id": "unit", "argv": ["python3", "-m", "unittest"]}]}).decode())

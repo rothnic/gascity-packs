@@ -49,16 +49,23 @@ Include the required schema sections:
 - Implementation Convoy
 - Work Items
 
-Create work-item beads first, then create a new implementation convoy for those
-work units. Do not reuse the source or launch convoy from `gc.var.convoy_id`.
+The native helper creates work-item beads first, then a new implementation
+convoy for those work units. Do not reuse the source or launch convoy from
+`gc.var.convoy_id`.
 
-For **new lifecycle**, use the [workspace entry contract](../workspace-entry.md)
+Use the [workspace entry contract](../workspace-entry.md)
 and the pack's native expansion helper. Declare code sources separately from
 ordinary scheduling dependencies in the `tasks.md` creation payload:
 
 Set `TASKS_PATH` to that creation file's absolute path. Keep it separate from
 the approved decomposition artifact: native creation records its recovery
 status and returned IDs in `tasks.md`.
+
+Derive each owner's strategy, members and ordered predecessors from the
+approved request and implementation plan. The YAML below illustrates syntax;
+replace its example names and edges with the approved task graph. Before
+creation, compare every declared owner, member and predecessor order with the
+approved plan; after creation, verify the same graph in the native readback.
 
 ```yaml
 sources:
@@ -93,7 +100,8 @@ python3 "{{pack_root}}/assets/scripts/create_beads_from_tasks.py" "$TASKS_PATH" 
 ```
 
 The helper creates native members and their implementation convoy, then
-publishes the source plan and both root convoy bindings in one guarded batch.
+publishes the source plan and both root convoy bindings, `gc.input_convoy_id`
+and `gc.build.implementation_convoy_id`, in one guarded batch.
 Planning A/B inputs does not require their outputs to exist yet. The
 integration workspace refuses missing or unaccepted outputs at consumption.
 Verify the exact plan/reference readback before closing decomposition or
@@ -101,34 +109,15 @@ starting any drain. If the command reports an uncertain operation, resolve
 that operation; do not rerun creation blindly. For a fix generation, pass its
 actual generation and exact current canonical parent instead of `1`.
 
-For **legacy lifecycle**, use the existing convoy creation flow:
-
-1. Create each work item with `gc bd create ...` and capture the returned work-item
-   bead IDs. Do not use `gc bd create --root-bead`; `--root-bead` is not a
-   create flag. Attach the workflow root relationship with metadata such as
-   `gc.root_bead_id=<workflow-root-id>`.
-2. Create and link the implementation convoy in one command:
-   `gc convoy create <name> <work-item-id...> --json`.
-3. Parse `<implementation-convoy-id>` from that JSON response, then verify the
-   convoy with `gc convoy list --json`.
-
-Do not create an empty convoy. Do not call `gc convoy add` for newly-created beads.
-The freshly-created IDs may not be visible to that path yet. Do not call `gc bd show <implementation-convoy-id>`.
-Convoy IDs are not bd issue IDs.
+Do not create or extend a convoy manually after this command. Do not recreate
+members or repeat creation to recover an uncertain response. Reconcile the
+original operation and require the same source plan and both convoy references.
 
 Record the decomposition output on the workflow root bead with
 `gc bd update "<workflow-root-id>" --set-metadata "gc.build.decomposition_path=<absolute path>"`.
 Do not use `gc bd update --metadata 'key=value'`; `--metadata` only accepts a JSON
 object.
 
-In legacy mode, set both `gc.input_convoy_id=<implementation-convoy-id>` and
-`gc.build.implementation_convoy_id=<implementation-convoy-id>` on the workflow
-root bead with a quoted command like:
-
-`gc bd update "<workflow-root-id>" --set-metadata "gc.input_convoy_id=<implementation-convoy-id>" --set-metadata "gc.build.implementation_convoy_id=<implementation-convoy-id>"`
-
-Before closing, verify both metadata fields exist on the workflow root and point
-to the new implementation convoy.
 Before closing this step, set the claimed step outcome with
 `gc bd update "<claimed-step-id>" --set-metadata "gc.outcome=pass"`, then close
 with `gc bd close "<claimed-step-id>" --reason "<concise reason>"`. Do not pass

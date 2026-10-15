@@ -12,7 +12,7 @@ contract = "graph.v2"
 
 [vars]
 [vars.worktree_checks]
-description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+description = "Canonical JSON required_checks [{id, argv}], captured once on the native run."
 default = ""
 
 [vars.worktree_base_ref]
@@ -35,7 +35,7 @@ enum = ["false", "true"]
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle; new requires composed methodology acceptance."
 default = "new"
-enum = ["legacy", "new"]
+enum = ["new"]
 
 [[template]]
 id = "{target}.inventory-artifacts"
@@ -69,5 +69,5 @@ max_attempts = 3
 
 [template.check.check]
 mode = "exec"
-path = ".gc/scripts/checks/build-artifact-valid.sh"
+path = "../assets/scripts/checks/build-artifact-valid.sh"
 timeout = "5m"

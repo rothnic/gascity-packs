@@ -1,3 +1,8 @@
+Resolve `VALIDATOR_PATH` from the same imported Gas City pack as the native
+loop's `gc.check_path`: its absolute path is `<check-directory>/../validate_build_artifact.py`.
+Require that resolved validator and its pack schemas to exist; never copy a
+validator into the rig or select one from a source checkout.
+
 Apply required Superpowers plan-review feedback.
 
 Read the plan-review context from workflow root metadata
@@ -38,8 +43,8 @@ When you edit one of them:
   metadata, not in the artifact's front matter.
 - Before closing with `gc.outcome=pass`, from `$GC_RIG_ROOT`, re-run the
   validator on every build artifact you edited and fix every reported error:
-  `python3 .gc/scripts/validate_build_artifact.py --schema gc.build.requirements.v1 --path "<requirements path>"`.
-  `python3 .gc/scripts/validate_build_artifact.py --schema gc.build.plan.v1 --path "<plan path>"`.
+  `python3 "$VALIDATOR_PATH" --schema gc.build.requirements.v1 --path "<requirements path>"`.
+  `python3 "$VALIDATOR_PATH" --schema gc.build.plan.v1 --path "<plan path>"`.
 - On a repeated attempt (`gc.attempt` greater than 1), first read the validator
   errors from `gc.attempt_log` on the loop control bead and repair the
   artifact in place.

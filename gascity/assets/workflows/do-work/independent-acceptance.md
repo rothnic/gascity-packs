@@ -1,4 +1,5 @@
-For retained `worktree_lifecycle=new`, run this acceptance step. The legacy route skips it.
+Run this acceptance step only for recorded `worktree_lifecycle=new`. Preserve
+older or unclassified runs and their original checkouts for explicit migration.
 
 Run the independent acceptance sequence in [the native runtime contract](../workspace-runtime.md).
 Use `gc gc workspace runtime begin-review` and `complete-review` under this

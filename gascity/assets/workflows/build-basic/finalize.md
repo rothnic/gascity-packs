@@ -1,15 +1,14 @@
-For `new`, run `gc gc workspace flow verify` using
+Run `gc gc workspace flow verify` using
 [the native runtime arguments](../workspace-runtime.md) before finalization.
 The command requires the exact canonical approval and actual native reviewer.
 
 Finalize the `build-basic` workflow.
 
-For a captured `new` run, require `workspace_review.validate_approval` on the exact
+Require `workspace_review.validate_approval` on the exact
 current canonical generation/OID, terminal requirement evidence and unchanged
 artifacts before any passing outcome. Closed work, valid ancestry, schema pass or
 publishing disabled supplies no credit. Preserve failed/skipped/unrun/setup_failure,
-unresolved fixes and exhaustion as blockers. New activation requires full composed
-acceptance; legacy retains the rules below.
+unresolved fixes and exhaustion as blockers.
 
 Summarize requirements, implementation-plan, design-review, create-beads,
 implementation, and review artifacts. Record the final outcome, artifact paths,
@@ -38,25 +37,12 @@ The validator only recognizes a Markdown table with an `ID` column and a
 Before writing `factory-run.md`, ensure the canonical implementation summary
 exists at the path recorded on the workflow root bead as
 `gc.build.implementation_summary_path`, normally `implementation-summary.md`.
-If that path is missing, absent on disk, or not a valid
-`gc.build.implementation-summary.v1` artifact, synthesize the canonical
-`implementation-summary.md` from closed implementation source anchors and their
-recorded per-item `gc.implementation.summary_path` values. The synthesized
-artifact must be Markdown with YAML front matter, schema
-`gc.build.implementation-summary.v1`, the same trace shape and `ID`/`Status`
-coverage matrix described here, and these sections:
-
-- Summary
-- Intended Behavior
-- Changed Files
-- Verification
-- Remaining Risks
-
-Record the canonical path on the workflow root bead before validating or
-writing the final report. Use
-`gc bd update "<workflow-root-id>" --set-metadata "gc.build.implementation_summary_path=<absolute path>"`.
-Do not use `gc bd update --metadata 'key=value'`; `--metadata` only accepts a JSON
-object.
+The accepted summary uses schema `gc.build.implementation-summary.v1`.
+The canonical record must retain that exact accepted summary and its hash.
+Missing or changed summary bytes block finalization. Do not synthesize a new
+accepted summary from closed tasks or replace a reviewed artifact. An aggregate
+report may link the accepted summary and per-item artifacts without changing
+their bytes or qualification.
 
 Use mapping objects for front matter; do not use scalar shortcuts such as
 `workflow: build-basic`. The top-level YAML shape must be:

@@ -23,7 +23,7 @@ review_modes = ["report", "agent", "interactive"]
 
 [vars]
 [vars.worktree_checks]
-description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+description = "Canonical JSON required_checks [{id, argv}], captured once on the native run."
 default = ""
 
 [vars.worktree_base_ref]
@@ -46,7 +46,7 @@ enum = ["false", "true"]
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle. New uses native owned workspaces and captured project checks."
 default = "new"
-enum = ["legacy", "new"]
+enum = ["new"]
 
 [vars.implementation_target]
 description = "BMAD task implementation role."
@@ -88,7 +88,7 @@ max_attempts = 3
 
 [steps.check.check]
 mode = "exec"
-path = ".gc/scripts/checks/build-artifact-valid.sh"
+path = "../assets/scripts/checks/build-artifact-valid.sh"
 timeout = "5m"
 
 [[steps]]
@@ -103,7 +103,7 @@ max_attempts = 3
 
 [steps.check.check]
 mode = "exec"
-path = ".gc/scripts/checks/build-artifact-valid.sh"
+path = "../assets/scripts/checks/build-artifact-valid.sh"
 timeout = "5m"
 
 [[steps]]
@@ -125,7 +125,7 @@ max_attempts = 3
 
 [steps.check.check]
 mode = "exec"
-path = ".gc/scripts/checks/build-artifact-valid.sh"
+path = "../assets/scripts/checks/build-artifact-valid.sh"
 timeout = "5m"
 
 [[steps]]

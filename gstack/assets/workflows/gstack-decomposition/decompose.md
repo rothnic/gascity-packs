@@ -1,8 +1,8 @@
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the methodology below. Its legacy source/path/state operations apply only
-to explicit `legacy`; the managed instructions govern an admitted `new` run.
-Unknown modes and failed managed reads never authorize legacy fallback.
+Use the native managed source contract below. Only `new` is supported.
+Legacy or unclassified state requires explicit migration; preserve its checkout
+and original run. Never infer source authority from paths or artifacts.
 Resolve shared helpers through the imported Gas City `assets/scripts` layer.
 
 For an admitted `new` decomposition, first validate the captured run
@@ -32,4 +32,4 @@ before closing.
 
 Do not invoke provider-native subagents.
 
-Artifact validation: this stage is gated by `.gc/scripts/checks/build-artifact-valid.sh`, which validates the artifact recorded at `gc.build.decomposition_path` (fallback `gc.var.decomposition_path`) against schema `gc.build.decomposition.v1`. On repair attempts (`gc.attempt` greater than 1), read the validator errors from `gc.attempt_log` on the validation loop control bead (the dependent of this step bead) and repair the artifact in place instead of rewriting it. Two bounded repair attempts follow the first failure; exhausting them closes this stage with `gc.outcome=fail` and machine-readable validation errors that block downstream stages. Never ask questions in headless mode; record unresolved ambiguity inside the artifact.
+Artifact validation: this stage is gated by the imported pack-owned `build-artifact-valid.sh` check, which validates the artifact recorded at `gc.build.decomposition_path` (fallback `gc.var.decomposition_path`) against schema `gc.build.decomposition.v1`. On repair attempts (`gc.attempt` greater than 1), read the validator errors from `gc.attempt_log` on the validation loop control bead (the dependent of this step bead) and repair the artifact in place instead of rewriting it. Two bounded repair attempts follow the first failure; exhausting them closes this stage with `gc.outcome=fail` and machine-readable validation errors that block downstream stages. Never ask questions in headless mode; record unresolved ambiguity inside the artifact.

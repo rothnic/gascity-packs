@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 import sys
 
-from workspace_records import (RecordError, canonical_bytes, contracts, parse_record,
+from workspace_records import (LIFECYCLE_MIGRATION, RecordError, canonical_bytes, contracts, parse_record,
                                record_identity, record_sha256, validate_record)
 from workspace_store import (GRANT_KEY, GRANT_REFS_KEY, MISSING, TRANSITION_NONCE_KEY,
                              GuardRead, InheritedRunReference, NativeOwnerProjection,
@@ -746,7 +746,8 @@ def main(argv=None):
     for name in ('rig-name', 'workflow-root-id', 'input-convoy-id',
                  'workspace-owner-id', 'member-id', 'claimed-step-id', 'artifact-root', 'evidence-dir'):
         parser.add_argument('--' + name, required=not resolving)
-    parser.add_argument('--worktree-lifecycle', required=not resolving, choices=['new'])
+    parser.add_argument('--worktree-lifecycle', required=not resolving,
+                        help='Only new is supported; older state requires explicit migration')
     parser.add_argument('--generation', required=not resolving, type=int)
     parser.add_argument('--resolve-request')
     parser.add_argument('--gc', default='gc')
@@ -756,6 +757,7 @@ def main(argv=None):
     parser.add_argument('--allow-external-parent', action=argparse.BooleanOptionalAction, default=None)
     args = parser.parse_args(argv)
     try:
+        require(args.worktree_lifecycle is None or args.worktree_lifecycle == 'new', LIFECYCLE_MIGRATION)
         store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city_root)
         if args.resolve_request:
             from workspace_requests import resolve_request

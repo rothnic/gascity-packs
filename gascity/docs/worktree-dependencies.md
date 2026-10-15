@@ -5,26 +5,17 @@ review, and optional publication. A workspace is the recorded Git checkout where
 a task edits source. In new mode, source dependencies select the commits that
 checkout must contain before the task starts.
 
-## Select a mode
+## Source lifecycle
 
-`worktree_lifecycle` selects source handling for a run:
+`worktree_lifecycle=new` is the supported source lifecycle. It requires a
+recorded base commit, explicit task inputs, required project checks and accepted
+outputs for dependent work. A continuation retains its original run, source
+plan, workspace and captured policy. Artifact paths and old `work_dir` values
+cannot establish source identity.
 
-- **`new`:** the default for fresh supported work. Requires a recorded base
-  commit, explicit task inputs, required project checks, and accepted outputs
-  for dependent work.
-- **`legacy`:** explicit deprecated compatibility through
-  `--var worktree_lifecycle=legacy`. Uses the existing formula's source
-  preparation and emits a deprecation warning.
-
-Existing workflows retain their recorded mode. The task-creation CLI inherits
-the native workflow's mode when its selector is omitted. An explicit conflicting
-selector refuses creation. A workflow without a recorded or explicitly cooked
-mode refuses admission and requires deliberate migration. Old `work_dir` or
-artifact paths alone cannot establish a mode.
-
-New-mode workflow execution and installation remain unverified. The examples
-below describe the source contract under development. Use a matched core/pack
-revision validated for the selected workflow before launch.
+Legacy, missing or conflicting modes stop source access. See
+[migrate existing work](#migrate-existing-work) before using an older run.
+Use a matched core/pack revision validated for the selected workflow.
 
 ## Configure the run
 
@@ -45,7 +36,9 @@ checks that assert the requested behavior. Formula variables are strings.
 Explicit `--var` values override [rig defaults](https://github.com/gastownhall/gascity/blob/main/docs/reference/config.md#rig).
 
 - **Base:** `worktree_base_ref` defaults to `@default`, which resolves the
-  registered checkout's `HEAD`. Capture performs no fetch. An explicit branch,
+  verified registered checkout's current commit on first capture. The formula
+  default is the selector; a missing native selector is rejected. Capture
+  records the full OID immediately and performs no fetch. An explicit branch,
   tag, or commit must exist locally and resolve to a commit. Empty or ambiguous
   selectors refuse capture. Use full ref names when a branch and tag share a name.
 - **Checks:** `worktree_checks` must be canonical JSON with a nonempty
@@ -75,7 +68,7 @@ gc formula show build-basic --json
 
 ## Configure layout
 
-In new mode, all five build packs accept the same workspace layout variables.
+All five build packs accept the same workspace layout variables.
 Set them under the rig's `[rigs.formula_vars]`, or pass explicit `--var` values
 at launch:
 
@@ -105,7 +98,7 @@ members retain that layout and stable owner name. Changed parent, prefix, or
 permission settings refuse reuse. Native drain children use the original
 workflow's settings, even when their own formula defaults differ.
 
-Older records without a layout tuple retain their recorded path and provenance.
+Older new-mode records without a layout tuple retain their recorded path and provenance.
 They cannot acquire a prefix or external permission from new formula defaults.
 Use their original explicit layout arguments when required, after checking the
 original authorization.
@@ -122,9 +115,10 @@ Choose how tasks share source before the workflow creates implementation tasks:
   `single_lane: true`. Each member must produce an accepted checkpoint before
   the next member advances the same workspace.
 
-Native execution has not yet verified shared checkpoints or continuation with
-dirty files or new commits. Preserve a refused checkout until the workflow can
-verify the recorded member and its current native ownership.
+A same-member continuation verifies the recorded member and current native
+ownership before retaining partial edits or linear commits. Preserve a refused
+checkout for recovery; continuation does not accept a result or advance the next
+shared member.
 
 The pack prepares workspaces through native worktree commands. Detached or
 attached HEAD, placement, and lock timeout are native command options rather
@@ -220,26 +214,23 @@ final report cannot convert blocked implementation or review into a pass.
 Report-only review preserves source. Interactive source edits require fresh
 checks and approval of the replacement commit.
 
-The GitHub PR review adapter uses explicit deprecated legacy compatibility for
-artifact-only methodology reports. Its snapshot does not establish a managed
-source run.
+The GitHub PR review adapter can review its explicit snapshot and head SHA
+without acquiring a source workspace. A snapshot or report path does not
+establish a source run or authorize fixes. Source changes require a separately
+admitted workflow and verified workspace.
 
 ## Continue existing work
 
 Keep the original run, base, source plan, and workspace when work continues.
 The [entrypoint guide](../README.md#choosing-an-entrypoint) identifies the
-artifacts needed for each `build-from-*` continuation. Its artifact-only launch
-recipes apply to legacy work. New mode also requires the retained run under its
-original workflow or a verified native child.
+artifacts needed for each `build-from-*` continuation. Those artifacts supplement
+the retained run under its original workflow or a verified native child; they
+cannot launch a separate source run implicitly.
 
 - **Recorded new work:** continue through the original workflow's verified
   native binding. A separate workflow must prove its relationship to the
   original run. Artifact paths cannot establish that relationship. Inheritance
   between separate workflows remains under native validation.
-- **Legacy work:** retain `worktree_lifecycle=legacy`. Captured-run validation
-  rejects a changed mode. Supply the explicit legacy selector for a separately
-  launched legacy continuation. A source plan or artifact path cannot convert
-  the old run to new mode.
 - **Refused continuation:** inspect the recorded checkout and original failure.
   Preserve dirty files, commits, and unfinished Git operations. The
   [checkout recovery interface](../assets/scripts/workspace_checkout.md#cli)
@@ -270,6 +261,23 @@ Inspection does not authorize a checkpoint or acceptance. Missing records,
 changed ownership, conflicting modes, or an unknown command outcome require
 repair of the original operation. Do not reset the checkout, choose a fresh
 base, or recreate records to bypass a refusal.
+
+## Migrate existing work
+
+Legacy or unclassified runs cannot continue through these helpers. A changed
+selector, copied artifact or old checkout path cannot convert them to `new`.
+
+- **Preserve the run:** retain its original records, checkout, commits, dirty
+  files and unresolved operation. Do not reset or relabel them to pass a check.
+- **Finish with the qualified version:** if the old run must finish in place,
+  use the pack/core version under which it was admitted, with its original
+  authorization and recovery procedure.
+- **Start a new run deliberately:** choose the registered repository and an
+  explicit source selector, supply the real task or convoy and required checks,
+  and let native capture create new identities. Old outputs become inputs only
+  through explicit acceptance and source-plan validation.
+- **Inspect without adopting:** historical record schemas remain readable for
+  diagnosis. Successful parsing does not authorize a new write or recapture.
 
 [RFC #209](https://github.com/gastownhall/gascity-packs/issues/209) contains the
 design discussion. [Issue #511](https://github.com/gastownhall/gascity-packs/issues/511)

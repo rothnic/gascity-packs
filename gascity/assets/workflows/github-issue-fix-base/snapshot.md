@@ -10,8 +10,8 @@ Resolved source lifecycle: {{worktree_lifecycle}}
 
 Fresh supported work defaults to `new`. Existing runs retain their recorded
 mode. Source preflight validates the selected mode against its source declarations.
-Recorded legacy work can use explicitly declared legacy compatibility. Missing,
-unknown, mixed or conflicting source classifications block.
+Legacy work requires explicit migration with its original state preserved.
+Missing, unknown, mixed or conflicting source classifications block.
 
 Normalize the interaction mode before any other work. `mode` is only a
 backward-compatible alias: the effective interaction mode is

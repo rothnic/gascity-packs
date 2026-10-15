@@ -49,21 +49,23 @@ Only supplied source roots enter this check. The report keeps
 select their priority or launch a workflow. Native composition validation and
 workflow acceptance remain separate checks.
 
-## Migration stages
+## Supported declarations
 
-| Declaration | Stage A, default | Stage B, `--stage b` |
-| --- | --- | --- |
-| `new` | Accept the declared source bindings | Accept the declared source bindings |
-| `legacy` | Accept an explicit legacy entry | Reject the entry |
-| `reference` | Accept a planning-only surface | Accept a planning-only surface |
-| Missing or unknown | Reject with migration guidance | Reject with migration guidance |
+| Declaration | Result |
+| --- | --- |
+| `new` | Validate the declared source bindings. |
+| `reference` | Validate a planning-only surface. |
+| `legacy`, missing or unknown | Reject with explicit migration guidance. |
 
-Owning assets require `legacy` or `new`. A planning reference cannot replace
-an implementation, review, fix, publish or continuation owner.
+Owning assets require `new`. A planning reference cannot replace an
+implementation, review, fix, publication or continuation owner. The final
+Stage B check is the default; `--stage b` is accepted explicitly. Historical
+Stage A checks and legacy successes remain evidence only at their original
+qualified source. Use that source for historical inspection rather than
+relabelling an old run or disabling the final check.
 
-The current inventory retains its explicit legacy declarations. Passing Stage A
-proves the declared inventory matches the inspected source. A classification or
-content hash does not prove the corresponding workflow has migrated.
+A classification or content hash does not prove runtime migration. Preserve
+old runs and follow [migration guidance](../../docs/worktree-dependencies.md#migrate-existing-work).
 
 ## Binding checks
 
@@ -79,8 +81,8 @@ identify the same leaf. Inheritance lookup uses those aliases too. Ambiguous
 source layers fail, with the supplied name preserved in the diagnostic.
 Inherited continuation entrypoints must retain that route. Owning-step bindings
 also cover review fixes, direct publish steps and inherited shared-item contracts.
-The inventory records existing missing explicit commit contracts for base,
-Compound and gstack shared items. Discovery preserves those gaps.
+The inventory records an explicit final commit/checkpoint contract for each
+separate and shared source owner.
 
 When an asset changes, update its classification, responsibility and hash together
 with the affected owning steps and source-owner bindings. Read the actual final
@@ -89,14 +91,14 @@ matching source binding and native composition review.
 
 This command supplies the closed-inventory check for
 [design scenario 18](https://github.com/gastownhall/gascity-packs/issues/209) and
-the unclassified-asset check in scenario 19. Scenario 19's explicit legacy run
-still requires a separate end-to-end workflow test. This command does not add the
-runtime `worktree_lifecycle` selector.
+the unclassified-asset check in scenario 19. Scenario 19 requires refusal of
+legacy execution at the final source. Historical Stage A legacy success remains
+bound to its original source; it is not final-source runtime credit.
 
 Entry formulas declare that selector separately and check their declared source
 lifecycle at preflight. The [record contract](README.md) supplies pure mode and
 replay validation. Discovery still does not inspect installed priority, capture
-run state or prove an end-to-end legacy or new run.
+run state or prove an end-to-end new run or native legacy-refusal case.
 
 Run the focused regression tests:
 

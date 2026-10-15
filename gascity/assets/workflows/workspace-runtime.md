@@ -1,5 +1,5 @@
-Use the captured `new` lifecycle for managed source. Legacy keeps its existing
-workflow instructions.
+Use the captured `new` lifecycle for source access. Legacy or unclassified runs
+require explicit migration with the original checkout and records preserved.
 
 Read the explicit city, store, rig, workflow root and physical claimed step from
 native claim and registration readback. Read the current generation from the

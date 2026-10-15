@@ -1,8 +1,8 @@
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the methodology below. Its legacy source/path/state operations apply
-only to explicit `legacy`; the managed instructions govern an admitted `new`
-run. Unknown modes or failed reads never authorize legacy fallback.
+Keep the methodology below. Source access requires the recorded `new` lifecycle.
+Legacy or unclassified work stops for explicit migration; preserve its original
+run and checkout. Do not infer source authority from artifacts or old paths.
 Resolve helper modules through the imported Gas City `assets/scripts` layer;
 keep that resolved directory on Python's import path for sibling modules.
 
@@ -24,7 +24,7 @@ artifacts, deployment-verification notes, and gap-analysis findings into one
 implementation-review report. Count skipped conditional artifacts as coverage
 records, not reviewer failures. Deduplicate overlaps, suppress non-actionable
 noise, classify required fixes, and write the approval verdict used by
-`.gc/scripts/checks/implementation-review-approved.sh`. Required fixes must be
+the imported pack-owned `implementation-review-approved.sh` check. Required fixes must be
 specific enough for the single apply step to resolve them directly.
 
 Read the review context from `gc.build.code_review_context_path` and all lane

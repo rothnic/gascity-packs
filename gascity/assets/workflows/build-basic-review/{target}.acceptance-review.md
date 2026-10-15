@@ -5,25 +5,19 @@ implementation plan, decomposition, and task summaries. Focus on correctness:
 did the factory build the requested behavior, and did it avoid out-of-scope
 changes?
 
-Read the review context first and evaluate the implementation source
-anchor/worktree recorded there. The launcher rig root is not the review target
-for build-basic; it may still contain the original fixture until publish. Do not
-mark acceptance as `iterate` merely because the root checkout is unchanged when
-the recorded source anchor/worktree implements the requested behavior and its
-proof commands pass.
+Resolve the exact run, source plan, workspace, terminal accepted result, owner
+output and canonical record through the imported `workspace_outputs` helpers.
+Validate native qualification and the captured check policy before source access.
+Use `workspace_review.begin_canonical_review` with the current native reviewer,
+recorded workspace and exact binding; retain its canonical/result hashes and
+source snapshot. Every lane reviews that same full canonical output OID.
+Artifact paths and old `work_dir` fields do not establish source authority.
+Missing or conflicting records stop review for explicit recovery or migration.
 
-Before inspecting files or running tests, read `gc.build.code_review_context_path`
-from the workflow root bead and use its `## Implementation Worktrees` section as
-the authority for code under review. `gc.work_dir` is the launcher rig root, not
-the implementation worktree. Do not inspect or edit the launcher checkout when
-deciding whether the implementation passes. Resolve every relative source path
-and proof command from the review context against the listed implementation
-worktree, run `cd "$WORKTREE"`, and verify `pwd -P` equals that worktree before
-executing commands. If the context is missing a usable implementation worktree,
-write an iterate finding against review setup instead of reviewing the launcher
-checkout.
-
-Contract: `gc.work_dir` is the launcher rig root, not the implementation worktree.
+Read `gc.build.code_review_context_path` for requirements and methodology
+evidence. Resolve source paths and proof commands against the verified canonical
+workspace, then verify its exact OID and clean state. Keep review read-only. An
+unchanged launcher checkout is irrelevant to the accepted canonical result.
 
 Write findings under the build artifact root. Required findings must include
 the relevant requirement or task reference plus the file, command, or artifact

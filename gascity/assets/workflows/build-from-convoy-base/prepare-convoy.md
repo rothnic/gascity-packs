@@ -18,10 +18,8 @@ python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
 In new mode, consume the original run and the current convoy's declared source
 plan. The helper validates their existing native binding; this handoff must
 not replace `gc.input_convoy_id`, recapture a base, or adopt artifact-only
-state. In legacy mode, record the resolved convoy as both:
-
-- `gc.input_convoy_id=<implementation-convoy-id>`
-- `gc.build.implementation_convoy_id=<implementation-convoy-id>`
+state. Older or unclassified input requires explicit migration. The native
+source plan owns both convoy bindings.
 
 Close only after the convoy identity, drain policy {{drain_policy}}, selected
 implementation target {{implementation_target}}, and source artifact paths are

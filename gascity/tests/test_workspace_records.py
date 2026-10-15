@@ -246,10 +246,10 @@ class WorkspaceRecordTests(unittest.TestCase):
 class WorkspaceSurfaceTests(unittest.TestCase):
     def test_review_and_fix_generation_owners_are_migration_surfaces(self):
         manifest = json.loads((CONTRACT_ROOT / "affected-surfaces.v1.json").read_text())
-        required = [("gascity", "build-base", "review", {"review", "source-writer"}, "new", "legacy"),
-                    ("gascity", "build-basic", "review", {"review-delegator"}, "new", "legacy"),
+        required = [("gascity", "build-base", "review", {"review", "source-writer"}, "new", "new"),
+                    ("gascity", "build-basic", "review", {"review-delegator"}, "new", "new"),
                     ("gascity", "fix-loop-base", "re-review", {"review-delegator"}, "new", "new"),
-                    ("gascity", "fix-convoy", "create-fix-convoy", {"fix-generation"}, "legacy", "legacy")]
+                    ("gascity", "fix-convoy", "create-fix-convoy", {"fix-generation"}, "new", "new")]
         required += [(pack, formula, "review", {"review-delegator"}, "new", "new") for pack, formula in
                      (("compound-engineering", "compound-build"), ("superpowers", "superpowers-build"),
                       ("bmad", "bmad-build"), ("gstack", "gstack-build"))]

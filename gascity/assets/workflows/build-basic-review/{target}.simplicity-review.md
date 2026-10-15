@@ -5,15 +5,19 @@ unnecessary abstractions, accidental broad changes, and obvious future
 maintenance risk. Keep this lane beginner-friendly: flag only concrete issues
 that a new factory user can understand and act on.
 
-Before inspecting files, read `gc.build.code_review_context_path` from the
-workflow root bead and use its `## Implementation Worktrees` section as the
-authority for code under review. `gc.work_dir` is the launcher rig root, not the
-implementation worktree. Do not inspect or edit the launcher checkout. Resolve
-relative file paths against the listed implementation worktree, run
-`cd "$WORKTREE"`, and verify `pwd -P` equals that worktree before running any
-command.
+Resolve the exact run, source plan, workspace, terminal accepted result, owner
+output and canonical record through the imported `workspace_outputs` helpers.
+Validate native qualification and the captured check policy before source access.
+Use `workspace_review.begin_canonical_review` with the current native reviewer,
+recorded workspace and exact binding; retain its canonical/result hashes and
+source snapshot. Every lane reviews that same full canonical output OID.
+Artifact paths and old `work_dir` fields do not establish source authority.
+Missing or conflicting records stop review for explicit recovery or migration.
 
-Contract: `gc.work_dir` is the launcher rig root, not the implementation worktree.
+Read `gc.build.code_review_context_path` for requirements and methodology
+evidence. Resolve source paths and proof commands against the verified canonical
+workspace, then verify its exact OID and clean state. Keep review read-only. An
+unchanged launcher checkout is irrelevant to the accepted canonical result.
 
 Write findings under the build artifact root. Required findings must be tied to
 specific changed files or artifacts and must explain the smallest useful fix.

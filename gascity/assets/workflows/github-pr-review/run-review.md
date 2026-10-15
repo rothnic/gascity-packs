@@ -33,25 +33,14 @@ gate. Pass review_mode {{review_mode}} and interaction_mode
 {{interaction_mode}} through when the selected formula accepts them; the PR
 adapter itself never mutates code regardless of review mode.
 
-This snapshot review has no managed source run. Select explicit deprecated
-`legacy` compatibility when the selected formula declares `worktree_lifecycle`.
-Keep the snapshot and report inputs; do not manufacture a source run.
+This report-only review consumes the explicit snapshot, PR diff and recorded
+`gc.github.head_sha`. Keep those immutable inputs. Artifact paths grant no
+workspace or source-write authority. A reviewer that needs a source checkout
+must receive an existing native run and verified workspace; never manufacture
+one or infer a base from the current directory.
 
-If the selected formula declares `worktree_lifecycle`, launch with the legacy
-selector and warning:
-
-```sh
-printf '%s\n' 'worktree_lifecycle=legacy is deprecated for artifact-only PR review' >&2
-gc sling gc.run-operator {{code_review_formula}} --formula \
-  --var context_path="{{context_path}}" \
-  --var subject_path="$SUBJECT_PATH" \
-  --var report_path="$REPORT_PATH" \
-  --var worktree_lifecycle=legacy \
-  --var interaction_mode="{{interaction_mode}}" \
-  --var review_mode="{{review_mode}}"
-```
-
-If the selected formula does not declare `worktree_lifecycle`, use this launch:
+Launch with explicit report inputs. Omit an interaction or review variable only
+when the selected formula does not declare that variable:
 
 ```sh
 gc sling gc.run-operator {{code_review_formula}} --formula \
@@ -62,8 +51,9 @@ gc sling gc.run-operator {{code_review_formula}} --formula \
   --var review_mode="{{review_mode}}"
 ```
 
-In either case, omit each interaction/review mode `--var` argument that the
-selected formula does not declare.
+Keep this adapter read-only. `agent` may produce a structured fix handoff but
+cannot apply it. An interactive source change requires a separately admitted
+managed workflow and verified workspace; this snapshot grants no such authority.
 
 Do not close this step until `REPORT_PATH` exists and validates through
 `{{pack_root}}/assets/scripts/github_reports.py review-outcome "$REPORT_PATH"`.

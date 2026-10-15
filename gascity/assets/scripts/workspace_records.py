@@ -11,6 +11,12 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schemas" / "workspace" / "records.v1.json"
+LIFECYCLE_MIGRATION = (
+    "legacy or unclassified workspace lifecycle is unsupported; preserve the original run and checkout. "
+    "Finish that run with its previously qualified pack version, or use an explicit migration before starting a new run. "
+    "Do not change recorded metadata or infer a workspace from artifacts. "
+    "See gascity/docs/worktree-dependencies.md#migrate-existing-work."
+)
 
 
 class RecordError(ValueError):
@@ -121,17 +127,23 @@ def verify_run_mode(run: dict[str, Any], selected_mode: str, workflow_root_id: s
     validate_record("run", run)
     if run["workflow_root_id"] != workflow_root_id:
         raise RecordError("workflow root conflicts with the recorded run")
-    if selected_mode not in ("legacy", "new"):
-        raise RecordError("worktree lifecycle must be explicit legacy or new")
+    require_new_mode(selected_mode)
+    require_new_mode(run["worktree_lifecycle"])
     if run["worktree_lifecycle"] != selected_mode:
         raise RecordError("worktree lifecycle conflicts with the recorded run")
     return selected_mode
 
 
+def require_new_mode(mode: str) -> str:
+    """Reject obsolete state before source selection, allocation or mutation."""
+    if mode != "new":
+        raise RecordError(LIFECYCLE_MIGRATION)
+    return mode
+
+
 def verify_source_modes(selected_mode: str, surfaces: dict[str, str]) -> str:
     """Refuse missing classifications or source paths from another lifecycle."""
-    if selected_mode not in ("legacy", "new"):
-        raise RecordError("worktree lifecycle must be explicit legacy or new")
+    require_new_mode(selected_mode)
     if not isinstance(surfaces, dict) or not surfaces or not any(value != "reference" for value in surfaces.values()):
         raise RecordError("worktree lifecycle requires explicit source classifications")
     for path, mode in surfaces.items():

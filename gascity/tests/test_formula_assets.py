@@ -223,10 +223,8 @@ MODE_VAR_DEFAULTS = {
     "github-pr-review": {"interaction_mode": "interactive", "review_mode": "report"},
 }
 
-# Derived packs still use the launcher-installed compatibility path in their
-# explicit step overrides. The base gascity pack owns and resolves its script
-# from the sibling asset tree.
-BUILD_ARTIFACT_CHECK_SCRIPT = ".gc/scripts/checks/build-artifact-valid.sh"
+# Every supported pack resolves checks through the imported asset layer.
+BUILD_ARTIFACT_CHECK_SCRIPT = "../assets/scripts/checks/build-artifact-valid.sh"
 GASCITY_BUILD_ARTIFACT_CHECK_SCRIPT = "../assets/scripts/checks/build-artifact-valid.sh"
 
 # One produce attempt plus two bounded schema-repair attempts per artifact stage.
@@ -1974,20 +1972,32 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertNotIn('id = "compound"', text)
 
         decompose = next(step for step in data["steps"] if step["id"] == "decompose")
-        decompose_description = node_description(root, decompose)
+        decompose_description = " ".join(node_description(root, decompose).split())
         for fragment in (
             "gc.input_convoy_id",
+            "gc.build.implementation_convoy_id",
             "implementation convoy",
             "workflow root bead",
             "before closing",
-            "gc convoy create <name> <work-item-id...> --json",
-            "Do not create an empty convoy",
-            "Do not call `gc convoy add` for newly-created beads",
-            "Do not call `gc bd show <implementation-convoy-id>`",
-            "Do not use `gc bd create --root-bead`",
+            "create_beads_from_tasks.py",
+            "--worktree-lifecycle new --generation 1",
+            "source plan and both root convoy bindings",
+            "Derive each owner's strategy, members and ordered predecessors from the approved request and implementation plan",
+            "YAML below illustrates syntax",
+            "replace its example names and edges with the approved task graph",
+            "compare every declared owner, member and predecessor order with the approved plan",
+            "verify the same graph in the native readback",
+            "one guarded batch",
+            "exact plan/reference readback",
+            "resolve that operation; do not rerun creation blindly",
+            "Do not create or extend a convoy manually",
+            "Do not recreate members or repeat creation",
         ):
             with self.subTest(step="decompose", fragment=fragment):
                 self.assertIn(fragment, decompose_description)
+        for manual_command in ("gc convoy create", "gc convoy add", "gc bd create --root-bead"):
+            with self.subTest(step="decompose", forbidden=manual_command):
+                self.assertNotIn(manual_command, decompose_description)
 
     def test_build_basic_v2_uses_approachable_factory_techniques(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
@@ -2042,14 +2052,16 @@ class FormulaAssetTests(unittest.TestCase):
             "code_review.test_evidence_verdict=approve",
             "code_review.simplicity_verdict=approve",
             "gc bd update \"$CLAIMED_BEAD_ID\"",
-            "source anchor/worktree",
-            "launcher rig root may remain unchanged",
-            "not to the launcher rig root",
-            "normalized `gc.build.review.v1` artifact with `status: approved`",
+            "workspace_review.begin_canonical_review",
+            "same full canonical output OID",
+            "captured check policy",
+            "schema: gc.build.review.v1",
+            "status: approved",
+            "native canonical review recipe",
             "Do not invoke provider-native subagents",
-            "Implementation Worktrees",
-            "`gc.work_dir` is the launcher rig root, not the implementation worktree",
-            "Do not inspect or edit the launcher checkout",
+            "Canonical Review Subject",
+            "old `work_dir` fields do not establish source authority",
+            "Keep review read-only",
         ):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, asset_text)
@@ -2149,7 +2161,6 @@ class FormulaAssetTests(unittest.TestCase):
             for fragment in (
                 "Use mapping objects for front matter",
                 "`workflow: build-basic`",
-                "workflow: {id: <workflow-root-id>",
                 "Trace front matter must use the validator shape exactly",
                 "`trace.upstream[]` entries must include `path` and `hash`",
                 "do not use\n  `id`/`title`/`type` entries as the upstream shape",
@@ -2162,6 +2173,13 @@ class FormulaAssetTests(unittest.TestCase):
             ):
                 with self.subTest(asset=relative_path, fragment=fragment):
                     self.assertIn(fragment, text)
+
+            if relative_path == "assets/workflows/build-base/summarize-implementation.md":
+                self.assertIn("workflow: {id: <accepted-workflow-id>", text)
+                self.assertIn("<accepted-producer-stage>", text)
+                self.assertIn("Preserve the accepted member's original workflow", text)
+            else:
+                self.assertIn("workflow: {id: <workflow-root-id>", text)
 
         for relative_path in (
             "assets/workflows/build-basic/finalize.md",
@@ -2198,7 +2216,7 @@ class FormulaAssetTests(unittest.TestCase):
         ):
             text = (root / relative_path).read_text(encoding="utf-8")
             for fragment in (
-                "read the launcher rig root from the workflow root bead's `gc.work_dir`",
+                "verify the registered rig through native identity readback",
                 # The gate's validator is a pack asset, not a rig-local
                 # .gc/scripts copy: agents run the absolute path gc resolved
                 # onto the ralph control bead.
@@ -2209,68 +2227,39 @@ class FormulaAssetTests(unittest.TestCase):
                 with self.subTest(asset=relative_path, fragment=fragment):
                     self.assertIn(fragment, text)
 
-    def test_build_basic_review_context_is_worktree_anchored(self) -> None:
+    def test_build_basic_review_context_requires_native_canonical_subject(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
-        workflow_dir = root / "assets" / "workflows" / "build-basic-review"
-        setup = (workflow_dir / "{target}.setup-build-basic-review.md").read_text(
-            encoding="utf-8"
-        )
-        acceptance = (workflow_dir / "{target}.acceptance-review.md").read_text(
-            encoding="utf-8"
-        )
-        test_evidence = (workflow_dir / "{target}.test-evidence-review.md").read_text(
-            encoding="utf-8"
-        )
-        simplicity = (workflow_dir / "{target}.simplicity-review.md").read_text(
-            encoding="utf-8"
-        )
-        synthesize = (workflow_dir / "{target}.synthesize-review.md").read_text(
-            encoding="utf-8"
-        )
-        apply = (workflow_dir / "{target}.apply-review-findings.md").read_text(
-            encoding="utf-8"
-        )
-
+        workflow = root / "assets/workflows/build-basic-review"
+        setup = " ".join((workflow / "{target}.setup-build-basic-review.md").read_text().split())
         for fragment in (
-            "gc.build.code_review_context_path",
-            "Implementation Worktrees",
-            "metadata.work_dir",
-            "Do not write\nliteral command substitutions",
+            "gc.build.code_review_context_path", "## Canonical Review Subject",
+            "Exact native run, source-plan, workspace and canonical record references",
+            "Canonical generation, full output OID and accepted summary hash",
+            "Verified workspace path and captured required checks", "current native references",
+            "Never recover a missing checkout from an artifact", "Do not write literal command substitutions",
             r"rg -n '\$\((cat|date)'",
         ):
             with self.subTest(asset="setup", fragment=fragment):
                 self.assertIn(fragment, setup)
-
-        for asset_name, text in (
-            ("acceptance", acceptance),
-            ("test-evidence", test_evidence),
-            ("simplicity", simplicity),
-            ("synthesize", synthesize),
-            ("apply", apply),
+        for lane in ("acceptance-review", "test-evidence-review", "simplicity-review"):
+            text = " ".join((workflow / ("{target}." + lane + ".md")).read_text().split())
+            for fragment in (
+                "gc.build.code_review_context_path", "workspace_review.begin_canonical_review",
+                "same full canonical output OID", "exact OID and clean state", "Keep review read-only",
+                "old `work_dir` fields do not establish source authority",
+            ):
+                with self.subTest(asset=lane, fragment=fragment):
+                    self.assertIn(fragment, text)
+        synthesis = " ".join((workflow / "{target}.synthesize-review.md").read_text().split())
+        self.assertIn("Conflicting subject bindings block synthesis", synthesis)
+        self.assertIn("never select a checkout from a relative path or launcher", synthesis)
+        repair = " ".join((workflow / "{target}.apply-review-findings.md").read_text().split())
+        for fragment in (
+            "workspace_review.fix_plan", "workspace_source_plan.declare_plan", "publish_plan",
+            "current admitted claim/owner grant", "exact parent generation/OID",
+            "Do not edit the accepted canonical checkout in place", "independent review of the new canonical commit",
         ):
-            with self.subTest(asset=asset_name, fragment="context path"):
-                self.assertIn("gc.build.code_review_context_path", text)
-            with self.subTest(asset=asset_name, fragment="worktree section"):
-                self.assertIn("Implementation Worktrees", text)
-            with self.subTest(asset=asset_name, fragment="launcher root"):
-                self.assertIn(
-                    "`gc.work_dir` is the launcher rig root, not the implementation worktree",
-                    text,
-                )
-
-        for asset_name, text in (
-            ("acceptance", acceptance),
-            ("test-evidence", test_evidence),
-            ("simplicity", simplicity),
-            ("apply", apply),
-        ):
-            with self.subTest(asset=asset_name, fragment="cd worktree"):
-                self.assertIn('cd "$WORKTREE"', text)
-            with self.subTest(asset=asset_name, fragment="pwd verification"):
-                self.assertIn("pwd -P", text)
-
-        self.assertIn("do not patch the launcher root", apply)
-        self.assertIn("source anchor and implementation\nworktree", synthesize)
+            self.assertIn(fragment, repair)
     def test_build_artifact_prompts_use_set_metadata_for_paths(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
         path_contracts = {
@@ -2285,7 +2274,6 @@ class FormulaAssetTests(unittest.TestCase):
             "assets/workflows/build-basic/decompose.md": ["gc.build.decomposition_path"],
             "assets/workflows/build-basic/review.md": ["gc.build.review_report_path"],
             "assets/workflows/build-basic/finalize.md": [
-                "gc.build.implementation_summary_path",
                 "gc.build.final_report_path",
                 "gc.build.factory_run_path",
             ],
@@ -2314,6 +2302,11 @@ class FormulaAssetTests(unittest.TestCase):
                 with self.subTest(asset=relative_path, key=key):
                     self.assertIn("--set-metadata", text)
                     self.assertIn(f"{key}=<", text)
+            if relative_path == "assets/workflows/build-basic/finalize.md":
+                self.assertIn("canonical record must retain that exact accepted summary and its hash", text)
+                self.assertIn("Missing or changed summary bytes block finalization", text)
+                self.assertIn("Do not synthesize a new", text)
+                self.assertNotIn('--set-metadata "gc.build.implementation_summary_path=', text)
 
     def test_third_party_build_packs_extend_base_and_vendor_sources(self) -> None:
         gascity_root = pathlib.Path(__file__).resolve().parents[1]
@@ -3097,7 +3090,7 @@ class FormulaAssetTests(unittest.TestCase):
                     all(group == "superpowers-task-{{issue}}" for group in continuation_groups)
                 )
 
-    def test_superpowers_finalizer_materializes_canonical_build_summary(self) -> None:
+    def test_superpowers_finalizer_preserves_accepted_canonical_summary(self) -> None:
         packs_root = pathlib.Path(__file__).resolve().parents[2]
         pack_root = packs_root / "superpowers"
         build = load_formula(pack_root, "superpowers-build")
@@ -3108,18 +3101,30 @@ class FormulaAssetTests(unittest.TestCase):
 
         self.assertEqual(finalize_step["metadata"]["gc.run_target"], "superpowers.finisher")
         for fragment in (
-            "materialize the canonical",
+            "workspace_outputs.referenced_record",
+            "gc gc workspace flow verify",
+            "workspace_review.validate_approval",
             "gc.build.implementation_summary_path",
-            "implementation-summary.md",
-            "{{artifact_root}}",
             "gc.build.implementation-summary.v1",
-            "gc.implementation.summary_path",
-            "source anchors",
-            "gc bd update",
-            "Do not create the final report",
+            "original absolute path and verify its recorded hash",
+            "original workflow, methodology, producer and trace",
+            "including when it belongs to a member run",
+            "Missing or changed accepted bytes block finalization",
+            "Do not synthesize, copy, restamp or rewrite",
+            "Write a separate final report",
+            "gc.build.final_report_path",
         ):
             with self.subTest(fragment=fragment):
-                self.assertIn(fragment, finalize)
+                self.assertIn(fragment, " ".join(finalize.split()))
+        for obsolete in (
+            "materialize the canonical",
+            "{{artifact_root}}/implementation-summary.md",
+            "A per-item summary inside an implementation worktree is not sufficient",
+            "Otherwise synthesize",
+            '--set-metadata "gc.build.implementation_summary_path=',
+        ):
+            with self.subTest(obsolete=obsolete):
+                self.assertNotIn(obsolete, " ".join(finalize.split()))
 
     def test_superpowers_development_converts_subagent_reviews_to_fanout(self) -> None:
         packs_root = pathlib.Path(__file__).resolve().parents[2]
@@ -3206,7 +3211,7 @@ class FormulaAssetTests(unittest.TestCase):
             design_loop["check"]["check"],
             {
                 "mode": "exec",
-                "path": ".gc/scripts/checks/design-review-approved.sh",
+                "path": "../assets/scripts/checks/design-review-approved.sh",
                 "timeout": "10m",
             },
         )
@@ -3226,7 +3231,7 @@ class FormulaAssetTests(unittest.TestCase):
             spec_loop["check"]["check"],
             {
                 "mode": "exec",
-                "path": ".gc/scripts/checks/design-review-approved.sh",
+                "path": "../assets/scripts/checks/design-review-approved.sh",
                 "timeout": "10m",
             },
         )
@@ -3316,7 +3321,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertIn("waiting-human", spec_approval)
         self.assertIn("silence", spec_approval)
         self.assertIn("spec revision summary", spec_approval)
-        self.assertIn("Do not run `.gc/scripts/checks/design-review-approved.sh`", spec_approval)
+        self.assertIn("Do not run the imported pack-owned `design-review-approved.sh`", spec_approval)
         self.assertIn("Do not use\n`gc bd update --metadata`", spec_approval)
         self.assertIn("--metadata-field gc.step_id=requirements.review-written-spec", spec_approval)
         self.assertIn("--metadata-field gc.step_id=requirements.apply-spec-feedback", spec_approval)
@@ -3698,178 +3703,85 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(do_work_item["vars"]["implementation_target"]["default"], "gc.implementation-worker")
         self.assertEqual(next(step for step in do_work_item["steps"] if step["id"] == "implement-item")["metadata"]["gc.run_target"], "{{implementation_target}}")
 
-    def test_do_work_formula_requires_persisted_item_worktree(self) -> None:
+    def test_do_work_formula_requires_native_prepared_workspace(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
-        do_work = tomllib.loads((root / "formulas" / "do-work.formula.toml").read_text(encoding="utf-8"))
-        steps = {step["id"]: step for step in do_work["steps"]}
-
-        prepare = node_description(root, steps["prepare-worktree"])
+        steps = {step["id"]: step for step in resolve_formula(root, "do-work")["steps"]}
+        prepare = " ".join(node_description(root, steps["prepare-worktree"]).split())
         for fragment in (
-            "current step bead metadata",
-            "gc.root_bead_id",
-            "gc.input_convoy_id",
-            "gc.synthetic_kind",
-            "gc.drain_member_id",
-            "do not use the synthetic drain-unit convoy id as `<source-anchor-id>`",
-            "never persist `work_dir` on the synthetic drain-unit convoy",
-            "hard-fail if the selected source anchor id equals the synthetic input convoy id",
-            "worktrees/<source-anchor-id>",
-            "git worktree add",
-            "gc bd update <source-anchor-id> --set-metadata work_dir=",
-            "Do not edit source files in the launcher checkout",
+            "workspace_dependency.py", "--worktree-lifecycle new", "--claimed-step-id",
+            "--launch-step-id", "original workflow root", "source member",
+            "synthetic convoy is never the source member", "gc.worktree_ref",
+            "selected input", "committed/replayed receipts", "Do not edit source files in the launcher checkout",
         ):
             with self.subTest(step="prepare-worktree", fragment=fragment):
                 self.assertIn(fragment, prepare)
+        self.assertNotIn("git worktree add", prepare)
+        self.assertNotIn("--set-metadata work_dir=", prepare)
 
-        implement = node_description(root, steps["implement"])
+        implement = " ".join(node_description(root, steps["implement"]).split())
         for fragment in (
-            "Read `work_dir` from the source anchor",
-            "never read `work_dir` from the synthetic drain-unit convoy",
-            "Do not infer the source anchor from dependency ids",
-            "`gc.work_dir` is the launcher rig root, not the implementation worktree",
-            "if the JSON output is a one-element list, unwrap the",
-            "verify `pwd -P` equals",
-            "cd \"$WORKTREE\"",
-            "fail this step before editing",
-            "Do not edit files in the launcher checkout",
-            "Leave the source anchor open",
+            "gc gc workspace checkout continue", "workspace_outputs.referenced_record",
+            "workspace_outputs.result_binding", "workspace_outputs.execute_checks",
+            "frozen ordered requirement IDs/argv", "actual full HEAD", "independent-acceptance",
+            "only `record-result` may publish acceptance", "do not fall back to a launcher or recapture base",
         ):
             with self.subTest(step="implement", fragment=fragment):
                 self.assertIn(fragment, implement)
-
-        close_source = node_description(root, steps["close-source-anchor"])
+        close_source = " ".join(node_description(root, steps["close-source-anchor"]).split())
         for fragment in (
-            "gc.root_bead_id",
-            "gc.source_anchor_id",
-            "DO NOT re-derive",
-            "FALLBACK — only if the root has NO `gc.source_anchor_id`",
-            "gc.synthetic_kind=drain-unit-convoy",
-            "gc.drain_member_id",
-            "Read `work_dir` from the source anchor",
-            "close only `<source-anchor-id>`",
-            "handle both an object and a",
-            "`gc.work_dir` is the launcher rig",
-            "points at a worktree without the",
-            "gc bd show <source-anchor-id> --json",
-            "status=closed",
-            "gc.outcome=pass",
-            "if either check fails",
-            "anchor before closing this step",
-            "Do not close this step with pass while the source anchor remains open",
+            "worktree_lifecycle=new", "gc gc workspace flow close-source",
+            "exact member ID", "record-result", "accepted result and checkpoint",
+            "qualified owner-output", "clean output OID", "independent review",
+            "Never close a wrapper convoy, parent workflow or another member",
+            "only after successful readback", "explicit migration",
         ):
             with self.subTest(step="close-source-anchor", fragment=fragment):
                 self.assertIn(fragment, close_source)
+        self.assertNotIn("FALLBACK", close_source)
+        self.assertNotIn("gc.source_anchor_id", close_source)
 
-    def test_pack_close_source_anchor_overrides_read_root_stamped_anchor(self) -> None:
+    def test_pack_close_source_uses_guarded_original_member(self) -> None:
         gascity_root = pathlib.Path(__file__).resolve().parents[1]
         pack_root = gascity_root.parent / "superpowers"
+        for name in ("superpowers-development", "superpowers-development-item"):
+            resolved = resolve_formula_from_dirs([gascity_root / "formulas", pack_root / "formulas"], name)
+            steps = {step["id"]: step for step in resolved["steps"]}
+            close_source = " ".join(node_description(pack_root, steps["close-source-anchor"]).split())
+            for fragment in (
+                "worktree_lifecycle=new", "gc gc workspace flow close-source",
+                "exact member ID", "accepted result and checkpoint", "qualified owner-output",
+                "only after successful readback", "Never close a wrapper convoy",
+                "explicit migration", "Superpowers TDD", "spec-compliance", "code-quality",
+            ):
+                with self.subTest(formula=name, fragment=fragment):
+                    self.assertIn(fragment, close_source)
+            self.assertNotIn("FALLBACK", close_source)
+            self.assertNotIn("gc.source_anchor_id", close_source)
 
-        resolved = resolve_formula_from_dirs(
-            [gascity_root / "formulas", pack_root / "formulas"],
-            "superpowers-development",
-        )
-        steps = {step["id"]: step for step in resolved["steps"]}
-        close_source = node_description(pack_root, steps["close-source-anchor"])
-        for fragment in (
-            "gc.root_bead_id",
-            "gc.source_anchor_id",
-            "DO NOT re-derive",
-            "FALLBACK — only if the root has NO `gc.source_anchor_id`",
-            "gc.synthetic_kind=drain-unit-convoy",
-            "gc.drain_member_id",
-            "close only the source anchor with `gc.outcome=pass`",
-        ):
-            with self.subTest(pack="superpowers", fragment=fragment):
-                self.assertIn(fragment, close_source)
-
-    def test_do_work_source_anchor_is_stamped_once_and_read_back(self) -> None:
-        """prepare-worktree is the only resolver; later steps read its stamp.
-
-        Covers the three resolution paths every source-anchor consumer must
-        handle: the stamped id, the unstamped (legacy / shared-drain item)
-        fallback, and the missing-anchor fail-closed path.
-        """
-        gascity_root = pathlib.Path(__file__).resolve().parents[1]
-        repo_root = gascity_root.parent
-
-        def flat(text: str) -> str:
-            return " ".join(text.split())
-
-        do_work = resolve_formula(gascity_root, "do-work")
-        steps = {step["id"]: step for step in do_work["steps"]}
-        prepare = flat(node_description(gascity_root, steps["prepare-worktree"]))
-        implement = flat(node_description(gascity_root, steps["implement"]))
-        close_source = flat(node_description(gascity_root, steps["close-source-anchor"]))
-
-        sp_formulas = [gascity_root / "formulas", repo_root / "superpowers" / "formulas"]
-        sp_closes = {
-            name: flat(
-                node_description(
-                    repo_root / "superpowers",
-                    {s["id"]: s for s in resolve_formula_from_dirs(sp_formulas, name)["steps"]}[
-                        "close-source-anchor"
-                    ],
-                )
-            )
-            for name in ("superpowers-development", "superpowers-development-item")
+    def test_source_consumers_keep_native_references_without_legacy_fallback(self) -> None:
+        repo = pathlib.Path(__file__).resolve().parents[2]
+        contracts = {
+            "gascity/assets/workflows/do-work/prepare-worktree.md": ("workspace_dependency.py", "gc.worktree_ref"),
+            "gascity/assets/workflows/do-work/implement.md": ("workspace_outputs.referenced_record", "workspace_outputs.result_binding"),
+            "gascity/assets/workflows/do-work/close-source-anchor.md": ("gc gc workspace flow close-source", "accepted result and checkpoint"),
+            "superpowers/assets/workflows/superpowers-development/close-source-anchor.md": ("gc gc workspace flow close-source", "accepted result and checkpoint"),
+            "bmad/assets/workflows/bmad-story-development/implement-story.md": ("workspace_checkout.load_workspace_context", "current native claim"),
+            "bmad/assets/workflows/bmad-story-development/apply-story-findings.md": ("workspace_checkout.load_workspace_context", "native workspace provenance"),
+            "gstack/assets/workflows/gstack-work/implement.md": ("workspace_checkout.load_workspace_context", "workspace_outputs.result_binding"),
+            "superpowers/assets/workflows/superpowers-development/implement.md": ("workspace_checkout.load_workspace_context", "current native claim"),
         }
-
-        # Stamped path: prepare-worktree writes the stamp, idempotently, and
-        # verifies it; every downstream step reads exactly that id.
-        for fragment in (
-            "gc bd update <root-bead-id> --set-metadata gc.source_anchor_id=<source-anchor-id>",
-            "If the root already has `gc.source_anchor_id` (a retry), it must equal the id resolved above; hard-fail on a mismatch instead of overwriting it",
-            "the root now has `gc.source_anchor_id=<source-anchor-id>` before closing this step",
-        ):
-            with self.subTest(path="stamped", step="prepare-worktree", fragment=fragment):
-                self.assertIn(fragment, prepare)
-        with self.subTest(path="stamped", step="implement"):
-            self.assertIn("If the root has `gc.source_anchor_id`", implement)
-            self.assertIn("use exactly that id and do not re-derive it", implement)
-        for name, text in {"do-work": close_source, **sp_closes}.items():
-            with self.subTest(path="stamped", step="close-source-anchor", formula=name):
-                self.assertIn("read that root's `gc.source_anchor_id` metadata", text)
-                self.assertIn("DO NOT re-derive it", text)
-        for rel in (
-            "bmad/assets/workflows/bmad-story-development/implement-story.md",
-            "bmad/assets/workflows/bmad-story-development/apply-story-findings.md",
-            "gstack/assets/workflows/gstack-work/implement.md",
-            "superpowers/assets/workflows/superpowers-development/implement.md",
-        ):
-            with self.subTest(path="stamped", prompt=rel):
-                self.assertIn(
-                    "Resolve the source anchor as the workflow root's stamped `gc.source_anchor_id`",
-                    flat((repo_root / rel).read_text(encoding="utf-8")),
-                )
-
-        # A single-item sling wraps the item in a `gc.synthetic=true` input
-        # convoy; the item, never the wrapper, is the source anchor.
-        for name, text in {"prepare-worktree": prepare, "implement": implement, "do-work close": close_source, **sp_closes}.items():
-            with self.subTest(path="single-item-wrapper", step=name):
-                self.assertIn("`gc.synthetic=true`", text)
-                self.assertIn("gc convoy status <input-convoy-id> --json", text)
-        self.assertIn("Never use the synthetic wrapper convoy id as `<source-anchor-id>`", prepare)
-
-        # Fallback path: unstamped roots (pre-stamp in-flight runs, the shared
-        # drain item lane) derive the anchor with prepare-worktree's rules and
-        # still find a pre-stamp work_dir on the wrapper convoy.
-        for name, text in {"do-work": close_source, **sp_closes}.items():
-            with self.subTest(path="fallback", formula=name):
-                self.assertIn("FALLBACK — only if the root has NO `gc.source_anchor_id`", text)
-                self.assertIn("gc.synthetic_kind=drain-unit-convoy", text)
-                self.assertIn("gc.drain_member_id", text)
-                self.assertIn("read `work_dir` from that convoy", text)
-                self.assertIn("still close the member", text)
-        self.assertIn("superpowers-development-item` lane, which has no `prepare-worktree`", sp_closes["superpowers-development-item"])
-        self.assertIn("read `work_dir` from that convoy instead", implement)
-
-        # Missing-anchor / wrong-bead path: fail closed before closing anything.
-        for name, text in {"do-work": close_source, **sp_closes}.items():
-            with self.subTest(path="missing-anchor", formula=name):
-                self.assertIn("if it is missing too, fail this step without closing any bead", text)
-                self.assertIn("gc.synthetic=true", text)
-                self.assertRegex(text, r"fail this step without closing any bead (if it does not hold|unless)")
-                self.assertIn("do not close it again", text)
+        for relative, required in contracts.items():
+            text = " ".join((repo / relative).read_text(encoding="utf-8").split())
+            with self.subTest(asset=relative):
+                self.assertIn("worktree_lifecycle", text)
+                self.assertIn("new", text)
+                self.assertIn("explicit migration", text)
+                for fragment in required:
+                    self.assertIn(fragment, text)
+                self.assertNotIn("FALLBACK", text)
+                self.assertNotIn("gc.source_anchor_id", text)
+                self.assertNotIn("git worktree add", text)
+                self.assertNotIn("read `work_dir` from that convoy", text)
 
     def test_wrapper_formulas_route_role_agents(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
@@ -4061,13 +3973,14 @@ class FormulaAssetTests(unittest.TestCase):
             with self.subTest(step="render-comment", fragment=fragment):
                 self.assertIn(fragment, render_comment)
 
-    def test_github_pr_report_delegation_preserves_explicit_legacy_compatibility(self) -> None:
+    def test_github_pr_report_delegation_uses_explicit_subject_without_legacy_capture(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
         adapter = resolve_formula(root, "github-pr-review")
         delegation = node_description(root, next(step for step in adapter["steps"] if step["id"] == "run-review"))
-        self.assertIn("--var worktree_lifecycle=legacy", delegation)
-        self.assertIn("does not declare `worktree_lifecycle`", delegation)
-        self.assertIn("deprecated", delegation)
+        self.assertNotIn("--var worktree_lifecycle=legacy", delegation)
+        self.assertIn("existing native run and verified workspace", delegation)
+        self.assertIn("never manufacture", delegation)
+        self.assertIn('--var review_mode="{{review_mode}}"', delegation)
         selectors = {"gascity": "review", **{
             pack: methodology_selector_defaults(expected)["code_review_formula"]
             for pack, expected in THIRD_PARTY_BUILD_PACKS.items()
@@ -4080,7 +3993,7 @@ class FormulaAssetTests(unittest.TestCase):
                 selected = resolve_formula_from_dirs(directories, formula_name)
                 self.assertFalse(selected["target_required"])
                 self.assertEqual(selected["vars"]["worktree_lifecycle"]["default"], "new")
-                self.assertIn("legacy", selected["vars"]["worktree_lifecycle"]["enum"])
+                self.assertEqual(selected["vars"]["worktree_lifecycle"]["enum"], ["new"])
                 self.assertEqual(load_formula_from_dirs(directories, formula_name)["mode"], "report")
         generic = effective_formula_text(root, "review")
         self.assertNotIn("gc workspace", generic)
@@ -4491,10 +4404,6 @@ description = "Override sink that writes the base triage report contract."
             text = path.read_text(encoding="utf-8")
             relative = path.relative_to(root)
             with self.subTest(asset=str(relative)):
-                if path.name == "build-artifact-valid.sh":
-                    # The check keeps its installed-copy rig-root fallback for
-                    # derived packs that still use the launcher-relative path.
-                    continue
                 self.assertNotIn(".gc/scripts/checks", text)
                 self.assertNotIn("cp -R {{pack_root}}/assets/scripts .gc/scripts", text)
 
@@ -5060,7 +4969,7 @@ description = "Override sink that writes the base triage report contract."
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn(str(artifact), result.stdout)
 
-    def test_build_artifact_check_derives_rig_root_from_installed_script_when_env_is_unset(self) -> None:
+    def test_build_artifact_check_refuses_work_dir_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             rig_root = tmp / "rig"
@@ -5097,13 +5006,15 @@ description = "Override sink that writes the base triage report contract."
                     "GC_RIG_ROOT": "",
                     "GC_BEADS_SCOPE_ROOT": "",
                     "GC_DIR": "",
+                    "GC_STORE_PATH": "",
                     "GC_WORK_DIR": str(per_bead_worktree),
                 },
                 script_root=rig_root,
             )
 
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn(str(artifact), result.stdout)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("explicit absolute rig/store root", result.stderr)
+        self.assertNotIn("build artifact valid", result.stdout)
 
     # Controller-run gates. With the formulas resolving their check from pack
     # assets, the dispatcher executes the script from the pack tree and only
@@ -5134,6 +5045,21 @@ description = "Override sink that writes the base triage report contract."
             text = text.replace("status: approved", "status: bogus")
         artifact.write_text(text, encoding="utf-8")
         return artifact
+
+    def test_build_artifact_check_refuses_installed_copy_with_explicit_root(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            rig = pathlib.Path(td) / "rig"
+            artifact = self._write_requirements(rig)
+            beads = self._relative_requirements_beads()
+            selected = {**self._CONTROLLER_ENV_CLEARED, "GC_STORE_PATH": str(rig)}
+            positive = self._run_build_artifact_check(beads, "loop", extra_env=selected)
+            self.assertEqual(positive.returncode, 0, positive.stdout + positive.stderr)
+            self.assertIn(str(artifact), positive.stdout)
+            refused = self._run_build_artifact_check(beads, "loop", extra_env=selected, script_root=rig)
+            self.assertNotEqual(refused.returncode, 0, refused.stdout + refused.stderr)
+            self.assertIn("resolved pack validator and schemas are required", refused.stderr)
+            self.assertIn("migrate legacy installed copies", refused.stderr)
+            self.assertNotIn("build artifact valid", refused.stdout)
 
     def test_build_artifact_check_from_pack_assets_resolves_relative_path_from_store_path(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -5178,7 +5104,7 @@ description = "Override sink that writes the base triage report contract."
         self.assertIn(str(artifact), result.stdout)
         self.assertNotIn(str(stale), result.stdout + result.stderr)
 
-    def test_build_artifact_check_falls_back_to_work_dir_when_store_lacks_artifact(self) -> None:
+    def test_build_artifact_check_refuses_work_dir_when_selected_store_lacks_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             store_root = tmp / "city"
@@ -5196,10 +5122,11 @@ description = "Override sink that writes the base triage report contract."
                 },
             )
 
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn(str(artifact), result.stdout)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("does not exist", result.stderr)
+        self.assertNotIn(str(artifact), result.stdout + result.stderr)
 
-    def test_build_artifact_check_reports_every_root_it_tried(self) -> None:
+    def test_build_artifact_check_reports_only_the_explicit_selected_root(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             store_root = tmp / "rig"
@@ -5220,7 +5147,7 @@ description = "Override sink that writes the base triage report contract."
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("does not exist", result.stderr)
         self.assertIn(str(store_root / ".gc" / "inference-gate" / "requirements.md"), result.stderr)
-        self.assertIn(str(work_dir / ".gc" / "inference-gate" / "requirements.md"), result.stderr)
+        self.assertNotIn(str(work_dir / ".gc" / "inference-gate" / "requirements.md"), result.stderr)
 
     def test_build_artifact_check_does_not_treat_a_pack_tree_as_an_installed_rig(self) -> None:
         # A pack checkout can itself contain a .gc directory (a city or rig
@@ -5351,6 +5278,7 @@ description = "Override sink that writes the base triage report contract."
             "GC_RIG_ROOT",
             "per-bead worktree",
             "gc.build.review_report_path={{report_path}}",
+            "do not write it under the current directory",
             "or `$GC_WORK_DIR`",
         ):
             with self.subTest(fragment=fragment):
@@ -5369,7 +5297,7 @@ description = "Override sink that writes the base triage report contract."
                 step = next(step for step in formula["steps"] if step["id"] == step_id)
                 self.assertEqual(
                     step["check"]["check"]["path"],
-                    ".gc/scripts/checks/implementation-review-approved.sh",
+                    "../assets/scripts/checks/implementation-review-approved.sh",
                 )
 
         story_root = bmad_root / "assets" / "workflows" / "bmad-story-development"

@@ -7,12 +7,11 @@ Use `gc bd update "<workflow-root-id>" --set-metadata "gc.build.review_report_pa
 Do not use `gc bd update --metadata 'key=value'`; `--metadata` only accepts a JSON
 object.
 
-Review approval is based on the implementation source anchor/worktree recorded
-in the review context and canonical implementation summary. Do not downgrade the
-review to `changes_required` because the launcher rig root has not been mutated;
-root propagation is handled by publish. If the source anchor/worktree satisfies
-the requirements and the remaining issue is only "not copied to root", write the
-normalized `gc.build.review.v1` artifact with `status: approved`.
+Complete canonical review through the
+[native canonical review recipe](../workspace-canonical-review.md). The actual
+native reviewer must validate the retained subject and bind the completed report
+to the exact canonical generation, OID and required scope. Schema-valid reports
+or three lane approvals alone cannot publish a canonical approval.
 
 The approved review report must be a Markdown build artifact with YAML front
 matter, not JSON. If the latest synthesis is not already valid for

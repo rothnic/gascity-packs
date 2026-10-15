@@ -10,5 +10,5 @@ their native references. The canonical record retains the accepted summary hash.
 An aggregate report may link that summary. Rewriting the summary requires new
 checks and independent review.
 
-Legacy keeps the existing summary workflow. Missing, stale or partial native
-records stop managed finalization.
+Missing, stale or partial native records stop finalization. Preserve older
+runs for explicit migration without recapturing source.

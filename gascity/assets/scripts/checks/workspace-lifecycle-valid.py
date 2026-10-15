@@ -33,13 +33,7 @@ def main() -> int:
         if not isinstance(source_modes, str):
             raise RecordError("source classifications are required")
         declared = parse_record(source_modes)
-        if mode == "legacy" and metadata.get("gc.lifecycle.compatibility") == "legacy":
-            verify_source_modes("new", declared)
-        else:
-            verify_source_modes(mode, declared)
-        if mode == "legacy":
-            print("workspace-lifecycle-check: worktree_lifecycle=legacy is deprecated; retain the original mode for legacy work",
-                  file=sys.stderr)
+        verify_source_modes(mode, declared)
         print(json.dumps({"ok": True, "worktree_lifecycle": mode}, sort_keys=True))
         return 0
     except (RecordError, OSError, subprocess.SubprocessError, UnicodeError) as exc:

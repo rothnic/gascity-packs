@@ -1,8 +1,8 @@
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the task/story procedure below in either mode. Legacy source/path
-resolution applies only to explicit `legacy`; managed source operations use
-the recorded workspace. Unknown modes or failed reads never select legacy.
+Use the recorded native workspace for the task/story procedure below.
+Only `new` is supported. Preserve older or unclassified state for explicit
+migration; failed reads grant no source authority.
 
 For an admitted `new` item, reload the exact run/source-plan/workspace
 through the imported Gas City `workspace_checkout.load_workspace_context`

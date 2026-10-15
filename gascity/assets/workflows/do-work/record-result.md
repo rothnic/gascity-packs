@@ -1,4 +1,5 @@
-For retained `worktree_lifecycle=new`, run this acceptance step. The legacy route skips it.
+Run this recorder step only for recorded `worktree_lifecycle=new`. Preserve
+older or unclassified runs and their original checkouts for explicit migration.
 
 Run the recorder sequence in [the native runtime contract](../workspace-runtime.md).
 Use `gc gc workspace flow record-result`, then the bridge's actual checkpoint

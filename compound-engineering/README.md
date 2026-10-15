@@ -261,9 +261,10 @@ while each member receives a Compound `ce-work` item formula.
 
 ### Source workspaces
 
-`worktree_lifecycle=new` is the default for fresh source work. Continuations
-retain the original run's mode. Explicit `legacy` remains deprecated
-compatibility and emits a warning. New mode uses the imported native entry,
+`worktree_lifecycle=new` is required for source work. Continuations retain the
+original run and recorded base. Legacy or unclassified work requires
+[explicit migration](../gascity/docs/worktree-dependencies.md#migrate-existing-work).
+The workflow uses the imported native entry,
 checkout, runtime and record helpers. Configure its fixed base and required
 checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
 Native worker execution and installation require separate matched-pair validation.

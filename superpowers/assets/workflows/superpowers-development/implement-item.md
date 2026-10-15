@@ -1,8 +1,8 @@
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the task/story procedure below in either mode. Legacy source/path
-resolution applies only to explicit `legacy`; managed source operations use
-the recorded workspace. Unknown modes or failed reads never select legacy.
+Use the recorded native workspace for the task/story procedure below.
+Only `new` is supported. Preserve older or unclassified state for explicit
+migration; failed reads grant no source authority.
 
 For an admitted `new` item, reload the exact run/source-plan/workspace
 through the imported Gas City `workspace_checkout.load_workspace_context`
@@ -41,4 +41,4 @@ compact task context note for the following implementation steps.
 Do not edit source files in the launcher checkout. Do not invoke
 provider-native subagents or upstream plugin runtime commands.
 
-Artifact validation: this step is gated by `.gc/scripts/checks/build-artifact-valid.sh`, which validates the summary recorded at `gc.implementation.summary_path` (fallbacks `gc.build.implementation_summary_path`, then `gc.var.summary_path`) against schema `gc.build.implementation-summary.v1`. On repair attempts (`gc.attempt` greater than 1), read the validator errors from `gc.attempt_log` on the validation loop control bead (the dependent of this step bead) and repair the summary in place instead of rewriting it. Two bounded repair attempts follow the first failure; exhausting them closes this stage with `gc.outcome=fail` and machine-readable validation errors that block downstream stages. Never ask questions in headless mode; record unresolved ambiguity inside the summary.
+Artifact validation: this step is gated by the imported pack-owned `build-artifact-valid.sh` check, which validates the summary recorded at `gc.implementation.summary_path` (fallbacks `gc.build.implementation_summary_path`, then `gc.var.summary_path`) against schema `gc.build.implementation-summary.v1`. On repair attempts (`gc.attempt` greater than 1), read the validator errors from `gc.attempt_log` on the validation loop control bead (the dependent of this step bead) and repair the summary in place instead of rewriting it. Two bounded repair attempts follow the first failure; exhausting them closes this stage with `gc.outcome=fail` and machine-readable validation errors that block downstream stages. Never ask questions in headless mode; record unresolved ambiguity inside the summary.

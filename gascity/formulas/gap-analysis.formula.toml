@@ -1,4 +1,7 @@
 description = """
+Source access uses the recorded new workspace lifecycle. Legacy or unclassified
+state requires explicit migration; no artifact or current-checkout fallback.
+
 Report-only gap analysis over implementation artifacts.
 
 Launch inputs:

@@ -6,27 +6,30 @@ review summary. If required fixes or missing evidence remain, make the smallest
 focused changes, run the relevant proof commands, and write the review-fix
 summary under the build artifact root.
 
-Apply fixes to the implementation source anchor/worktree named in the review
-context, not to the launcher rig root. An unchanged root checkout is not itself
-a required fix for build-basic; publish owns propagation beyond the source
-anchor. If the only reported issue is "implementation exists in the worktree but
-not the root checkout" and the source anchor/worktree passes the requirements,
-record a no-op fix summary and set `code_review.verdict=done`.
+For required fixes, read the current canonical and commit-bound
+findings through `workspace_outputs.referenced_record`. Report mode cannot
+apply fixes. A no-op retains the exact canonical OID and matching approval.
+Source or test changes require `workspace_review.fix_plan(canonical, findings,
+previous_plan, writer_step_id=..., source_plan_owner_id=..., nodes=...,
+terminal_owner_id=..., max_iterations=...)`. Use native IDs and the configured
+bounded retry policy. Publish the declared source-plan using
+`workspace_source_plan.declare_plan` and `publish_plan` under the current
+admitted claim/owner grant. Retain the exact parent generation/OID; do not edit
+the accepted canonical checkout in place or replace a newer parent.
 
-Before editing or running proof commands, read `gc.build.code_review_context_path`
-from the workflow root bead and use its `## Implementation Worktrees` section as
-the authority for writable code. `gc.work_dir` is the launcher rig root, not the
-implementation worktree. Do not inspect or edit the launcher checkout. Select
-the implementation worktree for each finding from the source anchor/worktree
-recorded in the review context, run `cd "$WORKTREE"`, and verify `pwd -P` equals
-that worktree before making changes. Resolve all relative paths in synthesis
-findings against the selected worktree. If a required fix cannot be tied to an
-implementation worktree, write an iterate summary explaining the missing
-worktree evidence and do not patch the launcher root. If multiple worktrees are
-listed and a finding is ambiguous, leave it as iterate until the owning worktree
-is explicit.
+Run the selected methodology's native implementation/fix lanes against that
+recorded generation. Use the common checkout, result and canonical APIs for
+its tested commit and independent review. A changed pass returns `iterate`;
+only a later independent review of the new canonical commit can approve.
+Preserve artifacts for both generations. Do not rewrite the old accepted
+summary, review or receipt. Any missing native route, grant or helper blocks
+with original state retained. Artifact paths grant no source-write authority.
 
-Contract: `gc.work_dir` is the launcher rig root, not the implementation worktree.
+The review context supplies findings and traceability, not writable authority.
+Any source change must run through the declared replacement generation and its
+verified workspace. Do not edit the accepted canonical checkout in place.
+Preserve accepted summaries and reports; write replacement artifacts for the
+new generation. A no-op keeps the exact existing canonical OID and approval.
 
 Set `code_review.verdict=done` only when acceptance, test evidence, and
 simplicity all approve after this pass. Set `code_review.verdict=iterate` when

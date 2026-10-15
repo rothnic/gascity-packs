@@ -1,15 +1,15 @@
-For `new`, execute `gc gc workspace flow publish` through
+Execute `gc gc workspace flow publish` through
 [the native publication recipe](../workspace-publication.md). Keep the same
 recorded publish intent for push/PR readback; never create another effect after
-an uncertain response. Legacy retains its publication policy below.
+an uncertain response. Preserve older or unclassified work for explicit migration.
 
 This is the `build-base` publish stage. Treat it as a virtual contract that concrete formulas may override.
 
-For a captured `new` run, use the exact canonical/approval/authority contract in
+For the captured `new` run, use the exact canonical/approval/authority contract in
 `workspace_publish.py` and the owning `publish` preflight/push/open-pr step files.
 Persist and read back intent before effects; reconcile the same immutable OID and
 PR marker after uncertainty without duplication. Missing approval/guards or changed
-source blocks, and no-op preserves any earlier failure. Legacy retains the contract below.
+source blocks, and no-op preserves any earlier failure.
 
 If `push` or `open_pr` is enabled, publish the finalized build result according to the workflow metadata. If publishing is disabled, record the exact reason and leave the artifacts ready for a later publisher.
 

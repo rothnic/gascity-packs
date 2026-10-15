@@ -12,7 +12,7 @@ target_required = true
 
 [vars]
 [vars.worktree_checks]
-description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+description = "Canonical JSON required_checks [{id, argv}], captured once on the native run."
 default = ""
 
 [vars.worktree_base_ref]
@@ -35,12 +35,12 @@ enum = ["false", "true"]
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle. New uses the composed native workspace helpers and captured policy."
 default = "new"
-enum = ["legacy", "new"]
+enum = ["new"]
 
 [[steps]]
 id = "validate-workspace-mode"
 title = "Validate methodology source lifecycle"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/workspace-mode/validate.md"
 
 [steps.check]
@@ -63,7 +63,7 @@ max_attempts = 8
 
 [steps.check.check]
 mode = "exec"
-path = ".gc/scripts/checks/implementation-review-approved.sh"
+path = "../assets/scripts/checks/implementation-review-approved.sh"
 timeout = "10m"
 
 [[steps.children]]
@@ -104,7 +104,7 @@ description_file = "../assets/workflows/bmad-story-development/apply-story-findi
 id = "prepare-worktree"
 title = "Prepare admitted methodology item worktree"
 needs = ["validate-workspace-mode"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/do-work/prepare-worktree.md"
 
 [steps.check]

@@ -71,16 +71,23 @@ class WorkspaceDiscoveryTests(unittest.TestCase):
         self.assertIn("migration", result.stdout)
         self.assertEqual(result.returncode, 1)
 
-    def test_current_legacy_inventory_passes_only_stage_a(self):
+    def test_final_inventory_has_no_legacy_and_old_stage_cannot_bypass_refusal(self):
         report = self.check()
         self.assertEqual(sum(report["classifications"].values()), len(self.manifest["inventory"]) + len(self.manifest["source_helpers"]))
-        self.assertGreater(report["classifications"]["legacy"], 0)
+        self.assertEqual(report["classifications"]["legacy"], 0)
         self.assertGreater(report["classifications"]["new"], 0)
         self.assertEqual(report["source_owner_count"], 10)
         self.assertEqual(set(report["inspected_roots"]), set(self.manifest["packs"]))
         self.assertEqual(report["unresolved_inputs"], [])
-        later = self.check("--stage", "b", ok=False)
-        self.assertTrue(any(issue["classification"] == "legacy" for issue in later["issues"]))
+        self.assertFalse(report["runtime_verified"])
+        self.check("--stage", "b")
+        path = "gascity/assets/workflows/do-work/implement.md"
+        self.manifest["inventory"][path]["classification"] = "legacy"
+        self.save_manifest()
+        self.assertTrue(any("legacy" in issue["reason"] for issue in self.reject(path)))
+        result = subprocess.run([sys.executable, str(SCRIPT), "--root", str(self.root), "--stage", "a"],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 2)
 
     def test_legacy_json_formula_and_new_workflow_asset_are_unclassified(self):
         for path, text in (

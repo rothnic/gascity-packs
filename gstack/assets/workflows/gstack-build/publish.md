@@ -2,8 +2,8 @@ Optionally publish the gstack sprint.
 
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-For explicit `legacy`, use the existing publishing procedure below. Unknown
-mode or failed managed reads never select legacy.
+Legacy or unclassified work requires explicit migration. Unknown or failed
+native reads never authorize publication.
 
 For an admitted `new` publication, require the exact canonical, accepted
 terminal result, owner-output and commit-bound review through the imported

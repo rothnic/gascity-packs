@@ -1,8 +1,8 @@
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the methodology below. Its legacy source/path/state operations apply
-only to explicit `legacy`; the managed instructions govern an admitted `new`
-run. Unknown modes or failed reads never authorize legacy fallback.
+Keep the methodology below. Source access requires the recorded `new` lifecycle.
+Legacy or unclassified work stops for explicit migration; preserve its original
+run and checkout. Do not infer source authority from artifacts or old paths.
 Resolve helper modules through the imported Gas City `assets/scripts` layer;
 keep that resolved directory on Python's import path for sibling modules.
 
@@ -23,7 +23,7 @@ its tested commit and independent review. A changed pass returns `iterate`;
 only a later independent review of the new canonical commit can approve.
 Preserve artifacts for both generations. Do not rewrite the old accepted
 summary, review or receipt. Any missing native route, grant or helper blocks
-with original state retained. Existing raw artifact edits below are legacy only.
+with original state retained. Artifact paths grant no source-write authority.
 
 Process Superpowers code-review feedback.
 

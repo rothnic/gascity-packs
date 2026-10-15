@@ -20,7 +20,7 @@ review_modes = ["report", "agent", "interactive"]
 
 [vars]
 [vars.worktree_checks]
-description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+description = "Canonical JSON required_checks [{id, argv}], captured once on the native run."
 default = ""
 
 [vars.worktree_base_ref]
@@ -43,7 +43,7 @@ enum = ["false", "true"]
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle. New uses native owned workspaces and captured project checks."
 default = "new"
-enum = ["legacy", "new"]
+enum = ["new"]
 
 [vars.implementation_convoy_id]
 description = "Existing implementation convoy ID. Empty means read gc.input_convoy_id from workflow metadata."
@@ -56,7 +56,7 @@ default = "separate"
 [[steps]]
 id = "prepare-convoy"
 title = "Validate implementation convoy"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/build-from-convoy-base/prepare-convoy.md"
 
 [steps.check]
@@ -101,7 +101,7 @@ single_lane = true
 id = "prepare-review"
 title = "Validate review continuation inputs"
 needs = ["implement", "implement-same-session"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/build-from-convoy-base/prepare-review.md"
 
 [steps.check]

@@ -68,7 +68,7 @@ root, store, source membership, designations and dependencies. Scoped iteration
 bodies and their checks retain their exact compiled roles. Reference suffixes
 alone never authorize an occurrence.
 
-The frozen specification is read through native `bd show --json`; its opaque
+The frozen specification is read through native `gc bd show --json`; its opaque
 revision and exact description are checked against the compiled source and a
 second read. The cooked map retains this source binding and opaque revision.
 Only the validated native CAS response to that map's own exact request can

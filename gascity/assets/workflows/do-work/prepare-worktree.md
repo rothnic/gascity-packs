@@ -7,36 +7,71 @@ an explicit cooked mode from the native runtime variables (`gc.graphv2_vars.v1`)
 Fresh supported entries cook `new` by default. Existing runs keep their recorded
 mode. Cooked selections must agree with the captured run. Missing, unknown, mixed
 or conflicting modes or source classifications block before allocation.
+A native drain child's cooked `new` selects the entry read below; that bridge
+verifies the inherited recorded mode even when the child has no run reference.
 
 For selected `new`, call the production dependency preparation bridge. Never
 fall through to the legacy preparation below after a failure or missing input:
 
-- Read the exact registered city/rig/store, original workflow root, current
-  implementation convoy, source generation, declared workspace owner and source
-  member from the native run/source-plan references. Preserve the synthetic
-  wrapper rules below. A synthetic convoy is never the source member.
-- Retain the actual claimed preparation step and native session incarnation.
-  Resolve every physical launch consumer from the cooked graph. Include the
-  implementation, test/story continuation, acceptance and result occurrences
-  that will use this checkout. Physical IDs must come from native readback.
+- Retain the actual claimed preparation step, its physical workflow root and
+  native session incarnation. Resolve the selected native executable and
+  registered city/rig/store from this runtime, not the caller's directory.
+  Use the retained source generation and run the read-only entry bridge before
+  deciding whether the run or source plan exists:
+
+  ```sh
+  python3 "$PACK_ROOT/assets/scripts/workspace_entry.py" read \
+    --gc "$GC_BIN" --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" \
+    --rig "$RIG_NAME" --workflow-root "$CLAIMED_ROOT_BEAD_ID" \
+    --claimed-step "$CLAIMED_BEAD_ID" --worktree-lifecycle new \
+    --generation "$SOURCE_GENERATION" --require-plan
+  ```
+
+  Resolve `PACK_ROOT` from this installed prompt's pack. Keep the actual command,
+  exit status and complete JSON output in the preparation evidence. A successful
+  read returns `state=recorded`; it does not prepare a checkout. On refusal,
+  retain the helper's actual diagnostic. Reading prompts or inspecting root
+  metadata is not an entry-helper execution receipt.
+- Use the returned `workflow_root_id`, `generation`, `rig_name` and `store_ref`.
+  `input_convoy_id` is the current logical implementation convoy; the immutable
+  `run.input_convoy_id` remains the original run input and can differ. A native
+  drain child also returns `native_workflow_root_id`, `native_input_convoy_id`
+  and `native_continuation`. Keep that physical child and its unit convoy:
+  pass `native_input_convoy_id` to dependency preparation when present,
+  otherwise pass `input_convoy_id`. The bridge checks the rendered native input
+  before resolving the logical implementation convoy internally.
+- For a native child, use `native_continuation.member_id` as the source member
+  and the sole returned `source_plan.nodes` entry containing that member as its
+  workspace owner. For other entries, retain the exact cooked source member and
+  require the same unique plan membership. `source_plan.source_plan_owner_id`
+  identifies the plan's producer, not the workspace owner. The helper follows
+  the native child, drain control, unit convoy and implementation convoy to that
+  producer's source-plan reference. Neither the physical child nor the original
+  root is required to carry `gc.source_plan_ref`. Do not copy or inject that
+  reference, infer a missing plan from its absence on a root, or use a synthetic
+  convoy as the source member.
 - Validate context path {{context_path}}, files ownership and the captured
   required-check policy. Call the installed production helper:
 
   ```sh
-  python3 <pack-root>/assets/scripts/workspace_dependency.py \
-    --worktree-lifecycle new --city-root '<registered-city>' \
+  python3 "$PACK_ROOT/assets/scripts/workspace_dependency.py" \
+    --gc "$GC_BIN" --worktree-lifecycle new --city-root '<registered-city>' \
     --rig-name '<registered-rig>' --store-ref '<exact-store-ref>' \
     --workflow-root-id '<original-root-id>' \
-    --input-convoy-id '<current-implementation-convoy>' --generation '<source-generation>' \
+    --input-convoy-id '<native-input-convoy-from-entry>' --generation '<source-generation>' \
     --workspace-owner-id '<declared-owner>' --member-id '<source-member>' \
     --claimed-step-id '<current-preparation-step>' \
-    --launch-step-id '<actual-consumer-step>' \
     --artifact-root '<existing-artifact-directory-outside-worktrees>' \
     --evidence-dir '<existing-evidence-directory-outside-worktrees>'
   ```
 
-  Repeat `--launch-step-id` for each physical consumer. The bridge reads layout
-  from the original logical workflow root:
+  Run this command and retain its actual result before reporting preparation
+  success or failure. The bridge resolves all physical launch consumers from
+  the cooked writer map when `--launch-step-id` is omitted. If explicitly
+  supplying those IDs, include every implementation, test/story continuation,
+  acceptance and result occurrence that uses the checkout; derive each from
+  native readback, never a logical step name. The bridge reads layout from the
+  original logical workflow root:
 
   - `gc.var.worktree_parent`: empty selects the rig's default parent.
   - `gc.var.worktree_name_prefix`: empty preserves the owner/generation name.

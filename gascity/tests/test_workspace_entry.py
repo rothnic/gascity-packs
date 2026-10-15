@@ -186,9 +186,14 @@ class EntryTests(unittest.TestCase):
                 self.assertEqual(result["input_convoy_id"], "implementation-1")
                 self.assertEqual(result["native_input_convoy_id"], "unit-1")
                 self.assertEqual(result["native_continuation"]["member_id"], "member-1")
+                self.assertEqual(result["source_plan"]["source_plan_owner_id"], "plan-owner")
                 self.assertIn("control-1", result["_native_rows"])
                 self.assertEqual(self.rows["step-1"]["metadata"]["gc.root_bead_id"], "child-1")
                 self.assertNotIn(entry.RUN_REF, self.rows["child-1"]["metadata"])
+                self.assertNotIn(entry.PLAN_REF, self.rows["child-1"]["metadata"])
+                self.assertNotIn(entry.PLAN_REF, self.rows["root-1"]["metadata"])
+        with self.assertRaisesRegex(entry.EntryError, "rendered input differs from the current native convoy"):
+            self.read(workflow_root_id="child-1", input_convoy_id="implementation-1", require_plan=True)
 
     def test_child_continuation_rejects_wrong_native_chain_store_generation_and_ref(self):
         self.drain_child()

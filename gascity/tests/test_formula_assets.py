@@ -4,6 +4,7 @@ import json
 import os
 import pathlib
 import re
+import shlex
 import subprocess
 import tempfile
 import tomllib
@@ -842,6 +843,42 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertNotRegex(close, r"gc mail send\s+mayor")
         self.assertNotRegex(close, r"&&\s*(?:\\\s*)?gc bd close")
         self.assertNotIn("MERGE REQUEST", close)
+
+    def test_role_worker_keeps_delivered_expanded_root_for_native_continuation(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1]
+        text = (root / "template-fragments" / "gc-role-worker.template.md").read_text(encoding="utf-8")
+        handoff = text.split("## Workflow root delivery\n", 1)[1].split("## Close\n", 1)[0]
+        for metadata in ("gc.kind=workflow", "gc.formula_contract=graph.v2", "gc.workflow_expanded=true"):
+            self.assertIn(metadata, handoff)
+        for contract in ("gc gc claim", "native workflow", "next claim's returned",
+                         "leave it unchanged", "do not loop or drain-ack the held root"):
+            self.assertIn(contract, handoff)
+        self.assertNotIn("`gc.kind=workflow` and `gc.kind=scope`: latch beads", text)
+
+    def test_winning_item_preparation_executes_native_entry_discovery_before_dependency(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1]
+        formula = resolve_formula(root, "do-work")
+        step = next(item for item in formula["steps"] if item["id"] == "prepare-worktree")
+        recipe = node_description(root, step)
+        commands = [shlex.split(code.replace("\\\n", " "))
+                    for code in re.findall(r"```sh\n(.*?)```", recipe, re.DOTALL)]
+        read = next(command for command in commands if command[1].endswith("/workspace_entry.py"))
+        prepare = next(command for command in commands if command[1].endswith("/workspace_dependency.py"))
+        self.assertLess(commands.index(read), commands.index(prepare))
+        self.assertEqual(read[2], "read")
+        self.assertIn("--require-plan", read)
+        self.assertEqual(read[read.index("--workflow-root") + 1], "$CLAIMED_ROOT_BEAD_ID")
+        self.assertEqual(read[read.index("--claimed-step") + 1], "$CLAIMED_BEAD_ID")
+        self.assertNotIn("--input-convoy-id", read)
+        self.assertEqual(prepare[prepare.index("--input-convoy-id") + 1], "<native-input-convoy-from-entry>")
+        for key in ("native_input_convoy_id", "native_continuation.member_id", "source_plan.source_plan_owner_id"):
+            self.assertIn(key, recipe)
+        item = resolve_formula(root, "do-work-item")
+        item_step = next(step for step in item["steps"] if step["id"] == "prepare-worktree")
+        item_recipe = node_description(root, item_step)
+        link = re.search(r"\[shared native recipe\]\(([^)]+)\)", item_recipe).group(1)
+        item_path = (root / "formulas" / item_step["description_file"]).resolve()
+        self.assertEqual((item_path.parent / link).resolve().read_text(encoding="utf-8"), recipe)
 
     def test_city_claim_command_verifies_and_normalizes_claim(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]

@@ -195,6 +195,10 @@ def assert_clean_worker_render(prompt: str, persona_heading: str) -> None:
     assert "Never merge a pull request yourself unless the bead explicitly" in prompt
     assert "`gc.failure_class=pr_handoff_failed`" in prompt
     assert "gc mail send mayor" not in prompt
+    assert "## Workflow root delivery" in prompt
+    assert "gc.workflow_expanded=true" in prompt
+    assert "do not loop or drain-ack the held root" in prompt
+    assert "`gc.kind=workflow` and `gc.kind=scope`: latch beads" not in prompt
 
 
 def test_city_scoped_gascity_registers_claim_command_from_rig(

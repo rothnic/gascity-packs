@@ -110,7 +110,7 @@ description_file = "../assets/workflows/compound-plan-review/{target}.apply-plan
 id = "{target}"
 title = "Finalize approved Compound Engineering plan review"
 needs = ["{target}.compound-plan-review-loop"]
-metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.plan.v1", "gc.build.artifact_path_keys" = "gc.build.plan_path,gc.var.plan_path" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.plan.v1", "gc.build.artifact_path_keys" = "gc.build.plan_path,gc.var.plan_path", "gc.build.plan_review_required" = "true" }
 description_file = "../assets/workflows/compound-plan-review/{target}.md"
 
 [template.check]
@@ -118,5 +118,5 @@ max_attempts = 3
 
 [template.check.check]
 mode = "exec"
-path = ".gc/scripts/checks/build-artifact-valid.sh"
+path = "../assets/scripts/checks/plan-review-approved.py"
 timeout = "5m"

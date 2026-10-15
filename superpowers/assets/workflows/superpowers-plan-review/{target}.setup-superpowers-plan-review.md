@@ -24,6 +24,13 @@ writes `design_review.review_verdict=approve|iterate`; the apply-plan-feedback
 lane owns `design_review.verdict=done|iterate` for
 `.gc/scripts/checks/design-review-approved.sh`.
 
+Include the imported Gas City
+[plan-review acceptance contract](../../../../gascity/docs/plan-review-acceptance.md):
+the reviewer writes a structured report bound to the exact current plan and
+upstream bytes. Any feedback edit requires another review, including changing
+the plan status to `approved`. Only a no-op with a passing current-subject
+check permits the feedback lane to set `done`.
+
 Close this setup bead with `gc.outcome=pass` and
 `design_review.output_path=<context path>`.
 

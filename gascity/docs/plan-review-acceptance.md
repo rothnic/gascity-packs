@@ -1,6 +1,6 @@
 # Plan-review acceptance
 
-The default build and planning review stages accept an approved current plan
+Build and planning review stages accept an approved current plan
 only when a passing review names its exact subject. Recording unresolved
 findings never authorizes decomposition. The native check allows three attempts;
 it records validation errors on the control's `gc.attempt_log` for repair.
@@ -75,9 +75,10 @@ claimed review step. A failing or unknown review must close with
 plan or upstream files, review those new bytes and write their new subject;
 old approval remains stale. The native gate repeats this validation using
 native-recorded paths, and the task creator repeats it before its first
-allocation when the cooked workflow declares the default review requirement.
+allocation when the cooked workflow declares the review requirement.
 It does not refresh pending allocation or publication requests.
 
-Methodology-specific review expansions retain their existing native verdict
-and repair contracts. Replacing the default review stage must supply equivalent
-approval and subject validation; overriding a stage is not approval by itself.
+Methodology-specific review expansions retain their native verdict and repair
+loops, then apply the same exact-subject approval check before decomposition.
+Their authored review requirements also reach the first-allocation check;
+overriding a stage is not approval by itself.

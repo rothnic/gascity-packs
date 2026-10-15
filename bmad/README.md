@@ -219,6 +219,17 @@ passes. Those reviewer lanes are real sibling beads — the fan-in barrier in
 the diagram documents the synthesizer's `needs` list, not a serial execution
 step between reviewers.
 
+## Plan acceptance
+
+The architect's handoff review has a native executable gate with three
+attempts. It requires an approved architecture plan and a passing structured
+review bound to the native workflow and exact current plan and PRD/upstream
+bytes. The task creator repeats acceptance before allocating epics and stories.
+Missing, stale, or blocking reviews refuse decomposition. BMAD's separate
+implementation-readiness gate still reviews the resulting stories before
+coding. See the shared
+[plan-review acceptance contract](../gascity/docs/plan-review-acceptance.md).
+
 ## Customization
 
 ### Source workspaces

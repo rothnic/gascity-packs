@@ -12,6 +12,8 @@ Approval path:
   `gc.build.plan_review_report_path`.
 - Confirm the apply summary exists at workflow root metadata
   `gc.build.plan_review_apply_summary_path`.
+- Require the imported `validate_plan_review.py native-check` to succeed for
+  the current claim and durable rig root before recording approval.
 - Update workflow root metadata:
   - `gc.build.plan_review_status=approved`
   - `gc.build.plan_status=approved`
@@ -28,20 +30,13 @@ Failure path:
 - Close with `gc.outcome=fail`, `design_review.output_path=<report path>`,
   and a concise `gc.failure_reason` that points at the blocking finding.
 
-Plan artifact validation: this step is gated by
-`.gc/scripts/checks/build-artifact-valid.sh`, which validates the plan
-recorded at workflow root metadata `gc.build.plan_path` (fallback
-`gc.var.plan_path`) against schema `gc.build.plan.v1`. Plan-review fix lanes
-edit the plan in place, so re-validate it here before closing:
+The native `plan-review-approved.py` gate permits three attempts. It checks
+the plan schema and approved status, plus a passing `gc.verdict-report.v1`
+report whose subject names this workflow's exact current plan and upstream
+bytes. Use the imported Gas City
+[acceptance contract](../../../../gascity/docs/plan-review-acceptance.md).
 
-- From `$GC_RIG_ROOT`, run the artifact validator with the claimed bead id and
-  fix any error before setting `gc.outcome=pass`:
-  `GC_BEAD_ID=<claimed-step-id> .gc/scripts/checks/build-artifact-valid.sh`.
-- Repair the plan in place and keep its YAML front matter intact. Its
-  front-matter `status` must be one of `draft`, `questions`, `approved`,
-  `changes_required`, `blocked`, or `superseded`. Replace any other value
-  (for example `reviewed`) with the allowed status that matches the review
-  outcome (`approved` for an approved plan).
-- On repair attempts (`gc.attempt` greater than 1), first read the validator
-  errors from `gc.attempt_log` on the validation loop control bead (the
-  dependent of this step bead) and fix every listed error in place.
+Do not edit the plan, upstream files, or report subject here. A repair must
+return through the reviewer and feedback lanes before approval. On an official
+check attempt read the native control's `gc.attempt_log`; missing or stale
+approval still follows the failure path above.

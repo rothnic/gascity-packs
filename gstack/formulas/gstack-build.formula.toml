@@ -117,7 +117,7 @@ timeout = "5m"
 id = "plan-review"
 title = "gstack plan review fanout"
 needs = ["plan"]
-metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gstack.review-synthesizer" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gstack.review-synthesizer", "gc.build.plan_review_required" = "true" }
 expand = "gstack-plan-review"
 expand_vars = { failure_scope = "build-body", implementation_target = "{{implementation_target}}", interaction_mode = "{{interaction_mode}}", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
 description_file = "../assets/workflows/gstack-build/plan-review.md"

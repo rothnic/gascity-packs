@@ -257,6 +257,16 @@ of falling through to decomposition or finalization. Implementation keeps the
 Gas City drain lifecycle, so independent convoy members can run in parallel
 while each member receives a Compound `ce-work` item formula.
 
+## Plan acceptance
+
+The four persona lanes and the plan author's repair lane retain their separate
+roles. Their final native gate accepts only an approved plan and a passing
+review bound to the exact native workflow, plan, and current upstream bytes.
+Every repair, including a status change, returns through review; unresolved
+required findings block decomposition. The task creator repeats this check
+before its first allocation. See the shared
+[plan-review acceptance contract](../gascity/docs/plan-review-acceptance.md).
+
 ## Customization
 
 ### Source workspaces

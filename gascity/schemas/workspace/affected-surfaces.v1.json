@@ -772,7 +772,7 @@
     "compound-engineering/formulas/compound-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,review-delegator",
-      "sha256": "a75accbbd2b660352b1ad5df4fff3b7671ecc5bae444e10c812df007637fc868"
+      "sha256": "b0bf6087e475136033bab1aa61d2811ec3e03dcf953c49ed87eede1e84ba9314"
     },
     "compound-engineering/formulas/compound-code-review.formula.toml": {
       "classification": "new",
@@ -797,12 +797,12 @@
     "compound-engineering/formulas/compound-plan-review.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "00a09a61f6fd651988b37abbfee7035b859524beeb9f8f86548daa88d8a49bdb"
+      "sha256": "df998114c1f23e9d9115e11775a317e54cfcd6d1108ec07109ac27c39f41c70f"
     },
     "compound-engineering/formulas/compound-planning.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "a8baa2af426d49bdafd16eddc1b76f785da79c1a17b198552d50d85aadb7f45f"
+      "sha256": "e8defe2f32507a5674f5d9d6b7eb29a028dc8f47b0997c0f8d932a9a777205ae"
     },
     "compound-engineering/formulas/compound-resolution.formula.toml": {
       "classification": "reference",
@@ -997,17 +997,17 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.apply-plan-findings.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "1475bc8b45eba1b46324643ff4f8dab00965f4408056babc9143657bffd4ae6b"
+      "sha256": "9bc49ebcaf081549594dbb59d674243436e730af8e40962d4560abe71f1faef9"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.architecture-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "afd45290730511b77184d894f24c0bed95dd07aad0350da3afca9b6d7f1fd921"
+      "sha256": "b0762eb6ccf77d0a70362f3d64dedb69706e316a859d0d67bb3989de9f5d8075"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.coherence-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "2104d470ce6b3f8f4ec415b69500787d357f3a9a1f217e49e3361976a167317d"
+      "sha256": "a948aa3ca3ee847d79a7d2e3267a19bf2dd39890baac0b4a2443a77d4635129a"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.compound-plan-review-loop.md": {
       "classification": "reference",
@@ -1017,27 +1017,27 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.feasibility-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "9d85fcdd95e872e72839273031624720fbf94d22f31e9925e7e6293fbe0cb61a"
+      "sha256": "19a8962304eef73e0b15a361a6e393b8f203dbbc46dca11b55e9661a9971a0cf"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "3d0a447c0b4e79cf647f294bcce33e3075834afbb9f086b02f11d899da78b628"
+      "sha256": "bf43318c99ad227f7b9d1be3eb942ee8561fb929bbf8eb4a79f1d2eac1b8ad2f"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.scope-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "699ff239fcb5ed41269c9583e6a6302eff6e00b0a9f6e5b1c4ac0742b662cf3c"
+      "sha256": "74b258e3ececf7bd12db040ac0a4b8c6fd4d8bb1c59e4fdd6c14c7001929590f"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.setup-compound-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "94f3326b7ed8b758d8a7e2ffeb3b8e1ac5105cd067e2d3a7cc3dd1cfcc0bf25d"
+      "sha256": "a26ce2297cdc7d4df6c2e12ae116e6ab2e6c6230fd4731e0303b2e654ecdcc14"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.synthesize-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "c84fa90481d5f84df81d1f6b8f7cd1a33ac09bb075dffe2d86610afd3ffd672c"
+      "sha256": "c9ca260fd65a3529b198898dc31ef57423663a92b4ee3356a7cc71162738ee15"
     },
     "compound-engineering/assets/workflows/compound-planning/plan-review.md": {
       "classification": "reference",
@@ -1097,7 +1097,7 @@
     "superpowers/formulas/superpowers-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,review-delegator",
-      "sha256": "759e3e636dca9c19ae0f4c40dd29eb74a849aec0d5331120413e775f58bf0021"
+      "sha256": "2d310a6abb297ef84269142930e13f2358be97300919b9e81e42f4e496c7db97"
     },
     "superpowers/formulas/superpowers-code-review.formula.toml": {
       "classification": "new",
@@ -1132,12 +1132,12 @@
     "superpowers/formulas/superpowers-plan-review.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "472e08d52afb5cf7b62db9e2f04a018eb9a428a94c05dc722a58e8459a63030a"
+      "sha256": "22b47f05937d46a97acd9d1bc01c514152f0643ce63ee83bf5fedee48d289443"
     },
     "superpowers/formulas/superpowers-planning.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "c40d28416154cd7cf8f42ad32a6c1ed548f04b9e58294ee7cb5447432f92dbdd"
+      "sha256": "9b31455be8e256096f64c8e86a4c985484301d7badb4642b1546cbdd2a9aa918"
     },
     "superpowers/formulas/superpowers-review.formula.toml": {
       "classification": "new",
@@ -1332,22 +1332,22 @@
     "superpowers/assets/workflows/superpowers-plan-review/{target}.apply-plan-feedback.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "b534fa3a1b400c01a73617e9b650742bd0ae118e4c29c18c6e9635de2f395f6b"
+      "sha256": "3feeaad2ace11f7ca89ec2d54ca8f74f51c7d71f4087de9f80e359e319ec8de2"
     },
     "superpowers/assets/workflows/superpowers-plan-review/{target}.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "e92a16fac82eb27c78ac4bec6382575458df4c2ae7513ed78e5500a6fb99ccf2"
+      "sha256": "08d49413091c5779fe22a1559d0b8e30bf9ac6a18e1ef1f47cb0d644027f1a72"
     },
     "superpowers/assets/workflows/superpowers-plan-review/{target}.plan-document-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "64daa8d6dff4f3c4b01f6c902e3aae6926ff99c118202a7f22b86a9e7015ec82"
+      "sha256": "421b2820e4794986cf7b7f266fd9ab44f11f0544873f9660d718c0952c64e590"
     },
     "superpowers/assets/workflows/superpowers-plan-review/{target}.setup-superpowers-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "dbc11cb260c4e75de71fa06e0bc18a166224ecf977581c15b55d6c13b26ffc80"
+      "sha256": "c4623f46595e7630fbcd5c96c6855ec1ffbfdb8ab60c30b011a561b59df58e56"
     },
     "superpowers/assets/workflows/superpowers-plan-review/{target}.superpowers-plan-review-loop.md": {
       "classification": "reference",
@@ -1412,7 +1412,7 @@
     "bmad/formulas/bmad-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,review-delegator",
-      "sha256": "5da8807a27bb6a4460c4c1ac0da1e2d1123c9ed082eab75c13ca716f3aad56be"
+      "sha256": "63cbcb60c8918b4d0dadcadffa9a05bca6d7208e96815a24af9a59a6e721db2b"
     },
     "bmad/formulas/bmad-code-review-flow.formula.toml": {
       "classification": "new",
@@ -1437,7 +1437,7 @@
     "bmad/formulas/bmad-planning.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "657d03fd7a29924d4a10b8e38f05166abe9fc8831328746d6a9e8d979c741129"
+      "sha256": "f515793bff47eb891d8437d6aa1f775d102143eaf42d44ace9f5a4be52fbfc7e"
     },
     "bmad/formulas/bmad-review.formula.toml": {
       "classification": "new",
@@ -1477,7 +1477,7 @@
     "bmad/assets/workflows/bmad-build/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "9695ee568ba876c569a22e47c24d500c83537b0801f0e85fa9991c467bc9dc6e"
+      "sha256": "446b36646e9f43037d10f2811338ff4fc3e5b20fb1ba7ee7af8c6feed03a90c1"
     },
     "bmad/assets/workflows/bmad-build/plan.md": {
       "classification": "reference",
@@ -1562,7 +1562,7 @@
     "bmad/assets/workflows/bmad-planning/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "e19ad1c9449de60106f6fff2edd7fb6edaaa24528e3c90a4474bdaff930414aa"
+      "sha256": "7cfa0d8784a38528427b0fbb4a1d14f6db1ab035e68b84e274a21631f29a7a6e"
     },
     "bmad/assets/workflows/bmad-planning/plan.md": {
       "classification": "reference",
@@ -1617,7 +1617,7 @@
     "gstack/formulas/gstack-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,publish,review-delegator",
-      "sha256": "eee7516ad7028b7cd5dcdffba3e8c7d8732ef1e9bd192808e2691e262f134f68"
+      "sha256": "c9b0b420e60d13bbc443ee46a8e144bc76e86abd9c563be90cc9e4a4f600bf51"
     },
     "gstack/formulas/gstack-code-review.formula.toml": {
       "classification": "new",
@@ -1642,12 +1642,12 @@
     "gstack/formulas/gstack-plan-review.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "eec034f9dd7bb8f5bd3c7216a4e041e45a5f01f443df058e96176ab2a37c0211"
+      "sha256": "be0835cd3b488733c76acabba90220194544ae88d2e589c57c9f6738ce024bef"
     },
     "gstack/formulas/gstack-planning.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "b559b8fc1380289decbd7452fbc534402bf35dbc7f423db959b2d267934c025a"
+      "sha256": "c48e9ce220e9dc53d7f4310205e0cc9427674c727410d05669cf73e775fa5da9"
     },
     "gstack/formulas/gstack-qa-review.formula.toml": {
       "classification": "new",
@@ -1792,27 +1792,27 @@
     "gstack/assets/workflows/gstack-plan-review/{target}.apply-plan-review-findings.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "df6c50e7e3fb1ba773bc1bb0f8e5d62f6270e7e16f200d39e823fc6f75081546"
+      "sha256": "fb078619705d0d4ec766c67783aecbb8e0217c706f52123ae2b5bd9d5843393a"
     },
     "gstack/assets/workflows/gstack-plan-review/{target}.design-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "73d3ff39dbd84f738d43fbc9b11748fdcf9cf7868a76d090f80ff18a0c81e768"
+      "sha256": "949305e7f017a4dac8df7f9496c392a3e296328b4a3dba919dedc2ec01189333"
     },
     "gstack/assets/workflows/gstack-plan-review/{target}.devex-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "59ed840a9aa8d085018ba72bf23ac08d2b8e89a9f1df9ac14170907033b053d8"
+      "sha256": "7fbc3e85f1829992c7933b64ed93c7328f40c7b1df68c04b7ebb16c17a51c1d2"
     },
     "gstack/assets/workflows/gstack-plan-review/{target}.engineering-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "d1ef3a278127d0097d5c57e6adaa507e09be20f1e7840a551f25237be37cffef"
+      "sha256": "7e3afb759984d5630e5675feff78ac9aec340204dcc19714111b031d379cc138"
     },
     "gstack/assets/workflows/gstack-plan-review/{target}.founder-scope-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "b3e8ff6e7bce245d1e82719c761b6ad9f04693746739af014ac60039628e3b64"
+      "sha256": "e990bb8bffcb1f0e57e83bb7664364a0a19be7d7c51af5f4f0d848859758e61e"
     },
     "gstack/assets/workflows/gstack-plan-review/{target}.gstack-plan-review-loop.md": {
       "classification": "reference",
@@ -1822,17 +1822,17 @@
     "gstack/assets/workflows/gstack-plan-review/{target}.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "5c1515c70b3ab8aeada333d6d6d372be2e1af1e47e0df8502a1ce64eb6be40a8"
+      "sha256": "1d832abda29c1d85578f1378ea692d233a2b59539cfae2b29823c89a5b9d137b"
     },
     "gstack/assets/workflows/gstack-plan-review/{target}.setup-gstack-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "9a700ac8939c0faeb81fac9f40a9bd6913e9d7f51e16c98dc5e63ea7af69087a"
+      "sha256": "41fb962e44d0f3068cd2647072c3b691e4d6e504f0641b46a8573e8c81418482"
     },
     "gstack/assets/workflows/gstack-plan-review/{target}.synthesize-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "5b7277757f6a9d37b086449d58f2252c9c70e51dd0572a338bd3c8ad25d6e76e"
+      "sha256": "a137018b8e2b924dd52c19ee882fcfd88c8679cb6bd6fca2ad526391a5d45a28"
     },
     "gstack/assets/workflows/gstack-planning/plan-review.md": {
       "classification": "reference",
@@ -2229,7 +2229,7 @@
     "gascity/assets/scripts/validate_plan_review.py": {
       "classification": "new",
       "responsibility": "read-only current native plan and upstream approval gate before task allocation",
-      "sha256": "e1c5c12ba10436b2129ff698dcc1c31d7c22d178027b34a643e9a7a10967fd99"
+      "sha256": "65b0f90d8f93c565a1e799f543da61a10a7615a3185d0a2b8443afe3940184be"
     },
     "gascity/assets/scripts/checks/plan-review-approved.py": {
       "classification": "new",

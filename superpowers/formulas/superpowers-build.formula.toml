@@ -107,7 +107,7 @@ timeout = "5m"
 id = "plan-review"
 title = "Superpowers plan review"
 needs = ["plan"]
-metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "superpowers.plan-reviewer" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "superpowers.plan-reviewer", "gc.build.plan_review_required" = "true" }
 expand = "superpowers-plan-review"
 expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
 description_file = "../assets/workflows/superpowers-build/plan-review.md"

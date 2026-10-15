@@ -177,6 +177,17 @@ The native stage formulas extend the matching base methodology contracts:
 (`code-review-base`), and `gstack-fix-loop` (`fix-loop-base`), plus the drain
 formulas `gstack-work` (`do-work`) and `gstack-work-item` (`do-work-item`).
 
+## Plan acceptance
+
+Founder, design, engineering, and developer-experience review keep their own
+perspectives. The synthesis preserves required findings; recording them never
+approves the plan. Authorized repairs return through all four lanes, and the
+final native gate requires a passing structured review for the exact current
+workflow, approved plan, and upstream bytes. The task creator repeats that
+check before allocation. Optional ambition remains separate from accepted
+scope. See the shared
+[plan-review acceptance contract](../gascity/docs/plan-review-acceptance.md).
+
 ## Customization
 
 ### Source workspaces

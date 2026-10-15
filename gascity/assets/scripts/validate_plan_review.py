@@ -150,12 +150,12 @@ def show(bead_id: str) -> dict[str, Any]:
 
 
 def check_creator_review(workspace: dict[str, Any] | None, *, bd_command: list[str]) -> None:
-    """Recheck an authored default review before the first task allocation.
+    """Recheck an authored review requirement before the first task allocation.
 
     Workspace callers pass already source-validated cooked rows. Legacy native
     callers use the same explicit city/rig route as their subsequent allocation.
-    Unscoped legacy CLI use and specialized methodology review contracts remain
-    unchanged; their existing checks are not replaced by this default contract.
+    Unscoped legacy CLI use remains unchanged. Default and specialized
+    authored requirements use the same current-subject acceptance boundary.
     """
     if workspace is not None:
         declared = workspace["writer_map"].declaration["steps"]

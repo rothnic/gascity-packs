@@ -110,8 +110,16 @@ timeout = "5m"
 id = "plan-review"
 title = "BMAD architecture handoff review"
 needs = ["plan"]
-metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "bmad.architect" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "bmad.architect", "gc.build.artifact_schema" = "gc.build.plan.v1", "gc.build.artifact_path_keys" = "gc.build.plan_path,gc.var.plan_path", "gc.build.plan_review_required" = "true" }
 description_file = "../assets/workflows/bmad-build/plan-review.md"
+
+[steps.check]
+max_attempts = 3
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/plan-review-approved.py"
+timeout = "5m"
 
 [[steps]]
 id = "decompose"

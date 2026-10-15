@@ -42,7 +42,41 @@ Trace front matter must use the validator shape exactly:
   requirements; do not use `approved` in `trace.coverage[].status` or the
   Markdown coverage table.
 
-Ground the plan in the generated requirements and repository conventions.
+Read the original request, current requirements, repository instructions and
+selected native recipes before authoring. Resolve the source repository and
+input revision from that request and native source context. Before task
+allocation, inspect the relevant source and tests at the captured full OID with
+read-only access such as `git -C "<repository>" show "<input-oid>:<path>"`.
+Record the files, interfaces and observed behavior used for the plan. If a
+required source or procedure cannot be read, record the failed read and blocker.
+Keep the plan and any later repair within the original request's authority.
+
+Cover these readiness details within the required sections below:
+
+- **Source and implementation:** Describe the current inputs, outputs and
+  interfaces, the files to change, task boundaries and implementation order.
+  Identify risky files or interactions and a concrete rollback procedure.
+- **Verification:** Name the exact commands, their owning native stages and
+  execution directories, expected behavior and required evidence. Preserve any
+  requested post-close observation for its designated observer and stage.
+- **Independent review:** Name the configured `build-basic-review` expansion's
+  acceptance/correctness, test evidence and simplicity/maintainability lanes,
+  followed by synthesis, required fixes and the final report/verdict handoff.
+  Read the [implementation review recipe](review.md) before describing it.
+- **Source completion:** Read the selected `do-work` or `do-work-item` recipes.
+  For legacy `do-work`, describe [worktree preparation](../do-work/prepare-worktree.md),
+  the focused [implementation commit and summary](../do-work/implement.md), then
+  [source-anchor closure and readback](../do-work/close-source-anchor.md).
+  For legacy shared work, follow [the item recipe](../do-work-item/implement-item.md)
+  that owns its source closure. Bind legacy evidence to the recorded source
+  `work_dir` and committed output OID. For `new`, retain the selected managed
+  checks, independent acceptance, result/checkpoint and source-close procedure.
+- **Final handoff:** Describe the canonical implementation summary and review
+  report consumed by [finalization](finalize.md), the final report path and the
+  selected [publish policy](publish.md). Include any required legacy stamp and
+  deprecation-warning evidence. Mark later allocated identities, output OIDs
+  and closure evidence as pending until their owning stages produce them.
+
 Use these required level-two headings verbatim, in this order; a single `#`
 heading does not satisfy the artifact check:
 

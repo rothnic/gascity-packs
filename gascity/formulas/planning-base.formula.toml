@@ -87,3 +87,16 @@ max_attempts = 3
 mode = "exec"
 path = "../assets/scripts/checks/plan-review-approved.py"
 timeout = "5m"
+
+[[steps.children]]
+id = "author-repair"
+title = "Apply authorized plan-readiness findings"
+metadata = { "gc.run_target" = "gc.design-author" }
+description_file = "../assets/workflows/planning-base/repair-plan-review.md"
+
+[[steps.children]]
+id = "plan-review-verdict"
+title = "Independently review the current implementation plan"
+needs = ["author-repair"]
+metadata = { "gc.run_target" = "gc.review-synthesizer" }
+description_file = "../assets/workflows/planning-base/plan-review.md"

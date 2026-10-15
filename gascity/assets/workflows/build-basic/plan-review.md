@@ -1,3 +1,10 @@
+This is the independent `plan-review-verdict` child of the native `plan-review` check.
+The preceding `author-repair` child owns permitted plan changes; do not edit
+the plan, requirements or author summary from this reviewer session. Read
+the actual current request/context, plan, upstream files and any author
+repair summary, then review those bytes independently. The logical check
+still allows only three total attempts and alone gates decomposition.
+
 Use the built-in Gas City `design-review` flow on the current implementation
 plan. Read the original native request and current requirements before review.
 Required changes block decomposition; recording them in a summary is not approval.
@@ -12,9 +19,9 @@ record its absolute path on the workflow root as
 
 The native `plan-review-approved.py` gate requires an approved
 `gc.build.plan.v1`, `verdict: pass`, `severity: none`, empty findings, and exact
-plan/upstream hashes. It allows three attempts. On repair, read the native
-control's `gc.attempt_log`; apply only authorized fixes and review the changed
-subject again. Preserve blocked findings when approval is unavailable.
+plan/upstream hashes. It allows three attempts. Read the native control's `gc.attempt_log` and
+review the changed subject after the authored repair child. Preserve blocked
+findings when approval is unavailable.
 
 Set `gc.outcome=pass` only after that validation succeeds. Otherwise set
 `gc.outcome=fail` and record the blocker before closing. Use

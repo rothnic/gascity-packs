@@ -12,7 +12,7 @@
     "gascity/formulas/build-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,implementation-delegator,path-reader,publish,review,review-fix,source-writer",
-      "sha256": "9105476a3b60fa4260a1d0b04f3379218bb02bf129f98a910df9a63c1f8e5a53"
+      "sha256": "5bcbca8057be6f4e5711244092d456aea520a533da6f25c758bab88c18a8efea"
     },
     "gascity/formulas/build-basic-review.formula.toml": {
       "classification": "new",
@@ -22,7 +22,7 @@
     "gascity/formulas/build-basic.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,publish,review-delegator",
-      "sha256": "bbc3df76681cc2cfcaa4300be73e639869a8edf78d3728e26c3e05330b23b6b7"
+      "sha256": "d72e5e4031d84510502e1aaffdea9df1a63458e9d8cb7f8852e5dd06d0d17f02"
     },
     "gascity/formulas/build-from-convoy-base.formula.toml": {
       "classification": "new",
@@ -47,7 +47,7 @@
     "gascity/formulas/build-from-plan-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,continuation",
-      "sha256": "dc5eb198b2f7624cd3166d8fb961e1725b7a15aa523c9fb5b7f70c6c3f6d219a"
+      "sha256": "978a6f3495492219902ab29a48e5d25c8d7bf93c6ba011929481b8849b8e19a9"
     },
     "gascity/formulas/build-from-plan.formula.toml": {
       "classification": "new",
@@ -162,7 +162,7 @@
     "gascity/formulas/planning-base.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "25a284273fd41014c5c66b53d4cff57ca98cd2a6af2ea2503869c43ecbb2c918"
+      "sha256": "6e95c1f606569d859cc182d186d8122380eff7f99015375984d4380b1eba9e5a"
     },
     "gascity/formulas/publish.formula.toml": {
       "classification": "new",
@@ -202,7 +202,7 @@
     "gascity/assets/workflows/build-base/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "4dfe0bce2d0d8941c06ddb329aa6b0a27b640c0fa90a45055500f62c734da062"
+      "sha256": "db99e9ecd48ffcfa60b91371d0198aa05f2fa0bf71f1c5c865f8b883738856c0"
     },
     "gascity/assets/workflows/build-base/plan.md": {
       "classification": "reference",
@@ -257,12 +257,12 @@
     "gascity/assets/workflows/build-basic/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "b297174da063b39cbccf03b95f542c40314ecbdf65306c89dd2785439fc991d0"
+      "sha256": "5965d47ec85db18e7e52121a28109eb310dbce7514e6b5fb9b80d1bba795e213"
     },
     "gascity/assets/workflows/build-basic/plan.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "c8ceb7843b2314e7edf3e9e61d7f8651d47d51fe181c6917648f3deedff6ccb4"
+      "sha256": "fe8de9776c4055eb2e94ab8f593fc44985fc45ed67cf535bae37b69c0dd6f725"
     },
     "gascity/assets/workflows/build-basic/publish.md": {
       "classification": "new",
@@ -357,7 +357,7 @@
     "gascity/assets/workflows/build-from-plan-base/plan-review.md": {
       "classification": "legacy",
       "responsibility": "continuation",
-      "sha256": "96fd06dc50e2ba94da56e17a1c5fe9ee754a6662e4a10f514ab491b0efd5928d"
+      "sha256": "451c6222b0946759dd420b0f3ecdb88034334d191a74e4e24239a3ada1b13c6d"
     },
     "gascity/assets/workflows/build-from-plan-base/plan.md": {
       "classification": "legacy",
@@ -722,7 +722,7 @@
     "gascity/assets/workflows/planning-base/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "8bf38e6cd759eb1530f062895cda5b6ac5ff6bdeff2c48f1f899218fe22e266d"
+      "sha256": "e605b620b06445b4fc1f20da5f3d3b83541b7e55c14f18a5b3fb99a14590e71b"
     },
     "gascity/assets/workflows/planning-base/plan.md": {
       "classification": "reference",
@@ -2068,6 +2068,11 @@
       "classification": "reference",
       "responsibility": "reference",
       "sha256": "a3ba08be9cb300cbef189b71e41c839414180bd6b881acb747945b6ef744c9ed"
+    },
+    "gascity/assets/workflows/planning-base/repair-plan-review.md": {
+      "classification": "reference",
+      "responsibility": "reference",
+      "sha256": "c86a3d50f87b40c0e92d220dd6702378336185f7e431429b3fe6910accf24928"
     }
   },
   "source_helpers": {

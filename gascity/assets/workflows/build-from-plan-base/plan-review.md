@@ -1,3 +1,10 @@
+This is the independent `plan-review-verdict` child of the native `plan-review` check.
+The preceding `author-repair` child owns permitted plan changes; do not edit
+the plan, requirements or author summary from this reviewer session. Read
+the actual current request/context, plan, upstream files and any author
+repair summary, then review those bytes independently. The logical check
+still allows only three total attempts and alone gates decomposition.
+
 This is the `build-from-plan-base` plan-review stage.
 
 Review the implementation plan before decomposition. The verdict must map to

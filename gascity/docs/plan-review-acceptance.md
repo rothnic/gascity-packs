@@ -55,9 +55,17 @@ A blocked report instead uses `verdict: fail`, a non-`none` severity, and
 structured findings with `id`, `severity`, `title`, `evidence`, and
 `required_fix`. Retain the actual findings. Never turn a blocked report into a
 passing report just to make a stage close. Respect `review_mode`: report-only
-review does not edit the plan, agent review can route authorized repairs, and
-interactive review can apply only permitted fixes. Missing headless approval
-remains blocked.
+review does not edit the plan. Default checks contain native `author-repair`
+(`gc.design-author`) then independent `plan-review-verdict` (`gc.review-synthesizer`)
+children inside each of the same three attempts. The author does nothing on
+attempt one. On later attempts, agent mode permits only plan repairs expressly
+authorized by the current request and consistent with approved requirements;
+interactive mode additionally needs its existing permission. A missing,
+foreign or stale report cannot authorize an edit. The reviewer never edits
+the plan or grants authority. It reviews changed bytes and writes a new exact
+subject; only the unchanged logical check can approve that result. Missing
+headless approval remains blocked. Methodology-specific loops retain their
+own authored repair roles and the same final exact-subject boundary.
 
 Record the absolute report path on the native workflow root:
 

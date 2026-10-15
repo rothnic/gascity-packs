@@ -39,15 +39,15 @@ python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
 An `awaiting-source` result permits planning only. Keep implementation blocked
 until the original workflow has a valid native source and recorded run.
 
-Validate mode inputs against the methodology vocabulary before any stage runs:
+Validate mode inputs with the compact native reader below before any stage runs:
 `interaction_mode` must be `interactive`, `autonomous`, or `headless`;
 `review_mode` must be `report`, `agent`, or `interactive`; `drain_policy` must
 be `separate` or `same-session`. The running formula's
 `[metadata.gc.methodology]` declares which of those values it supports. If a
 requested value is outside the vocabulary or unsupported by the formula's
 declared metadata, stop this workflow as blocked instead of starting work:
-record `gc.build.status=blocked` and a machine-readable
-`gc.blocked_reason` (for example `unsupported-interaction-mode:headless`) on
+record `gc.build.status=blocked` and the reader's machine-readable
+`selection.blocked_reason` as `gc.blocked_reason` on
 the workflow root, then close this step with `gc.outcome=fail` and
 `gc.failure_class=methodology_incompatible`. In `headless` interaction mode,
 never ask questions; treat missing required input as the same blocked outcome.
@@ -65,13 +65,19 @@ Read the compact native declaration before evaluating supported modes:
 
 ```sh
 python3 "{{pack_root}}/assets/scripts/formula_methodology.py" --formula "$RUNNING_FORMULA" \
-  --city-root "$CITY_ROOT" --rig "$RIG_NAME"
+  --city-root "$CITY_ROOT" --rig "$RIG_NAME" \
+  --interaction-mode "{{interaction_mode}}" --review-mode "{{review_mode}}" \
+  --drain-policy "{{drain_policy}}"
 ```
 
-The helper parses the complete `gc formula show` JSON before printing only
-the exact formula name, `declared`, and `methodology`. Inspect `methodology`
-only after a successful read. This build requires `declared: true`.
-A nonzero exit or `UNREADABLE` result blocks with
+Run this selected-mode command; do not substitute a raw `gc formula show` call.
+The helper parses the complete native JSON and validates all three requested
+values before printing the compact declaration and `selection`. Continue only
+when it exits zero with `declared: true` and `selection.supported: true`.
+Exit 2 with `selection.supported: false` means the selected modes are invalid or
+unsupported; record its exact `selection.blocked_reason` and the failing outcome
+above. Do not reinterpret a supported selection as incompatible.
+An `UNREADABLE` result or another failed read blocks with
 `gc.blocked_reason=unreadable-methodology:<formula-name>` and the failing
 outcome above. Never infer unsupported modes from missing or truncated output.
 Never infer the formula name from

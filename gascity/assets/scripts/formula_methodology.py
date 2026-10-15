@@ -45,17 +45,40 @@ def read_methodology(gc: str, city_root: str, formula: str, rig: str | None = No
     return dict(result, declared=True, methodology=policy)
 
 
+def select_modes(declaration: dict[str, Any], interaction_mode: str, review_mode: str,
+                 drain_policy: str) -> dict[str, Any]:
+    require(declaration.get("declared") is True, "selected modes require a methodology declaration")
+    selection = dict(interaction_mode=interaction_mode, review_mode=review_mode, drain_policy=drain_policy)
+    for label, field, value in (("interaction-mode", "interaction_modes", interaction_mode),
+                                ("review-mode", "review_modes", review_mode),
+                                ("drain-policy", "allowed_drain_policies", drain_policy)):
+        if value not in VOCABULARY[field]:
+            return dict(selection, supported=False, blocked_reason=f"invalid-{label}:{value}")
+        if value not in declaration["methodology"][field]:
+            return dict(selection, supported=False, blocked_reason=f"unsupported-{label}:{value}")
+    return dict(selection, supported=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--formula", required=True)
     parser.add_argument("--gc", default="gc")
     parser.add_argument("--city-root", required=True)
     parser.add_argument("--rig")
+    parser.add_argument("--interaction-mode")
+    parser.add_argument("--review-mode")
+    parser.add_argument("--drain-policy")
     args = parser.parse_args(argv)
+    modes = (args.interaction_mode, args.review_mode, args.drain_policy)
+    selected = any(value is not None for value in modes)
+    if selected and not all(value is not None for value in modes):
+        parser.error("selected modes require --interaction-mode, --review-mode, and --drain-policy together")
     try:
         result = read_methodology(args.gc, args.city_root, args.formula, args.rig)
+        if selected:
+            result["selection"] = select_modes(result, *modes)
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
-        return 0
+        return 2 if selected and not result["selection"]["supported"] else 0
     except (RecordError, OSError, UnicodeError) as exc:
         print(f"UNREADABLE methodology: {exc}", file=sys.stderr)
         return 1

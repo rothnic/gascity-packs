@@ -67,7 +67,7 @@
     "gascity/formulas/build-from-review-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,continuation,publish,review",
-      "sha256": "d50b828499beaf1204de5bea381a071c1ea961e9acae6cee1073fd50d34dbf46"
+      "sha256": "d76b96787b93e9e13fe84fa0187df12f62a546080cf16dabd163e9c415fecda2"
     },
     "gascity/formulas/build-from-review.formula.toml": {
       "classification": "new",
@@ -237,7 +237,7 @@
     "gascity/assets/workflows/build-basic/decompose.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "643989d2b30f27743355cc4ccbb876f5875079c4e2dfc112ae1151efd1cbdfd3"
+      "sha256": "4186a0c2c571380cb6c4a3911db29242bdfb5c63ffa3da17f684fbeaa1dc30a1"
     },
     "gascity/assets/workflows/build-basic/finalize.md": {
       "classification": "reference",
@@ -352,7 +352,7 @@
     "gascity/assets/workflows/build-from-decompose-base/prepare-decompose.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "90b61e477bcfe493f7526a8262a5edd948b624d9c36136c6ae5368f69620d05f"
+      "sha256": "795c426362b5578ae917c656b26ff07686b8848c99e44a8cfbf1d994d8af06ce"
     },
     "gascity/assets/workflows/build-from-plan-base/plan-review.md": {
       "classification": "legacy",
@@ -372,7 +372,7 @@
     "gascity/assets/workflows/build-from-plan-base/prepare-plan.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "40727b4682e5d326adf9358131944defc9f6d0cf2a1a732668b13ec174fa989c"
+      "sha256": "37212f5d16f3476e8c9fb03a94cac835cebfce92c34258f13f584282e2c62c2e"
     },
     "gascity/assets/workflows/build-from-requirements-base/prepare-plan.md": {
       "classification": "new",
@@ -397,7 +397,7 @@
     "gascity/assets/workflows/build-from-review-base/prepare-review.md": {
       "classification": "new",
       "responsibility": "canonical-summary,continuation,review",
-      "sha256": "e369efca77ce939e55fa282b979fdd056c5ef4dbf5dfb958e4bf839765d0063f"
+      "sha256": "406890c39f3ca0d90560306a55e51f20919d160edf45280cd36b61b7a2f04048"
     },
     "gascity/assets/workflows/build-from-review-base/publish.md": {
       "classification": "new",
@@ -1982,7 +1982,7 @@
     "gascity/assets/workflows/workspace-entry.md": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "1c7be8f3273417c6bf5a96f424eb7a699e693df0ffeeb3546b09a281ef0ce453"
+      "sha256": "1faa1c620c4f614e141b453b5b945beaed01c5886c7003bd12111b988a483e03"
     },
     "gascity/assets/workflows/workspace-publication.md": {
       "classification": "new",
@@ -2054,7 +2054,7 @@
     "gascity/assets/scripts/workspace_outputs.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "53310548a464e3d0c6616bc0890b54cbd7d847c5d0e4b94f5cf5d2c0fbcbf95a"
+      "sha256": "79391ca8d83471f70382cdfeb57c7e0fdc74cdab36a30e9a23745d27c16141b7"
     },
     "gascity/assets/scripts/workspace_inputs.py": {
       "classification": "new",
@@ -2084,7 +2084,7 @@
     "gascity/assets/scripts/workspace_source_plan.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "21c5e11c1d0dacf4b4fc0f9bb1e17bb714e9aa8aeb9a06c95e5045915e560437"
+      "sha256": "f14ea54a3740acae9d281cae2e1aae5b264225b26217257118b4919f348822a0"
     },
     "gascity/assets/scripts/workspace_run.py": {
       "classification": "new",
@@ -2094,12 +2094,12 @@
     "gascity/assets/scripts/workspace_store.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "7da5d44524459d6a9888bd92e817ae6b5e4c2b24a2bb87b9f350fd252f65199a"
+      "sha256": "0488fd5ecae8d6e6ebd2a101114d5709cfb9005b8fdd5afe55376d01c32d32c5"
     },
     "gascity/assets/scripts/workspace_entry.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "ba20c56960bdfc5dc4f1985b26ff84b210ecbaac6eefdfd65204310d4a2bdf8f"
+      "sha256": "e08cfae1bffce328ca5adf16f5b6c2eaa89fb34b537d96c11c1eaf2c03f7f44e"
     },
     "gascity/assets/scripts/workspace_flow.py": {
       "classification": "new",
@@ -2114,7 +2114,7 @@
     "gascity/assets/scripts/create_beads_from_tasks.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "e1d447e5f76f0a5770132da697d6612beb5dabe61363463ff3d82e79b45ecc8f"
+      "sha256": "74c0c9aaf351145c79a65d8765e7ee4606ae756443af100f7272156faea76d54"
     },
     "gascity/pack.toml": {
       "classification": "reference",
@@ -2159,17 +2159,17 @@
     "gascity/assets/scripts/workspace_checkout.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "0c8027982cc2f7b1072d6454df4ba7461f975bd63afc91c17767edd3207108fe"
+      "sha256": "8bb089ba5f9e5ca469cc3477303917b74c249e1a736d0e025024daf9c400301a"
     },
     "gascity/assets/scripts/workspace_dependency.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "4bec7f116468321fcbd9c60f33ce9360c1c86c41172433bc56568674059c6897"
+      "sha256": "1da4f74bc8430cf27001aae73f7ab063573b06d518c9ea32272877f93cd2984b"
     },
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",
       "responsibility": "native claim/session and exact-commit project check, review and accepted-output qualification",
-      "sha256": "7dfa6ce02323aebf69d046942720b0f8b33b1da7cd5762b403e7239f92c670f3"
+      "sha256": "fc4d9d7080a71dfb1eb46cb4a1c578b34a1c74648cc432a51a75afa848cb857d"
     },
     "gascity/assets/scripts/workspace_requests.py": {
       "classification": "new",
@@ -2180,6 +2180,11 @@
       "classification": "new",
       "responsibility": "recover native closed record allocations under the retained writer and source intent without repeating uncertain creates",
       "sha256": "930d213192549dc46736066bda0d420b4a305d898af8c10b60c94e5a7391dd90"
+    },
+    "gascity/assets/scripts/workspace_suffix.py": {
+      "classification": "new",
+      "responsibility": "native standalone suffix source and original-run continuation admission",
+      "sha256": "ec37a1c662fb471a20ae7746e796b6d8c287aeef0b4e8def0c149fea3267cabe"
     }
   },
   "source_owners": [

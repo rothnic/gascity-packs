@@ -14,8 +14,11 @@ python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
   --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" --entrypoint plan
 ```
 
-In new mode, retain the original recorded run. Do not capture a new base from
-the current checkout or infer one from the requirements artifact.
+In new mode, an initial planning suffix captures its run once from the real
+native task or convoy, registered rig, base and check policy. A recorded suffix
+retains that original run. An artifact cannot supply its source identity or
+select another base. Follow the entry contract's recorded-root selector when
+continuing a separate workflow.
 
 Do not run decomposition or implementation from this step. Record
 `gc.build.continuation_entrypoint=plan` when this suffix is launched directly.

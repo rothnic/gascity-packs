@@ -72,7 +72,7 @@ def source_node_ids(plan: dict[str, Any]) -> list[str]:
                               for bead_id in (node["owner_id"], *node["member_ids"])))
 
 
-def validate_native_nodes(plan: dict[str, Any], snapshots: dict[str, Any], store_ref: str) -> None:
+def validate_native_nodes(plan: dict[str, Any], snapshots: dict[str, Any], store_ref: str, *, continuation=None) -> None:
     """Require native identity plus explicit pack source-generation membership."""
     if not isinstance(snapshots, dict):
         raise RecordError("native node snapshots must be an exact-ID object")
@@ -86,7 +86,11 @@ def validate_native_nodes(plan: dict[str, Any], snapshots: dict[str, Any], store
         if not isinstance(metadata, dict):
             raise RecordError(f"native node scope missing: {bead_id}")
         native_root = next((metadata[key] for key in NATIVE_ROOT_KEYS if metadata.get(key)), None)
-        if (native_root != plan["workflow_root_id"]
+        suffix_owner = False
+        if bead_id == plan["source_plan_owner_id"] and native_root != plan["workflow_root_id"]:
+            from workspace_suffix import source_owner_context
+            suffix_owner = source_owner_context(plan, snapshots, store_ref=store_ref, continuation=continuation) is not None
+        if ((native_root != plan["workflow_root_id"] and not suffix_owner)
                 or metadata.get("gc.source_root_id") != plan["workflow_root_id"]
                 or metadata.get("gc.source_generation") != str(plan["generation"])
                 or metadata.get("gc.root_store_ref") != store_ref):
@@ -95,12 +99,12 @@ def validate_native_nodes(plan: dict[str, Any], snapshots: dict[str, Any], store
 
 def validate_source_plan(plan: dict[str, Any], run: dict[str, Any], snapshots: dict[str, Any], *,
                          store_ref: str, canonical: dict[str, Any] | None = None,
-                         stored: dict[str, Any] | None = None) -> dict[str, Any]:
+                         stored: dict[str, Any] | None = None, continuation=None) -> dict[str, Any]:
     source_order(plan)
     validate_record("run", run)
     if run["workflow_root_id"] != plan["workflow_root_id"] or run["worktree_lifecycle"] != "new":
         raise RecordError("source plan requires the same workflow root and new run lifecycle")
-    validate_native_nodes(plan, snapshots, store_ref)
+    validate_native_nodes(plan, snapshots, store_ref, continuation=continuation)
     if stored is not None:
         verify_replay("source-plan", stored, plan)
         return plan
@@ -139,7 +143,7 @@ def declare_plan(store, attempt, plan: dict[str, Any], *, run_record_id: str,
                  record_bead_id: str, authority_id: str, implementation_convoy_id: str | None = None,
                  operation_nonce: str | None = None, writer_map=None, writer_rows=None):
     """Prepare one fenced publication using the production record-access adapter."""
-    from workspace_store import (CookedWriterMap, GRANT_KEY, GuardRead, MISSING, RecordWrite,
+    from workspace_store import (CookedWriterMap, GRANT_KEY, GuardRead, InheritedRunReference, MISSING, RecordWrite,
                                  ReferenceWrite, SourceMembershipProjection, SourcePlanConvoyBinding)
 
     source_order(plan)
@@ -152,6 +156,8 @@ def declare_plan(store, attempt, plan: dict[str, Any], *, run_record_id: str,
     declaration = writer_map.declaration
     map_ids = [declaration["expansion_root_id"], declaration["source_member_id"],
                *(step["bead_id"] for step in declaration["steps"])]
+    if writer_map.continuation is not None:
+        map_ids.extend(writer_map.continuation.row_ids)
     rows = {} if writer_rows is None else dict(writer_rows)
     if any(not isinstance(row, dict) or row.get("id") != bead_id for bead_id, row in rows.items()):
         raise RecordError("cooked writer rows require their exact original native snapshots")
@@ -206,14 +212,20 @@ def declare_plan(store, attempt, plan: dict[str, Any], *, run_record_id: str,
     source_membership = {"gc.source_root_id": root_id, "gc.source_generation": str(plan["generation"])}
     if any(key not in owner_metadata for key in source_membership):
         native_root = next((owner_metadata[key] for key in NATIVE_ROOT_KEYS if owner_metadata.get(key)), None)
-        if native_root != root_id or owner_metadata.get("gc.root_store_ref") != store.store_ref:
+        suffix_owner = (writer_map.continuation is not None and writer_map.continuation.binding["version"] == 2
+                        and owner_id == attempt.claimed_bead_id == plan["writer_step_id"]
+                        and native_root == writer_map.continuation.binding["child_root_id"])
+        if (native_root != root_id and not suffix_owner) or owner_metadata.get("gc.root_store_ref") != store.store_ref:
             raise RecordError("source-plan owner has a foreign native root or store")
         if any(key in owner_metadata and owner_metadata[key] != value for key, value in source_membership.items()):
             raise RecordError("source-plan owner has conflicting source membership")
         validation_rows = dict(rows)
         validation_rows[owner_id] = dict(rows[owner_id], metadata=dict(owner_metadata, **source_membership))
         projections = [SourceMembershipProjection(owner_id, root_id, plan["generation"])]
-    validate_source_plan(plan, run, validation_rows, store_ref=store.store_ref, canonical=canonical, stored=stored)
+    validate_source_plan(plan, run, validation_rows, store_ref=store.store_ref, canonical=canonical, stored=stored,
+                         continuation=writer_map.continuation)
+    if writer_map.continuation is not None and writer_map.continuation.binding["version"] == 2:
+        projections.append(InheritedRunReference(writer_map.continuation))
     if implementation_convoy_id is not None:
         projections.append(SourcePlanConvoyBinding(implementation_convoy_id))
         guards.append(GuardRead(root_id, "gc.input_convoy_id", root_metadata.get("gc.input_convoy_id", MISSING)))
@@ -305,9 +317,15 @@ def main(argv: list[str] | None = None) -> int:
         else:
             from workspace_store import Attempt, WorkspaceStore
             from workspace_cooked import read_cooked_writer_map
+            from workspace_entry import native_root, read_native_continuation
             store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.cwd)
+            claim = store.snapshot([args.claimed_step_id])[args.claimed_step_id]
+            context, original = None, None
+            if native_root(claim) != plan['workflow_root_id']:
+                context, original = read_native_continuation(store, claimed_step_id=args.claimed_step_id,
+                    requested_root_id=plan['workflow_root_id'])
             writer_map, writer_rows = read_cooked_writer_map(store, workflow_root_id=plan["workflow_root_id"],
-                                                            claimed_step_id=args.claimed_step_id)
+                claimed_step_id=args.claimed_step_id, continuation=context, continuation_rows=original)
             prepared = declare_plan(store, Attempt.from_env(args.claimed_step_id), plan,
                                     run_record_id=args.run_record_id, record_bead_id=args.record_id,
                                     authority_id=args.authority_id, implementation_convoy_id=args.implementation_convoy_id,

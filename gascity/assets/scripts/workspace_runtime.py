@@ -215,7 +215,8 @@ class NativeSourceRuntime:
         self.input_convoy_id = entry["input_convoy_id"]
         policy = read_check_policy(self._fence, self.run_record_id, self.run)
         root = self._fence.rows[self.run["workflow_root_id"]]
-        require(root["status"] != "closed", "workflow root is no longer active")
+        require(root["status"] != "closed" or continuation is not None and continuation.binding["version"] == 2,
+                "workflow root is no longer active")
         self._policy = validate_check_policy(policy, self.run, self.run_record_id,
                                              root["metadata"].get(CHECKS_CONFIG_KEY))
         require(entry.get("check_policy") == self._policy, "entry and frozen policy readback differ")
@@ -569,7 +570,7 @@ class NativeSourceRuntime:
                             for name in relationship_keys), "acknowledged write changed native inheritance authority")
             child = continuation.binding["child_root_id"]
             expected = {"gc.implementation_run_ref": canonical_bytes(continuation.binding["run_ref"]).decode(),
-                        CONTINUATION_KEY: continuation.binding_bytes.decode()}
+                        CONTINUATION_KEY: continuation.reference_bytes.decode()}
             require(all(after[child]["metadata"].get(name) == value for name, value in expected.items()),
                     "acknowledged write lost its exact inherited run reference")
         self._written_requests[prepared.sha256] = prepared

@@ -1,5 +1,23 @@
 This is the `build-from-review-base` review handoff step.
 
+Apply the [workspace entry contract](../workspace-entry.md) before consuming
+review evidence:
+
+```sh
+python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
+  --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --rig "$RIG_NAME" \
+  --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" \
+  --entrypoint review --require-plan
+```
+
+For a separately launched suffix, its native input must identify the recorded
+implementation convoy or original source. An optional `worktree_run_root`
+selector locates that run; it cannot authorize unrelated input. Keep the
+captured base, layout, policy and exact source generation.
+
+Recorded root selector: `{{worktree_run_root}}` (empty uses native relationships).
+This value locates a candidate; the native task or convoy must prove its run.
+
 For retained `new` mode, restore exact run/plan/canonical/result references from the
 native adapter and verify the accepted canonical subject through `workspace_review`.
 If the immutable canonical exists without its current pointer, use

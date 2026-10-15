@@ -28,8 +28,10 @@ python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
   --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" --entrypoint decompose
 ```
 
-In new mode, the approved artifacts supplement the original recorded run;
-they do not establish its root, store, generation or base commit.
+In new mode, an initial decomposition suffix captures one run from its real
+native task or convoy before allocation. A recorded suffix reuses its original
+run through the entry contract's native source relationship. Approved artifacts
+supplement that proof; they do not establish its root, store, generation or base.
 
 Record `gc.build.continuation_entrypoint=decompose` when this suffix is
 launched directly. Close only after the decompose stage can create or reuse the

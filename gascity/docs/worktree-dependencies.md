@@ -228,14 +228,26 @@ source run.
 
 Keep the original run, base, source plan, and workspace when work continues.
 The [entrypoint guide](../README.md#choosing-an-entrypoint) identifies the
-artifacts needed for each `build-from-*` continuation. Its artifact-only launch
-recipes apply to legacy work. New mode also requires the retained run under its
-original workflow or a verified native child.
+artifacts needed for each `build-from-*` continuation. Initial requirements,
+planning and decomposition entries may capture generation 1 from a real native
+task or convoy, registered repository and check policy. Implementation and
+review entries require the declared source plan. Artifacts alone never supply
+source authority.
 
-- **Recorded new work:** continue through the original workflow's verified
-  native binding. A separate workflow must prove its relationship to the
-  original run. Artifact paths cannot establish that relationship. Inheritance
-  between separate workflows remains under native validation.
+- **Recorded new work:** a separate suffix takes the original native source or
+  declared implementation convoy. If needed, pass
+  `--var worktree_run_root=<original-root>` to locate the recorded run. The entry
+  helper verifies that candidate against the actual source relationship, exact
+  store, run, plan, generation and captured policy. Read-only inspection does not
+  stamp the physical suffix. Its first allowed lifecycle payload joins the
+  inherited reference in the same guarded write. An actual drain keeps its own
+  physical child, unit convoy and control. The original base and layout remain
+  fixed after branch movement.
+- **Completed original workflow:** a new active review/fix/publish suffix may
+  consume only the exact accepted canonical subject and recorded plan. Failed,
+  held or canceled source state refuses. A fix generation keeps the existing
+  exact canonical-parent and generation checks; a selector cannot approve a
+  replacement commit or new check policy.
 - **Legacy work:** retain `worktree_lifecycle=legacy`. Captured-run validation
   rejects a changed mode. Supply the explicit legacy selector for a separately
   launched legacy continuation. A source plan or artifact path cannot convert

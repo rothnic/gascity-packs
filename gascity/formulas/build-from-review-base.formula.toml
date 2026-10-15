@@ -19,6 +19,10 @@ interaction_modes = ["interactive", "autonomous", "headless"]
 review_modes = ["report", "agent", "interactive"]
 
 [vars]
+[vars.worktree_run_root]
+description = "Optional recorded workflow root selector for a separate suffix. Native task/convoy relationships must prove the same run; artifacts do not authorize inheritance."
+default = ""
+
 [vars.worktree_base_ref]
 description = "Initial source selector; @default captures the registered repository HEAD. Empty is invalid."
 default = "@default"

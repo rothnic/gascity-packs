@@ -934,8 +934,12 @@ def create_from_tasks(path: Path, *, city: str | None, dry_run: bool, force: boo
         runner.creation_edges = expanded_dependency_edges(plan)
         if not dry_run:
             from workspace_cooked import read_cooked_writer_map
+            from workspace_store import NativeRunContinuation
+            context = (NativeRunContinuation(canonical_bytes(workspace["state"]["native_continuation"]))
+                       if workspace["state"].get("native_continuation") is not None else None)
             writer_map, writer_rows = read_cooked_writer_map(workspace["store"],
-                workflow_root_id=workspace["state"]["workflow_root_id"], claimed_step_id=workspace["attempt"].claimed_bead_id)
+                workflow_root_id=workspace["state"]["workflow_root_id"], claimed_step_id=workspace["attempt"].claimed_bead_id,
+                continuation=context, continuation_rows=workspace["state"].get("_native_rows") if context else None)
             workspace["writer_map"], workspace["writer_rows"] = writer_map, writer_rows
         front = FRONT_MATTER_RE.match(markdown)
         data = yaml.safe_load(front.group("body")) if front else {}
@@ -1021,18 +1025,22 @@ def publish_source_expansion(runner: WorkspaceRunner, plan: Plan, mappings: dict
         authority_id = allocate_placeholder(store, title="Source-plan writer grant")
     # Native allocations can overlap controller annotations. Re-admit before
     # preparing the first intent, retaining the original map and spec tokens.
-    current_map, current_rows = read_cooked_writer_map(store,
-        workflow_root_id=state["workflow_root_id"], claimed_step_id=attempt.claimed_bead_id)
-    if current_map.sha256 != workspace["writer_map"].sha256:
-        raise RecordError("native writer map changed during source allocation")
-    validate_cooked_writer_map(workspace["writer_map"], current_rows, store_ref=store.store_ref,
-        workflow_root_id=state["workflow_root_id"], record_kind="source-plan", claimed_step_id=attempt.claimed_bead_id)
     current_entry = read_entry(store, gc=store.gc, city_root=store.cwd, rig_name=state["rig_name"],
         workflow_root_id=state["workflow_root_id"], claimed_step_id=attempt.claimed_bead_id,
         worktree_lifecycle="new", generation=state["generation"], expected_run_sha256=state["run_sha256"])
     if ({key: value for key, value in current_entry.items() if key != "_native_rows"}
             != {key: value for key, value in state.items() if key != "_native_rows"}):
         raise RecordError("recorded source expansion entry changed during native allocation")
+    from workspace_store import NativeRunContinuation
+    context = (NativeRunContinuation(canonical_bytes(current_entry["native_continuation"]))
+               if current_entry.get("native_continuation") is not None else None)
+    current_map, current_rows = read_cooked_writer_map(store,
+        workflow_root_id=state["workflow_root_id"], claimed_step_id=attempt.claimed_bead_id,
+        continuation=context, continuation_rows=current_entry.get("_native_rows") if context else None)
+    if current_map.sha256 != workspace["writer_map"].sha256:
+        raise RecordError("native writer map changed during source allocation")
+    validate_cooked_writer_map(workspace["writer_map"], current_rows, store_ref=store.store_ref,
+        workflow_root_id=state["workflow_root_id"], record_kind="source-plan", claimed_step_id=attempt.claimed_bead_id)
     prepared = declare_plan(store, attempt, source_plan, run_record_id=state["run_reference"]["bead_id"],
         record_bead_id=record_id, authority_id=authority_id, implementation_convoy_id=mappings[convoy_key],
         writer_map=workspace["writer_map"], writer_rows=current_rows)
@@ -1056,6 +1064,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="Inherit the recorded workflow mode, otherwise use new; legacy is deprecated")
     parser.add_argument("--store-ref")
     parser.add_argument("--workflow-root")
+    parser.add_argument("--recorded-root", help="Locate an original run; native input relationships must also match")
     parser.add_argument("--claimed-step")
     parser.add_argument("--generation", type=int, default=1)
     parser.add_argument("--source-plan-record-id")
@@ -1075,7 +1084,8 @@ def main(argv: list[str] | None = None) -> int:
                 raise PlanError("native lifecycle selection requires explicit city, store, workflow root and claimed step")
             store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city)
             mode, _ = read_entry_mode(store, workflow_root_id=args.workflow_root,
-                claimed_step_id=args.claimed_step, worktree_lifecycle=args.worktree_lifecycle)
+                claimed_step_id=args.claimed_step, worktree_lifecycle=args.worktree_lifecycle,
+                recorded_root_id=args.recorded_root)
         if mode == "new":
             from workspace_entry import read_entry, reference
             from workspace_store import Attempt, WorkspaceStore
@@ -1088,12 +1098,12 @@ def main(argv: list[str] | None = None) -> int:
             store = store or WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city)
             state = read_entry(store, gc=args.gc, city_root=args.city, rig_name=rig_name,
                 workflow_root_id=args.workflow_root, claimed_step_id=args.claimed_step,
-                worktree_lifecycle="new", generation=args.generation)
+                worktree_lifecycle="new", generation=args.generation, recorded_root_id=args.recorded_root)
             state["rig_name"] = rig_name
             store.common_git_dir = state["run"]["common_git_dir"]
             canonical = None
             if args.generation > 1:
-                raw = store.snapshot([args.workflow_root])[args.workflow_root]["metadata"].get("gc.canonical_ref")
+                raw = store.snapshot([state["workflow_root_id"]])[state["workflow_root_id"]]["metadata"].get("gc.canonical_ref")
                 ref = reference(raw, "canonical")
                 canonical = store.read_record("canonical", ref["bead_id"], ref["identity"])
                 if canonical is None or canonical["generation"] + 1 != args.generation:

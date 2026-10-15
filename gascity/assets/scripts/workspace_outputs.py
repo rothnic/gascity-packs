@@ -427,7 +427,7 @@ def prepare_record(store, attempt, payload: dict, *, kind: str, record_id: str, 
                    reference_owner_id: str, writer_map, guards=(), native_rows=None, initial_write: bool = False,
                    operation_nonce: str | None = None):
     """Use the writer-owned transaction; callers supply every qualified dependency guard."""
-    from workspace_store import (CookedWriterMap, GuardRead, GRANT_KEY, MISSING, NativeRunContinuation,
+    from workspace_store import (CookedWriterMap, GuardRead, GRANT_KEY, InheritedRunReference, MISSING, NativeRunContinuation,
                                  RecordWrite, ReferenceWrite, SCOPE_OWNER, read_cooked_context, record_reference)
     require(isinstance(writer_map, CookedWriterMap), "native cooked writer map is required")
     validate_record(kind, payload)
@@ -487,12 +487,15 @@ def prepare_record(store, attempt, payload: dict, *, kind: str, record_id: str, 
         missing = [bead_id for bead_id in ids if bead_id not in expected_rows]
         if missing:
             expected_rows.update(read_cooked_context(store, missing))
+    projections = ([InheritedRunReference(writer_map.continuation)]
+                   if writer_map.continuation is not None and writer_map.continuation.binding["version"] == 2
+                   and kind in ("canonical", "review", "publish") else [])
     return method(attempt=attempt, scope={"workflow_root_id": payload["workflow_root_id"],
                                "generation": payload["generation"], "writer_scope_id": payload[SCOPE_OWNER[kind]], "record_kind": kind},
                                authority_id=authority_id, writes=[RecordWrite(kind, record_id, payload)],
                                references=[ReferenceWrite(reference_owner_id, key, record_reference(kind, record_id, payload))],
                                writer_map=writer_map, guards=guards, expected_rows=expected_rows or None,
-                               operation_nonce=operation_nonce, **replacement)
+                               operation_nonce=operation_nonce, projections=projections, **replacement)
 
 
 def native_rows(evidence: dict, result: dict) -> dict:

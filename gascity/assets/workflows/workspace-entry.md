@@ -47,6 +47,12 @@ or replay; a result artifact cannot select easier checks.
 - **Refused:** missing records, a different root/store/generation, changed
   lifecycle, or artifact-only input require repair or explicit migration.
 
+Initial `requirements`, `plan` and `decompose` entries may capture generation 1
+from their real native input before a run exists. Capture records the registered
+repository, exact base and required checks once. Approved artifacts remain
+required for the selected stage. A `convoy` or `review` entry requires the
+already declared source plan; it cannot bootstrap a run from evidence paths.
+
 Attached continuations consume the original workflow's run. Native drain items
 retain their own workflow roots and physical steps. The helper follows the
 item's unit convoy and drain control to the original workflow, then verifies its
@@ -63,6 +69,27 @@ A standalone suffix without a proven native relationship must not recapture the
 base or adopt a run from an artifact. For implementation-convoy handoff, pass
 `--require-plan` so that the current convoy's exact source-plan reference and
 generation are verified as well.
+
+For a separately launched recorded suffix, sling the recorded implementation
+convoy, or the original native source task/convoy. If the original input does
+not itself point to its run, supply `--var worktree_run_root=<original-root>`
+at launch. The helper also accepts `--recorded-root <original-root>` on `gate`,
+`read` and `prepare`. This selector only locates a candidate. The helper verifies
+the actual native input, original source anchor, run, current plan, generation,
+captured checks and layout before allowing work. It never adopts an artifact's
+root or base.
+
+The physical suffix root must be active. A completed original root may be used
+only with its exact accepted canonical subject and source plan, with no failed,
+held or canceled native state. Review, fix and publication retain that subject
+and the existing generation rules. Changed input, policy, layout or hashes
+refuse; an outstanding original intent still requires resolution.
+
+A separate suffix keeps its physical root and claimed step. Its first allowed
+source-plan, workspace, canonical, review or publication write joins the
+inherited run reference atomically with that payload, guarding the original and
+physical roots and every actual drain relationship. Read-only entry never
+stamps a root. Existing native drain children retain their original binding.
 
 Record and grant IDs are allocated by the native create command as closed,
 unassigned, empty tasks. Lifecycle payloads and references are published

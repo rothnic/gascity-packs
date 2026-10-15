@@ -533,7 +533,8 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
     require(frozen.read('source-plan', plan['source_plan_owner_id'], 'gc.source_plan_ref') == plan, 'original source plan changed')
     root, convoy = frozen.rows[workflow_root_id], frozen.rows[input_convoy_id]
     healthy(root)
-    require(root['status'] != 'closed' and root['metadata'].get('gc.input_convoy_id') == input_convoy_id
+    require((root['status'] != 'closed' or context is not None and context.binding['version'] == 2)
+            and root['metadata'].get('gc.input_convoy_id') == input_convoy_id
             and convoy['metadata'].get('gc.source_plan_owner_id') == plan['source_plan_owner_id']
             and convoy['metadata'].get('gc.source_plan_sha256') == record_sha256(plan), 'current native plan/convoy selection is stale')
     validate_source_plan(plan, run, frozen.rows, store_ref=store.store_ref, stored=plan)

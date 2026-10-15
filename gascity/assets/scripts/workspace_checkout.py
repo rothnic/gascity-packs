@@ -731,7 +731,8 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
     if (root['metadata'].get('gc.kind') != 'workflow'
             or root['metadata'].get('gc.root_store_ref') != store.store_ref
             or root['metadata'].get('gc.input_convoy_id') != input_convoy_id
-            or (require_live and root['status'] == 'closed')):
+            or (require_live and root['status'] == 'closed'
+                and entry.get('native_continuation', {}).get('version') != 2)):
         raise CheckoutError('frozen workflow root/current convoy is stale or ineligible')
     step = rows[claimed_step_id]
     physical_root_id = entry.get('native_workflow_root_id', workflow_root_id)
@@ -816,7 +817,9 @@ def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
     # Freeze every observed metadata value, as well as each row's native revision.
     guards = [GuardRead(i, key, value) for i, row in rows.items() for key, value in row['metadata'].items()]
     projections = list(projections)
-    if record_kind == 'workspace' and writer_map.continuation is not None:
+    if writer_map.continuation is not None and (record_kind == 'workspace'
+            or writer_map.continuation.binding['version'] == 2
+            and record_kind in ('source-plan', 'canonical', 'review', 'publish')):
         if not any(isinstance(item, InheritedRunReference) for item in projections):
             projections.append(InheritedRunReference(writer_map.continuation))
     publish = store.install_grant if GRANT_KEY not in rows[authority_id]['metadata'] else store.write_records

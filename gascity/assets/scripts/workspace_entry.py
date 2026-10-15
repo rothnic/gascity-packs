@@ -167,13 +167,19 @@ def _load(store, kind: str, ref: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: str | None = None):
+def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: str | None = None,
+                             recorded_root_id: str | None = None):
     """Resolve a native drain child through its recorded control and unit convoy.
 
     This reads native rows only. Publishing inherited references belongs in the
     guarded workspace transaction that consumes these exact original rows.
     """
     from workspace_store import NativeRunContinuation, validate_native_continuation
+    from workspace_suffix import read as read_suffix
+    suffix = read_suffix(store, claimed_step_id=claimed_step_id, requested_root_id=requested_root_id,
+                         recorded_root_id=recorded_root_id)
+    if suffix is not None:
+        return suffix
     rows = {}
 
     def read(bead_id):
@@ -203,9 +209,12 @@ def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: 
     control_id = child["metadata"].get("gc.drain_control_id")
     control = read(control_id)
     run_root_id = native_root(control)
-    require(run_root_id != child_id and requested_root_id in (None, run_root_id, child_id),
+    require(run_root_id != child_id and requested_root_id in (None, run_root_id, child_id)
+            and recorded_root_id in (None, run_root_id),
             "native drain child does not continue the requested workflow")
     root = read(run_root_id)
+    require(all(row["metadata"].get("gc.var.worktree_run_root") in (None, "", run_root_id)
+                for row in (root, child)), "native drain selector conflicts with its original workflow")
     unit_id = child["metadata"].get("gc.input_convoy_id")
     unit = read(unit_id)
     implementation_id = unit["metadata"].get("gc.parent_convoy_id")
@@ -234,11 +243,26 @@ def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: 
     return continuation, rows
 
 
+def _continuation_candidate(store, root, requested_root_id=None, recorded_root_id=None):
+    from workspace_store import CONTINUATION_KEY
+    metadata = root["metadata"]
+    if (metadata.get("gc.drain_control_id") or CONTINUATION_KEY in metadata
+            or recorded_root_id not in (None, root["id"])
+            or metadata.get("gc.var.worktree_run_root") not in (None, "", root["id"])
+            or requested_root_id not in (None, root["id"])):
+        return True
+    if RUN_REF not in metadata and metadata.get("gc.input_convoy_id"):
+        convoy = store.snapshot([metadata["gc.input_convoy_id"]])[metadata["gc.input_convoy_id"]]
+        source_root = convoy["metadata"].get("gc.source_root_id")
+        return bool(source_root) and source_root != root["id"]
+    return False
+
+
 def read_entry(store, *, gc: str, city_root: str, rig_name: str,
                workflow_root_id: str, claimed_step_id: str, worktree_lifecycle: str,
                generation: int, input_convoy_id: str | None = None,
                require_plan: bool = False, expected_run_sha256: str | None = None,
-               expected_plan_sha256: str | None = None) -> dict[str, Any]:
+               expected_plan_sha256: str | None = None, recorded_root_id: str | None = None) -> dict[str, Any]:
     """Read immutable provenance separately from the mutable current convoy.
 
     Native attached suffixes retain the original root. Drain children retain
@@ -255,14 +279,18 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
         continuation = None
         physical_root_id = native_root(step)
         physical_root = root if physical_root_id == workflow_root_id else store.snapshot([physical_root_id])[physical_root_id]
-        if physical_root["metadata"].get("gc.drain_control_id"):
+        if _continuation_candidate(store, physical_root, workflow_root_id, recorded_root_id):
             continuation, continuation_rows = read_native_continuation(store, claimed_step_id=claimed_step_id,
-                                                                       requested_root_id=workflow_root_id)
+                requested_root_id=workflow_root_id, recorded_root_id=recorded_root_id)
             require(all(bead_id not in rows or rows[bead_id] == row for bead_id, row in continuation_rows.items()),
                     "native continuation changed after its original entry snapshot")
             rows.update(continuation_rows)
             workflow_root_id = continuation.binding["workflow_root_id"]
-            require(generation == continuation.binding["generation"],
+            next_plan = (continuation.binding["version"] == 2 and not require_plan
+                         and generation == continuation.binding["generation"] + 1
+                         and continuation.binding["canonical_ref"] is not None
+                         and continuation.binding["canonical_ref"]["identity"][1] == generation - 1)
+            require(generation == continuation.binding["generation"] or next_plan,
                     "requested generation differs from the native child source plan")
             root = rows[workflow_root_id]
             physical_root = rows[physical_root_id]
@@ -318,7 +346,8 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
             require(native_root(convoy) == workflow_root_id
                     and convoy["metadata"].get("gc.root_store_ref") == store.store_ref
                     and convoy["metadata"].get("gc.source_root_id") == workflow_root_id
-                    and convoy["metadata"].get("gc.source_generation") == str(generation),
+                    and convoy["metadata"].get("gc.source_generation") == str(
+                        continuation.binding["generation"] if continuation else generation),
                     "implementation convoy conflicts with the original root, native store or source generation")
         result = {"state": "recorded", "run": replay, "run_reference": ref, "run_sha256": digest,
                   "workflow_root_id": workflow_root_id, "generation": generation,
@@ -358,8 +387,12 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
                 canonical = _load(store, "canonical", canonical_ref)
             # An existing generation is exact replay, not a proposal based on
             # the current canonical result that it may have produced itself.
-            validate_source_plan(plan, replay, nodes, store_ref=store.store_ref, canonical=canonical, stored=plan)
+            from workspace_suffix import retain_source_owner
+            rows = retain_source_owner(store, plan, rows)
+            validate_source_plan(plan, replay, rows, store_ref=store.store_ref, canonical=canonical, stored=plan)
             result.update(source_plan=plan, source_plan_reference=plan_ref, source_plan_sha256=plan_digest)
+        if continuation or (require_plan and len(rows) > len(nodes)):
+            result['_native_rows'] = rows
         return result
     except (RecordError, RunError, OSError, KeyError, TypeError, ValueError) as exc:
         if isinstance(exc, EntryError):
@@ -372,22 +405,24 @@ def prepare_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
                   base_ref: str = "@default", generation: int = 1,
                   input_convoy_id: str | None = None, run_record_id: str | None = None,
                   authority_id: str | None = None, require_plan: bool = False,
-                  allow_pending_source: bool = False) -> dict[str, Any]:
+                  allow_pending_source: bool = False, recorded_root_id: str | None = None) -> dict[str, Any]:
     require(worktree_lifecycle in ("legacy", "new"), "unknown worktree lifecycle")
     require(type(generation) is int and generation > 0, "generation must be a positive integer")
     require(canonical_path(city_root) == store.cwd, "selected city conflicts with the native store adapter")
     rows = store.snapshot([workflow_root_id, attempt.claimed_bead_id])
     root = rows[workflow_root_id]
-    if RUN_REF in root["metadata"] or root["metadata"].get("gc.drain_control_id"):
+    physical_id = native_root(rows[attempt.claimed_bead_id])
+    physical = root if physical_id == workflow_root_id else store.snapshot([physical_id])[physical_id]
+    if RUN_REF in root["metadata"] or _continuation_candidate(store, physical, workflow_root_id, recorded_root_id):
         result = read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
             workflow_root_id=workflow_root_id, claimed_step_id=attempt.claimed_bead_id,
             worktree_lifecycle=worktree_lifecycle, generation=generation,
-            input_convoy_id=input_convoy_id, require_plan=require_plan)
+            input_convoy_id=input_convoy_id, require_plan=require_plan, recorded_root_id=recorded_root_id)
         from workspace_requests import require_resolved_scope
         store.common_git_dir = result["run"]["common_git_dir"]
         require_resolved_scope(store, run_scope(result["run"]["workflow_root_id"]))
         return result
-    require(entrypoint in ("build", "implement", "requirements"),
+    require(entrypoint in ("build", "implement", "requirements", "plan", "decompose"),
             "continuation has no recorded run; artifact-only legacy input requires explicit migration")
     require(generation == 1, "an initial run cannot begin at a later generation")
     step = rows[attempt.claimed_bead_id]
@@ -444,7 +479,7 @@ def prepare_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
 
 
 def read_entry_mode(store, *, workflow_root_id: str, claimed_step_id: str,
-                    worktree_lifecycle: str | None = None):
+                    worktree_lifecycle: str | None = None, recorded_root_id: str | None = None):
     """Read the retained run or explicit cooked mode before source effects."""
     observed = store.snapshot(list(dict.fromkeys([workflow_root_id, claimed_step_id])))
     root = observed[workflow_root_id]
@@ -458,12 +493,21 @@ def read_entry_mode(store, *, workflow_root_id: str, claimed_step_id: str,
     metadata = physical_root["metadata"]
     require(root["metadata"].get("gc.kind") == "workflow" and root["metadata"].get("gc.root_store_ref") == store.store_ref
             and metadata.get("gc.kind") == "workflow" and metadata.get("gc.root_store_ref") == store.store_ref
-            and (physical_root_id == workflow_root_id or metadata.get("gc.drain_control_id"))
+            and (physical_root_id == workflow_root_id or _continuation_candidate(store, physical_root, workflow_root_id, recorded_root_id))
             and step["metadata"].get("gc.root_store_ref") == store.store_ref
             and step["status"] == "in_progress" and bool(step["assignee"]),
             "lifecycle selection requires the exact native workflow, store and claimed step")
     mode = metadata.get("gc.var.worktree_lifecycle")
-    if metadata.get("gc.drain_control_id"):
+    from workspace_suffix import read as read_suffix
+    suffix = (read_suffix(store, claimed_step_id=claimed_step_id, requested_root_id=workflow_root_id,
+                         recorded_root_id=recorded_root_id)
+              if _continuation_candidate(store, physical_root, workflow_root_id, recorded_root_id) else None)
+    if suffix is not None:
+        continuation, inherited_rows = suffix
+        retained = parse_record(inherited_rows[continuation.binding["run_ref"]["bead_id"]]["metadata"][contracts()["run"]["metadata_key"]])
+        mode = retained["worktree_lifecycle"] if mode is None else mode
+        require(mode == retained["worktree_lifecycle"], "suffix mode conflicts with its immutable recorded run")
+    elif metadata.get("gc.drain_control_id"):
         control = store.snapshot([metadata["gc.drain_control_id"]])[metadata["gc.drain_control_id"]]
         original_root_id = native_root(control)
         require(original_root_id and original_root_id != physical_root_id
@@ -477,7 +521,7 @@ def read_entry_mode(store, *, workflow_root_id: str, claimed_step_id: str,
                 "native child original root/store changed")
         if RUN_REF in original_root["metadata"]:
             continuation, inherited_rows = read_native_continuation(store, claimed_step_id=claimed_step_id,
-                                                                  requested_root_id=workflow_root_id)
+                requested_root_id=workflow_root_id, recorded_root_id=recorded_root_id)
             inherited = inherited_rows[continuation.binding["run_ref"]["bead_id"]]
             retained = parse_record(inherited["metadata"][contracts()["run"]["metadata_key"]])
             mode = retained["worktree_lifecycle"] if mode is None else mode
@@ -514,7 +558,8 @@ def gate_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
                worktree_lifecycle: str | None = None, **kwargs) -> dict[str, Any]:
     """Apply the mode recorded by native cooking at the real entry boundary."""
     mode, retained = read_entry_mode(store, workflow_root_id=workflow_root_id,
-        claimed_step_id=attempt.claimed_bead_id, worktree_lifecycle=worktree_lifecycle)
+        claimed_step_id=attempt.claimed_bead_id, worktree_lifecycle=worktree_lifecycle,
+        recorded_root_id=kwargs.get("recorded_root_id"))
     if retained is not None:
         from workspace_requests import require_resolved_scope
         rig_root = registered_rig(gc, canonical_path(city_root), rig_name, store.store_ref)
@@ -539,7 +584,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rig", required=True)
     parser.add_argument("--workflow-root")
     parser.add_argument("--claimed-step")
-    parser.add_argument("--entrypoint", choices=("build", "implement", "requirements", "plan", "decompose", "convoy"), default="build")
+    parser.add_argument("--entrypoint", choices=("build", "implement", "requirements", "plan", "decompose", "convoy", "review"), default="build")
+    parser.add_argument("--recorded-root", help="Locate an original run; native input relationships must still prove its authority")
     parser.add_argument("--worktree-lifecycle", choices=("legacy", "new"))
     parser.add_argument("--base-ref", default="@default")
     parser.add_argument("--generation", type=int, default=1)
@@ -564,10 +610,11 @@ def main(argv: list[str] | None = None) -> int:
             mode = args.worktree_lifecycle
             if args.action != "gate":
                 mode, _ = read_entry_mode(store, workflow_root_id=args.workflow_root,
-                    claimed_step_id=args.claimed_step, worktree_lifecycle=mode)
+                    claimed_step_id=args.claimed_step, worktree_lifecycle=mode, recorded_root_id=args.recorded_root)
             kwargs = dict(gc=args.gc, city_root=args.city_root, rig_name=args.rig,
                 workflow_root_id=args.workflow_root, worktree_lifecycle=mode,
-                generation=args.generation, input_convoy_id=args.input_convoy_id, require_plan=args.require_plan)
+                generation=args.generation, input_convoy_id=args.input_convoy_id, require_plan=args.require_plan,
+                recorded_root_id=args.recorded_root)
             if args.action == "read":
                 result = read_entry(store, claimed_step_id=args.claimed_step,
                     expected_run_sha256=args.expected_run_sha256, expected_plan_sha256=args.expected_plan_sha256, **kwargs)

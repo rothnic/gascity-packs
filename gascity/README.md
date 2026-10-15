@@ -164,6 +164,7 @@ launch or pin them in a rig's `formula_vars`:
 | `push` / `open_pr` | `false` | Allow the publish stage to push and open a PR after all checks pass. |
 | `max_iterations` | `10` | Bound on implementation/review fix attempts. |
 | `worktree_lifecycle` | `new` | Recorded source inputs, owned workspaces and qualified output handoff. Explicit `legacy` is deprecated. |
+| `worktree_run_root` | empty | Locates an original run for a separate suffix; actual native source relationships must authorize it. |
 | `worktree_base_ref` | `@default` | Captures the registered checkout HEAD once. Empty is invalid. |
 | `worktree_checks` | empty | Canonical JSON `required_checks: [{id, argv}]`, required only for `new` and captured on the run. |
 | `worktree_parent` | empty | Default rig workspace parent, or an absolute existing directory. |
@@ -180,10 +181,10 @@ a Markdown file at the same relative path in a higher-priority layer, and
 every documented step can be swapped for your own expansion — see "Stable
 Workflow Override Interface" below for the recipe and per-stage examples.
 
-If part of the factory already ran, choose the continuation entrypoint that
-matches the artifacts you already have. This artifact-only recipe applies to
-legacy work. New mode also requires the retained run under its original workflow
-or a verified native child; see [Worktree dependencies](docs/worktree-dependencies.md#continue-existing-work).
+An initial planning or decomposition entry can capture a new run from a real
+request task or convoy, its registered repository and configured check policy.
+Approved artifacts supply that stage's prerequisites. They do not supply its
+source identity. For example:
 
 ```sh
 gc sling gc.run-operator <request-id> --on build-from-decompose \
@@ -191,9 +192,17 @@ gc sling gc.run-operator <request-id> --on build-from-decompose \
   --var requirements_path=<artifact-dir>/requirements.md \
   --var plan_path=<artifact-dir>/implementation-plan.md \
   --var plan_review_path=<artifact-dir>/plan-review.md \
-  --var worktree_lifecycle=legacy \
+  --var worktree_lifecycle=new \
   --var drain_policy=separate
 ```
+
+For recorded work, launch the matching suffix against its implementation convoy
+or original native source. When that source does not point back to the run,
+include `--var worktree_run_root=<original-workflow-root>`. The helper verifies
+the source relationship, run, plan, generation and captured configuration;
+the selector alone grants no authority. Review and implementation entries need
+the declared plan and their upstream evidence. See
+[continuing work](docs/worktree-dependencies.md#continue-existing-work).
 
 Launch a continuation against a real task or convoy. Each continuation validates
 the artifacts you hand it before doing any work,

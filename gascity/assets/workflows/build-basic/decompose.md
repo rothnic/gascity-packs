@@ -56,11 +56,46 @@ For **new lifecycle**, use the [workspace entry contract](../workspace-entry.md)
 and the pack's native expansion helper. Declare code sources separately from
 ordinary scheduling dependencies in the `tasks.md` creation payload:
 
+Read the entry helper's recorded `run.source_anchor_id` with the same native
+city/store routing, and read that original request alongside the approved plan.
+The request and approved plan define each source strategy and the ordered
+predecessors. An example is syntax guidance; it does not replace that graph.
+If the original request and approved plan conflict, record the blocker before
+allocation. Resolve linked files relative to this actual description file or
+the rendered `pack_root`, rather than the worker's current directory. An
+initial path error requires checking the rendered path; do not declare a helper
+unavailable without looking up and executing its actual command.
+
 Set `TASKS_PATH` to that creation file's absolute path. Keep it separate from
 the approved decomposition artifact: native creation records its recovery
 status and returned IDs in `tasks.md`.
 
+Use the complete creation envelope below under the exact Markdown heading
+`## Bead Creation Payload`. Replace `my-project` with the registered rig and
+replace these example tasks and source edges with the approved graph.
+
 ```yaml
+target_rig: my-project
+convoys:
+  - key: implementation
+    title: Implementation
+    description: Implement the approved plan.
+    beads:
+      - key: a
+        title: First independent change
+        type: task
+        description: Implement the first approved change.
+        acceptance_criteria: [Required checks and independent review pass.]
+      - key: b
+        title: Second independent change
+        type: task
+        description: Implement the second approved change.
+        acceptance_criteria: [Required checks and independent review pass.]
+      - key: m
+        title: Integrate both changes
+        type: task
+        description: Integrate the accepted outputs in their declared order.
+        acceptance_criteria: [Both changes work together and required checks pass.]
 sources:
   nodes:
     - owner: a
@@ -71,19 +106,24 @@ sources:
       strategy: isolated
       members: [b]
       predecessors: []
-    - owner: d
-      strategy: dependent
-      members: [d]
-      predecessors: [b, a]
-  terminal: d
+    - owner: m
+      strategy: integration
+      members: [m]
+      predecessors: [a, b]
+  terminal: m
 ```
 
 Each owner/member key must name a work item or convoy in that same payload.
 Use one terminal output. Ordered predecessors describe which accepted code
 feeds a task; scheduling dependencies alone transfer no source code.
-Multiple predecessors create a real integration work item before the
-dependent item. Its inputs retain the declared order. A shared-chain owner
-uses ordered members and `single_lane: true`.
+An explicit `integration` owner consumes its listed predecessors directly.
+Declaring `dependent` with multiple predecessors instead creates an additional
+`<owner>-inputs` integration work item before that dependent owner. These are
+different graphs; preserve the requested strategy and order. A shared-chain
+owner uses ordered members and `single_lane: true`. Before invoking the helper,
+compare every declared owner, strategy, member and ordered predecessor with the
+approved graph. Afterward verify the exact returned source plan; do not repair
+a mismatch by manually editing native records.
 
 ```sh
 python3 "{{pack_root}}/assets/scripts/create_beads_from_tasks.py" "$TASKS_PATH" \

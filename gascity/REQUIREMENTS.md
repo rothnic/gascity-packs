@@ -119,6 +119,12 @@ top-level stages only as anchored extensions:
   review entrypoints and adapters.
 - Producer-stage artifact validation is explicit graph/check behavior, not
   prompt-only guidance.
+- Required build and continuation stages share a native `build-body` scope.
+  A terminal stage failure aborts remaining members before downstream dispatch;
+  bounded check/review repair attempts retain their existing limits. Derived
+  whole-step overrides and expansions preserve this failure boundary. Added
+  required stages belong to the scope, including finalization and publication;
+  only genuine cleanup is teardown.
 - Decomposition is required before implementation. Implementations consume a
   convoy, not an unstructured prompt, unless the decomposition intentionally
   produces exactly one work item.

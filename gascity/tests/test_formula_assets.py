@@ -93,9 +93,11 @@ BUILD_BASE_STEPS = [
     "review-result",
     "finalize",
     "publish",
+    "build-body",
 ]
 
 BUILD_FROM_REVIEW_STEPS = {
+    "build-body",
     "review-result",
     "prepare-review",
     "review",
@@ -1659,7 +1661,8 @@ class FormulaAssetTests(unittest.TestCase):
         for var_name, default in METHODOLOGY_FORMULA_VARS.items():
             self.assertEqual(data["vars"][var_name]["default"], default)
 
-        route_by_step = {step["id"]: step["metadata"]["gc.run_target"] for step in data["steps"]}
+        route_by_step = {step["id"]: step["metadata"]["gc.run_target"] for step in data["steps"]
+                         if step["id"] != "build-body"}
         self.assertEqual(route_by_step["prepare"], "gc.run-operator")
         self.assertEqual(route_by_step["requirements"], "gc.requirements-planner")
         self.assertEqual(route_by_step["plan"], "gc.design-author")
@@ -1938,6 +1941,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertEqual(
             review_step["expand_vars"],
             {
+                "failure_scope": "build-body",
                 "implementation_target": "{{implementation_target}}",
                 "worktree_lifecycle": "{{worktree_lifecycle}}",
                 "worktree_base_ref": "{{worktree_base_ref}}",
@@ -2382,6 +2386,7 @@ class FormulaAssetTests(unittest.TestCase):
                 self.assertEqual(review_step["needs"], ["summarize-implementation"])
                 self.assertEqual(review_step["expand"], expected["review_expansion"])
                 expected_review_expand_vars = {
+                    "failure_scope": "build-body",
                     "implementation_target": "{{implementation_target}}",
                     "review_mode": "{{review_mode}}",
                     "artifact_path_keys": "gc.build.review_report_path",

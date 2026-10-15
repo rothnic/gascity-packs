@@ -10,6 +10,10 @@ version = 1
 contract = "graph.v2"
 
 [vars]
+[vars.failure_scope]
+description = "Optional enclosing native scope. Build entrypoints bind this to build-body; standalone use remains unscoped."
+default = ""
+
 [vars.worktree_checks]
 description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
 default = ""
@@ -43,14 +47,14 @@ default = "interactive"
 [[template]]
 id = "{target}.setup-gstack-release"
 title = "Prepare gstack release readiness"
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/gstack-release-readiness/{target}.setup-gstack-release.md"
 
 [[template]]
 id = "{target}.gstack-release-readiness-loop"
 title = "Run gstack release readiness"
 needs = ["{target}.setup-gstack-release"]
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/gstack-release-readiness/{target}.gstack-release-readiness-loop.md"
 
 [template.check]
@@ -94,5 +98,5 @@ description_file = "../assets/workflows/gstack-release-readiness/{target}.synthe
 id = "{target}"
 title = "Finalize gstack release readiness"
 needs = ["{target}.gstack-release-readiness-loop"]
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/gstack-release-readiness/{target}.md"

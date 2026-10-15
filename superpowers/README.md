@@ -282,6 +282,16 @@ with session affinity scoped to that bead. In the same-session path, the drain
 serializes convoy members through one shared single-lane session. Both paths
 converge before the post-implementation review fan-out.
 
+## Plan acceptance
+
+The plan-document reviewer owns approval and the writing-plans lane owns
+authorized repairs. A repair returns through review; the feedback lane can
+finish only with an unchanged, currently approved subject. The final native
+gate and the task creator check the structured report against the exact
+workflow, plan, and upstream bytes before decomposition allocates work.
+Unresolved findings remain blocked. See the shared
+[plan-review acceptance contract](../gascity/docs/plan-review-acceptance.md).
+
 ## Customization
 
 ### Source workspaces

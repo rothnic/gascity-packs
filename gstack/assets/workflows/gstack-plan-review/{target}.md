@@ -1,27 +1,23 @@
 Finalize the gstack plan review.
 
-Verify the latest plan-review loop approved the plan or clearly recorded
-remaining required fixes. Record the approved plan-review summary path on the
-workflow root for decomposition and the final sprint report.
+Require all four reviewer lanes to approve and the apply lane to report
+`design_review.verdict=done`. Unresolved required findings, a missing report,
+or an exhausted loop must close with `gc.outcome=fail` and a concrete
+`gc.failure_reason`. Recording remaining required fixes is not approval.
 
-Close with `gc.outcome=pass`.
+Before closing pass, run the imported
+`validate_plan_review.py native-check` with the current claim and durable rig
+root. Record `gc.build.plan_review_status=approved`, the current absolute
+`gc.build.plan_review_report_path`, and `gc.build.plan_review_approved_at` only
+after it succeeds. A failed or unknown check must record
+`gc.build.plan_review_status=failed` and close `gc.outcome=fail`.
 
 Do not invoke provider-native subagents.
 
-Plan artifact validation: this step is gated by
-`.gc/scripts/checks/build-artifact-valid.sh`, which validates the plan
-recorded at workflow root metadata `gc.build.plan_path` (fallback
-`gc.var.plan_path`) against schema `gc.build.plan.v1`. Plan-review fix lanes
-edit the plan in place, so re-validate it here before closing:
-
-- From `$GC_RIG_ROOT`, run the artifact validator with the claimed bead id and
-  fix any error before setting `gc.outcome=pass`:
-  `GC_BEAD_ID=<claimed-step-id> .gc/scripts/checks/build-artifact-valid.sh`.
-- Repair the plan in place and keep its YAML front matter intact. Its
-  front-matter `status` must be one of `draft`, `questions`, `approved`,
-  `changes_required`, `blocked`, or `superseded`. Replace any other value
-  (for example `reviewed`) with the allowed status that matches the review
-  outcome (`approved` for an approved plan).
-- On repair attempts (`gc.attempt` greater than 1), first read the validator
-  errors from `gc.attempt_log` on the validation loop control bead (the
-  dependent of this step bead) and fix every listed error in place.
+The native `plan-review-approved.py` gate permits three attempts. It validates
+`gc.build.plan.v1`, approved status, and a passing `gc.verdict-report.v1`
+subject bound to this workflow's exact current plan and upstream bytes. Follow
+the shared [acceptance contract](../../../../gascity/docs/plan-review-acceptance.md).
+Do not edit the plan, upstream files, or review subject in this finalizer;
+changed bytes need the native review/fix loop. On an official check attempt,
+read the native control's `gc.attempt_log` and preserve any unresolved failure.

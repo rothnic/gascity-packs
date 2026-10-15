@@ -10,12 +10,19 @@ Update only the requirements or plan artifacts needed to resolve required
 findings. Preserve traceability and avoid adding unrequested scope. If a
 finding cannot be resolved safely, record the blocker in the apply summary.
 
-If the review report approves the plan, perform a no-op pass, mark the plan
-artifact approved, update workflow root metadata with
-`gc.build.plan_status=approved`, and close with `design_review.verdict=done`.
-If required changes remain, apply them, keep the plan in draft status, update
-workflow root metadata with `gc.build.plan_status=draft`, and close with
-`design_review.verdict=iterate`.
+Respect `review_mode`: report-only work does not edit the plan; agent or
+interactive work applies only authorized repairs. Any plan or upstream change,
+including changing the plan status to `approved`, requires
+`design_review.verdict=iterate` so the reviewer inspects those new bytes.
+Preserve the prior report; this feedback lane must not rewrite its subject or
+create a passing review for its own edits.
+
+Set `design_review.verdict=done` only for a no-op after the reviewer approves
+and the imported `validate_plan_review.py native-check` succeeds with the
+current claim and durable rig root. The structured report must pass for the
+exact native-recorded plan and upstream files. Then update workflow root
+metadata with `gc.build.plan_status=approved`. Otherwise preserve the findings,
+set `gc.build.plan_status=draft`, and use `design_review.verdict=iterate`.
 
 Always close with `gc.outcome=pass`, `design_review.verdict=done|iterate`, and
 `design_review.output_path=<apply summary path>`.

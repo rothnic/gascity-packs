@@ -6,12 +6,20 @@ Read the synthesized report from `gc.build.plan_review_report_path`. Write the
 apply summary to `gc.build.plan_review_apply_summary_path`, which should be
 `<artifact_root>/plan-review/apply-summary.md`.
 
-If the synthesized report approves the plan with no required findings, perform
-a no-op pass, update workflow root metadata with
-`gc.build.plan_review_status=approved`, and close with
-`design_review.verdict=done`. If required plan changes remain, update workflow
-root metadata with `gc.build.plan_review_status=draft` and close with
-`design_review.verdict=iterate`.
+Respect `review_mode`: report-only work records findings without editing;
+agent or interactive work applies only authorized repairs. Any change to the
+plan or upstream artifacts, including setting the plan status to `approved`,
+requires `design_review.verdict=iterate` so the review lanes inspect the new
+bytes. Preserve the report that caused the repair; do not replace its subject
+or manufacture a passing report in this apply lane.
+
+Set `design_review.verdict=done` only for a no-op after all four lanes approve,
+the structured report has no unresolved findings, and the imported
+`validate_plan_review.py native-check` succeeds with the current claim and
+durable rig root. This rechecks the exact native-recorded plan, report,
+workflow, and upstream files. Then set `gc.build.plan_review_status=approved`.
+If anything remains unresolved or the subject is stale, keep
+`gc.build.plan_review_status=draft` and `design_review.verdict=iterate`.
 
 Always close with `gc.outcome=pass`,
 `design_review.report_path=<apply summary path>`, and

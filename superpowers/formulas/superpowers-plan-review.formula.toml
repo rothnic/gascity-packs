@@ -75,7 +75,7 @@ description_file = "../assets/workflows/superpowers-plan-review/{target}.apply-p
 id = "{target}"
 title = "Finalize approved Superpowers plan review"
 needs = ["{target}.superpowers-plan-review-loop"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.plan.v1", "gc.build.artifact_path_keys" = "gc.build.plan_path,gc.var.plan_path" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.plan.v1", "gc.build.artifact_path_keys" = "gc.build.plan_path,gc.var.plan_path", "gc.build.plan_review_required" = "true" }
 description_file = "../assets/workflows/superpowers-plan-review/{target}.md"
 
 [template.check]
@@ -83,5 +83,5 @@ max_attempts = 3
 
 [template.check.check]
 mode = "exec"
-path = ".gc/scripts/checks/build-artifact-valid.sh"
+path = "../assets/scripts/checks/plan-review-approved.py"
 timeout = "5m"

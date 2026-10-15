@@ -14,6 +14,16 @@ Read the plan-review context from workflow root metadata
 root metadata path `gc.build.plan_review_report_path`, which should be
 `<artifact_root>/plan-review-report.md`.
 
+Follow the imported Gas City [plan-review acceptance contract](../../../../gascity/docs/plan-review-acceptance.md).
+Review the original native request, current plan, and current upstream files.
+The report must be `gc.verdict-report.v1`, kind `review`. Pass only an approved
+plan with no unresolved findings; capture the exact current `subject` with
+`validate_plan_review.py subject` after reviewing those bytes. Preserve actual
+required findings in a failing report. If the plan still needs an approved
+status or any repair, request it through the feedback lane and review the
+changed bytes on the next iteration. Never refresh an old report's subject
+without reviewing the new plan and upstream files.
+
 Close with `gc.outcome=pass`,
 `design_review.review_verdict=approve|iterate`, and
 `design_review.output_path=<report path>`. Do not set

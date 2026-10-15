@@ -47,7 +47,7 @@ timeout = "5m"
 id = "plan-review"
 title = "gstack plan review fanout"
 needs = ["plan"]
-metadata = { "gc.run_target" = "gstack.review-synthesizer" }
+metadata = { "gc.run_target" = "gstack.review-synthesizer", "gc.build.plan_review_required" = "true" }
 expand = "gstack-plan-review"
 expand_vars = { interaction_mode = "{{interaction_mode}}" }
 description_file = "../assets/workflows/gstack-planning/plan-review.md"

@@ -41,6 +41,6 @@ timeout = "5m"
 id = "plan-review"
 title = "Superpowers plan review"
 needs = ["plan"]
-metadata = { "gc.run_target" = "superpowers.plan-reviewer" }
+metadata = { "gc.run_target" = "superpowers.plan-reviewer", "gc.build.plan_review_required" = "true" }
 expand = "superpowers-plan-review"
 description_file = "../assets/workflows/superpowers-planning/plan-review.md"

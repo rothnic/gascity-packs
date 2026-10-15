@@ -42,6 +42,6 @@ timeout = "5m"
 id = "plan-review"
 title = "Compound plan review"
 needs = ["plan"]
-metadata = { "gc.run_target" = "compound-engineering.ce-plan-review-synthesizer" }
+metadata = { "gc.run_target" = "compound-engineering.ce-plan-review-synthesizer", "gc.build.plan_review_required" = "true" }
 expand = "compound-plan-review"
 description_file = "../assets/workflows/compound-planning/plan-review.md"

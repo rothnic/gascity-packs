@@ -2,8 +2,9 @@
 
 When a build stage `expand`s into a methodology flow, gc drops the stage's own
 prompt: only the expansion's step prompts reach agents. The flow's `{target}`
-step is the one gated by `build-artifact-valid.sh`, and the build gate's final
-artifact check reads the same workflow-root keys. So the instruction to write
+step carries the artifact gate, with plan review additionally requiring exact
+current-subject approval. The build gate's final artifact check reads the same
+workflow-root keys. So the instruction to write
 the artifact and record its path has to live in the `{target}` prompt, not in
 the stage override.
 
@@ -141,7 +142,7 @@ def prompt_text(formula_path: Path, step: dict[str, Any]) -> str:
     return normalize(raw_prompt(formula_path, step))
 
 
-def expansion_target(pack: str, build: str, stage: str) -> tuple[Path, dict[str, Any], dict[str, Any], dict[str, Any]]:
+def expansion_target(pack: str, build: str, stage: str, *, check_script: str = CHECK_SCRIPT) -> tuple[Path, dict[str, Any], dict[str, Any], dict[str, Any]]:
     """Build stage -> (expansion path, expansion data, stage step, checked `{target}` template)."""
     build_path, build_data = load_formula(pack, build)
     stage_step = find_step(build_data, stage, "steps")
@@ -150,8 +151,8 @@ def expansion_target(pack: str, build: str, stage: str) -> tuple[Path, dict[str,
         raise AssertionError(f"{build_path} stage {stage!r} no longer expands into a flow")
     exp_path, exp_data = load_formula(pack, expansion)
     target = find_step(exp_data, "{target}", "template")
-    if CHECK_SCRIPT not in str(target.get("check")):
-        raise AssertionError(f"{exp_path} {{target}} is no longer gated by {CHECK_SCRIPT}")
+    if check_script not in str(target.get("check")):
+        raise AssertionError(f"{exp_path} {{target}} is no longer gated by {check_script}")
     return exp_path, exp_data, stage_step, target
 
 
@@ -295,10 +296,13 @@ APPLY_LANE_FRAGMENTS = (
 )
 
 PLAN_TARGET_FRAGMENTS = (
-    f"gc_bead_id=<claimed-step-id> .gc/scripts/checks/{CHECK_SCRIPT}",
-    "fix any error before setting `gc.outcome=pass`",
-    "read the validator errors from `gc.attempt_log` on the validation loop control bead",
-    "keep its yaml front matter intact",
+    "`validate_plan_review.py native-check`",
+    "approved status",
+    "a passing `gc.verdict-report.v1`",
+    "this workflow's exact current plan and upstream bytes",
+    "`gc.build.plan_review_status=failed`",
+    "`gc.outcome=fail`",
+    "read the native control's `gc.attempt_log`",
 )
 
 
@@ -338,7 +342,12 @@ class ApplyFindingsFrontMatterTests(unittest.TestCase):
 
     def test_plan_review_targets_revalidate_the_plan(self) -> None:
         for pack, build in PLAN_REVIEW_BUILDS:
-            exp_path, _, _, target = expansion_target(pack, build, "plan-review")
+            exp_path, _, _, target = expansion_target(
+                pack, build, "plan-review", check_script="plan-review-approved.py"
+            )
+            with self.subTest(pack=pack, check="native current-subject gate"):
+                self.assertEqual(target["check"], {"max_attempts": 3, "check": {
+                    "mode": "exec", "path": "../assets/scripts/checks/plan-review-approved.py", "timeout": "5m"}})
             metadata = target["metadata"]
             with self.subTest(pack=pack, check="metadata"):
                 self.assertEqual(metadata.get("gc.build.artifact_schema"), "gc.build.plan.v1")
@@ -349,8 +358,8 @@ class ApplyFindingsFrontMatterTests(unittest.TestCase):
             for fragment in PLAN_TARGET_FRAGMENTS:
                 with self.subTest(pack=pack, fragment=fragment):
                     self.assertIn(normalize(fragment), text)
-            with self.subTest(pack=pack, check="allowed statuses"):
-                self.assertIn(status_sentence("plan"), text)
+            with self.subTest(pack=pack, check="read-only finalizer"):
+                self.assertRegex(text, r"do not edit (?:the reviewed plan|the plan), upstream files, or (?:report|review) subject")
 
 
 if __name__ == "__main__":

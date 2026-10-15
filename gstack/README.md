@@ -29,14 +29,18 @@ retryable through the workflow graph.
   and the other methodology packs, gstack defaults both `interaction_mode` and
   `review_mode` to `interactive`, because raw gstack is intentionally
   conversation-heavy. You can override both for automation.
-- If you want a leaner run, pick `build-basic` (single-lane review, no extra
+- If you want a leaner run, pick `build-basic` (three-lane starter review, no extra
   gates) or another methodology pack (Compound Engineering, Superpowers, BMAD);
   they share the same `build-base` contract, so switching later is a one-line
   formula change.
 
 ## Quick start
 
-These steps go from a fresh machine to a completed gstack sprint.
+Use matching Gas City core and pack versions. See
+[worktree configuration](../gascity/docs/worktree-dependencies.md#select-a-mode)
+for lifecycle modes and prerequisites.
+
+These steps configure and launch a gstack sprint.
 
 1. Install Gas City and create a city:
 
@@ -48,7 +52,8 @@ These steps go from a fresh machine to a completed gstack sprint.
 2. Add the repository you want to build in as a rig:
 
    ```sh
-   mkdir proj && cd proj && git init && gc rig add .
+   cd ~/your-project        # an existing repository with at least one commit
+   gc rig add .
    ```
 
 3. Import this pack at city scope. From the city directory — this writes the
@@ -67,7 +72,7 @@ These steps go from a fresh machine to a completed gstack sprint.
 
    ```toml
    [[rigs]]
-   name = "proj"
+   name = "your-project"
 
    [rigs.imports.gc]
    source = "https://github.com/gastownhall/gascity-packs.git//gascity/roles"

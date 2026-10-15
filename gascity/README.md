@@ -29,8 +29,11 @@ for the read and transaction limits.
 ## Quick Start: your first build
 
 Prerequisites: Gas City installed and a city running (`gc init`, `gc start`),
-and your project added as a rig (`gc rig add .` inside the repo). See the
-[repository README](../README.md) for the from-scratch path.
+and your project added as a rig (`gc rig add .` inside the repo). Use matching
+Gas City core and pack versions. See
+[worktree configuration](docs/worktree-dependencies.md#select-a-mode) for
+lifecycle modes and prerequisites, and the [repository README](../README.md)
+for the from-scratch path.
 
 1. Import formulas, claim command, and rig roles. From city directory:
 
@@ -444,13 +447,17 @@ flowchart TD
 
     DrainFanIn --> Review["review<br/>build-basic implementation review"]:::basic
 
-    subgraph ReviewLoop["post-implementation review loop: build-basic single-lane default"]
+    subgraph ReviewLoop["post-implementation review loop: build-basic starter review"]
         direction TB
-        Review --> ReviewLens["implementation review<br/>single reviewer lane"]:::basic
-        ReviewLens --> ReviewReport["synthesize findings and required fixes"]:::basic
+        Review --> AcceptanceReview["acceptance and correctness"]:::basic
+        Review --> TestReview["test evidence"]:::basic
+        Review --> SimplicityReview["simplicity and maintainability"]:::basic
+        AcceptanceReview --> ReviewReport["synthesize findings and required fixes"]:::basic
+        TestReview --> ReviewReport
+        SimplicityReview --> ReviewReport
         ReviewReport --> ApplyFixes["apply required fixes when needed"]:::basic
         ApplyFixes --> ReviewGate{"implementation approved?<br/>review contract"}:::infra
-        ReviewGate -->|no: fix and re-review| ReviewLens
+        ReviewGate -->|no: fix and re-review| Review
         ReviewGate -->|yes| ReviewDone["review approved"]:::basic
     end
 
@@ -464,9 +471,9 @@ the concrete `build-basic` implementation, and amber nodes are Gas City graph,
 convoy, or drain infrastructure. Concrete methodology packs extend the same
 shape: they can override requirements, planning, review fanout, item formulas,
 or finalization while preserving the convoy/drain/fan-in mechanics. The
-`build-basic` review step is intentionally single-lane; packs such as
-Superpowers, Compound Engineering, and BMAD replace it with expansion formulas
-whose reviewer beads fan out before synthesis.
+`build-basic` review expands into acceptance, test-evidence and simplicity
+lanes before synthesis and repair. Methodology packs retain their own review
+lanes and bounded repair loops.
 
 ## Stable Workflow Override Interface
 

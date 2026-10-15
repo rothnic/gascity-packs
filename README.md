@@ -19,10 +19,12 @@ For the full model (cities, rigs, formulas, beads, runtime providers) see the
   </a>
 </p>
 
-## Start here: first build in about ten minutes
+## Start here: configure and launch a build
 
-If you just installed Gas City and want a working multi-agent build factory,
-this is the shortest path. Each step is copy-pasteable; swap names to taste.
+Use matching Gas City core and pack versions. See
+[worktree configuration](./gascity/docs/worktree-dependencies.md#select-a-mode)
+for lifecycle modes and prerequisites. The steps below configure and launch a
+build.
 
 1. **Install Gas City and start a city** (skip steps you have already done):
 

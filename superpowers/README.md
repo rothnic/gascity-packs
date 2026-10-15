@@ -31,8 +31,11 @@ maps that process onto Gas City's `build-base` workflow contract as the
 
 ## Quick start
 
-The goal: from a fresh Gas City install to a completed `superpowers-build`
-run.
+Use matching Gas City core and pack versions. See
+[worktree configuration](../gascity/docs/worktree-dependencies.md#select-a-mode)
+for lifecycle modes and prerequisites.
+
+These steps configure and launch `superpowers-build`.
 
 1. **Install Gas City and start a city** (skip what you already have):
 

@@ -12,8 +12,8 @@ lifecycle with retries, persistence, and observable per-stage artifacts.
 
 - **Review depth matters most.** The post-implementation review fans out to up
   to 17 specialist lanes (correctness, testing, security, performance, data
-  migration, API contracts, and more), versus `build-basic`'s single review
-  lane.
+  migration, API contracts, and more), compared with `build-basic`'s three
+  starter review lanes.
 - **You want plans reviewed before code.** A four-persona plan review loop
   (coherence, feasibility, scope, architecture) must approve the plan before
   decomposition starts.
@@ -26,6 +26,10 @@ lifecycle with retries, persistence, and observable per-stage artifacts.
   parts (`build-basic` in the base `gascity` pack).
 
 ## Quick start
+
+Use matching Gas City core and pack versions. See
+[worktree configuration](../gascity/docs/worktree-dependencies.md#select-a-mode)
+for lifecycle modes and prerequisites.
 
 Prerequisites: git, and a repository you want agents to work on.
 
@@ -43,7 +47,7 @@ Prerequisites: git, and a repository you want agents to work on.
    can work in:
 
    ```sh
-   cd ~/your-project        # any git repo; `git init` a fresh one if needed
+   cd ~/your-project        # an existing repository with at least one commit
    gc rig add .
    ```
 

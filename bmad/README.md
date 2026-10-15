@@ -17,12 +17,16 @@ reviewed implementation in your repository with a full artifact trail.
   acceptance-audit, and fix loop, followed by a four-lane adversarial code
   review (blind-hunter, edge-case, acceptance-audit, gap-analysis).
 - Prefer `build-basic` (in the `gascity` pack) when you want the default
-  starter factory with fewer stages and a single-lane review.
+  starter factory with fewer stages and a three-lane starter review.
 - Prefer `compound-engineering` when review breadth matters most (20+
   specialist reviewer lanes), or `superpowers` when you want hard spec-approval
   gates and strict per-task TDD.
 
 ## Quick start
+
+Use matching Gas City core and pack versions. See
+[worktree configuration](../gascity/docs/worktree-dependencies.md#select-a-mode)
+for lifecycle modes and prerequisites.
 
 Prerequisites: Gas City installed and a city running, plus a git repository
 registered as a rig. If you have not done that yet:
@@ -35,7 +39,7 @@ gc start
 ```
 
 ```sh
-mkdir proj && cd proj && git init
+cd ~/your-project        # an existing repository with at least one commit
 gc rig add .
 ```
 
@@ -56,7 +60,7 @@ gc rig add .
 
    ```toml
    [[rigs]]
-   name = "proj"
+   name = "your-project"
 
    [rigs.imports.gc]
    source = "https://github.com/gastownhall/gascity-packs.git//gascity/roles"

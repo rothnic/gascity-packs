@@ -67,6 +67,14 @@ gc sling <run-target> <request-id> --on build-basic \
 
 This launch uses the rig defaults above. Builds require a real task or convoy
 as input. Targetless build launch is outside the supported route.
+
+The launch variable `artifact_root` locates stage documents. Managed preparation,
+project-check and review helpers use a separate existing, canonical absolute
+directory for acceptance evidence, outside the registered repository and every
+worktree. Their `--artifact-root` selects that evidence directory. Do not pass
+the in-rig stage-document directory to those helpers. See the
+[managed preparation recipe](../assets/workflows/do-work/prepare-worktree.md).
+
 Inspect the selected formula before launch:
 
 ```sh

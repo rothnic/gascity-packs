@@ -262,6 +262,10 @@ def publish_plan(store, prepared, *, evidence_dir) -> dict[str, Any]:
     observed = store.resolve(prepared)
     result = {"outcome": observed["outcome"], "request_sha256": observed["request_sha256"],
               "submission_outcome": submitted["outcome"], "retry_allowed": False, "request_path": str(request_path)}
+    if "error" in submitted:
+        result["submission_error"] = submitted["error"]
+    if "error" in observed:
+        result["readback_error"] = observed["error"]
     if result["outcome"] not in ("committed", "replayed"):
         result["error"] = observed.get("error", submitted.get("error", "exact native intent readback did not prove publication"))
     else:

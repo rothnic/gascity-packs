@@ -73,6 +73,7 @@ class ExpansionCompositionTests(unittest.TestCase):
             + tasks.yaml.safe_dump(source_payload(), sort_keys=False) + "```\n")
         self.commands, self.dependencies = [], set()
         self.fail_create = False
+        self.run_command = subprocess.run
         for target in (
             patch.object(self.store, "_command", side_effect=self.port),
             patch.object(cooked, "_native_list", return_value=["decompose-1"]),
@@ -80,9 +81,13 @@ class ExpansionCompositionTests(unittest.TestCase):
                 {"id": "build.decompose", "metadata": {"gc.build.artifact_schema": "gc.build.decomposition.v1"}}], "deps": []}),
             patch.object(tasks.subprocess, "run", side_effect=self.native_command),
             patch.object(entry, "native_json", side_effect=self.native_placeholder),
+            patch.object(entry, "registered_rig", return_value=str(self.repo)),
         ):
             target.start()
             self.addCleanup(target.stop)
+        self.state.update(entry.read_entry(self.store, gc="gc", city_root=str(self.city), rig_name="example",
+            workflow_root_id="root-1", claimed_step_id=self.attempt.claimed_bead_id,
+            worktree_lifecycle="new", generation=1))
 
     def git(self, *args, cwd=None):
         return subprocess.run(["git", "-C", str(cwd or self.repo), *args], text=True,
@@ -98,6 +103,8 @@ class ExpansionCompositionTests(unittest.TestCase):
         return {"id": bead_id}
 
     def native_command(self, command, **kwargs):
+        if command[0] == "git":
+            return self.run_command(command, **kwargs)
         self.commands.append(copy.deepcopy(command))
         self.assertEqual(command[:5], ["gc", "--city", str(self.city), "--rig", "example"])
         self.assertEqual(kwargs["cwd"], str(self.city))
@@ -207,6 +214,96 @@ class ExpansionCompositionTests(unittest.TestCase):
         self.assertNotIn(entry.PLAN_REF, self.port.rows["decompose-1"]["metadata"])
         self.assertNotIn("gc.source_plan_sha256", self.port.rows["physical-convoy"]["metadata"])
         self.assertEqual(tasks.front_matter_status(self.path.read_text()), "partial")
+        receipts = list(self.workspace["evidence_dir"].glob("source-plan-publication-*.json"))
+        self.assertEqual(len(receipts), 1)
+        receipt = json.loads(receipts[0].read_text())
+        self.assertEqual(receipt["outcome"], "unknown")
+        self.assertIn("synthetic stale revision", receipt["submission_error"])
+        self.assertTrue(Path(receipt["request_path"]).is_file())
+        self.assertFalse(receipt["retry_allowed"])
+        before = copy.deepcopy(self.commands)
+        with self.assertRaisesRegex(RecordError, "unresolved.*original retained request"):
+            self.expand()
+        self.assertEqual(self.commands, before)
+        self.assertEqual(len(self.port.requests), 1)
+        self.assertEqual(json.loads(receipts[0].read_text()), receipt)
+
+    def during_last_allocation(self, mutate):
+        allocate = self.native_placeholder
+        def native(gc, city, arguments, rig):
+            response = allocate(gc, city, arguments, rig)
+            if arguments[2] == "Source-plan writer grant":
+                mutate()
+            return response
+        return patch.object(entry, "native_json", side_effect=native)
+
+    def test_root_display_stamp_during_allocation_precedes_first_declaration(self):
+        def stamp():
+            root = self.port.rows["root-1"]
+            root["metadata"]["gc.session_name"] = "task-decomposer"
+            root["revision"] = "2"
+        with self.during_last_allocation(stamp):
+            self.assertEqual(self.expand(), 0)
+        self.assertEqual(self.store.read_record("run", "run-record"), self.record)
+        self.assertEqual(len(self.port.requests), 1)
+        root = next(row for row in self.port.requests[0]["rows"] if row["id"] == "root-1")
+        self.assertEqual(root["expected_revision"], "2")
+        self.assertEqual(self.port.rows["root-1"]["metadata"]["gc.session_name"], "task-decomposer")
+        receipt_path, = self.workspace["evidence_dir"].glob("source-plan-publication-*.json")
+        self.assertEqual(json.loads(receipt_path.read_text())["outcome"], "committed")
+
+    def test_allocation_cannot_replace_original_source_policy_claim_or_topology(self):
+        original = copy.deepcopy(self.port.rows)
+        for changed in ("source", "policy", "claim", "topology", "run"):
+            with self.subTest(changed=changed):
+                self.port.rows = copy.deepcopy(original)
+                self.port.requests = []
+                self.path.write_text("---\nstatus: approved\n---\n## Bead Creation Payload\n\n```yaml\n"
+                    + tasks.yaml.safe_dump(source_payload(), sort_keys=False) + "```\n")
+                def mutate():
+                    if changed == "source":
+                        self.port.rows["initial-1"]["labels"] = ["hold:foreign-source"]
+                    elif changed == "policy":
+                        policy = run.capture_check_policy(self.record, "run-record", canonical_bytes({
+                            "required_checks": [{"id": "different", "argv": ["false"]}]}).decode())
+                        self.port.rows["run-record"]["metadata"][run.CHECKS_POLICY_KEY] = canonical_bytes(policy).decode()
+                    elif changed == "claim":
+                        self.port.rows["decompose-1"]["metadata"]["gc.session_id"] = "foreign-session"
+                    elif changed == "topology":
+                        self.port.rows["decompose-1"]["metadata"][cooked.TOPOLOGY] = '["foreign-step"]'
+                    else:
+                        candidate = dict(self.record, writer_step_id="different-original-writer")
+                        self.port.rows["run-record"]["metadata"]["gc.implementation_run"] = canonical_bytes(candidate).decode()
+                with self.during_last_allocation(mutate), self.assertRaises(RecordError):
+                    self.expand()
+                self.assertEqual(self.port.requests, [])
+                self.assertNotIn(entry.PLAN_REF, self.port.rows["decompose-1"]["metadata"])
+                self.assertEqual(self.port.rows["root-1"]["metadata"]["gc.input_convoy_id"], "initial-1")
+
+    def test_allocation_cannot_renew_observed_native_specification_revision(self):
+        from test_workspace_attempts import NativeAttemptTests
+        native = NativeAttemptTests()
+        native.setUp()
+        self.addCleanup(native.doCleanups)
+        root = copy.deepcopy(self.port.rows["root-1"])
+        for bead_id, state in native.rows.items():
+            state = copy.deepcopy(state)
+            state["metadata"]["gc.root_store_ref"] = "rig:example"
+            self.port.rows[bead_id] = state
+        self.port.rows["root-1"]["metadata"] = dict(root["metadata"], **self.port.rows["root-1"]["metadata"])
+        self.port.rows.pop("decompose-1")
+        self.port.rows[native.claim]["metadata"]["gc.session_id"] = "session-1"
+        self.attempt = self.workspace["attempt"] = Attempt("session-1", "incarnation-1", native.claim)
+        def read(gc, city, arguments, rig, **options):
+            return copy.deepcopy(native.detail if arguments[:2] == ["bd", "show"] else native.formula)
+        def touch():
+            current = self.port.rows["spec-1"]
+            current["revision"] = native.detail["revision"] = str(int(current["revision"]) + 1)
+        with patch.object(cooked, "_native_list", return_value=list(native.rows)), \
+             patch.object(cooked, "native_json", side_effect=read), self.during_last_allocation(touch):
+            with self.assertRaisesRegex(RecordError, "specification.*revision"):
+                self.expand()
+        self.assertEqual(self.port.requests, [])
 
 
 if __name__ == "__main__":

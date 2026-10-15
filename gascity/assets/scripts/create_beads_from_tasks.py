@@ -974,9 +974,12 @@ def create_from_tasks(path: Path, *, city: str | None, dry_run: bool, force: boo
 
 
 def publish_source_expansion(runner: WorkspaceRunner, plan: Plan, mappings: dict[str, str], workspace: dict) -> None:
-    from workspace_entry import allocate_placeholder
+    from workspace_cooked import read_cooked_writer_map
+    from workspace_entry import allocate_placeholder, read_entry
+    from workspace_outputs import immutable_json
     from workspace_records import canonical_bytes, record_identity
     from workspace_source_plan import declare_plan, publish_plan
+    from workspace_store import validate_cooked_writer_map
     state, store, attempt = workspace["state"], workspace["store"], workspace["attempt"]
     source_plan = physical_source_plan(plan, mappings, state["run"], writer_step_id=attempt.claimed_bead_id,
         generation=state["generation"], canonical=workspace.get("canonical"))
@@ -1016,12 +1019,29 @@ def publish_source_expansion(runner: WorkspaceRunner, plan: Plan, mappings: dict
                 authority_id = grant_ref["authority_id"]
     if authority_id is None:
         authority_id = allocate_placeholder(store, title="Source-plan writer grant")
+    # Native allocations can overlap controller annotations. Re-admit before
+    # preparing the first intent, retaining the original map and spec tokens.
+    current_map, current_rows = read_cooked_writer_map(store,
+        workflow_root_id=state["workflow_root_id"], claimed_step_id=attempt.claimed_bead_id)
+    if current_map.sha256 != workspace["writer_map"].sha256:
+        raise RecordError("native writer map changed during source allocation")
+    validate_cooked_writer_map(workspace["writer_map"], current_rows, store_ref=store.store_ref,
+        workflow_root_id=state["workflow_root_id"], record_kind="source-plan", claimed_step_id=attempt.claimed_bead_id)
+    current_entry = read_entry(store, gc=store.gc, city_root=store.cwd, rig_name=state["rig_name"],
+        workflow_root_id=state["workflow_root_id"], claimed_step_id=attempt.claimed_bead_id,
+        worktree_lifecycle="new", generation=state["generation"], expected_run_sha256=state["run_sha256"])
+    if ({key: value for key, value in current_entry.items() if key != "_native_rows"}
+            != {key: value for key, value in state.items() if key != "_native_rows"}):
+        raise RecordError("recorded source expansion entry changed during native allocation")
     prepared = declare_plan(store, attempt, source_plan, run_record_id=state["run_reference"]["bead_id"],
         record_bead_id=record_id, authority_id=authority_id, implementation_convoy_id=mappings[convoy_key],
-        writer_map=workspace["writer_map"], writer_rows=workspace["writer_rows"])
+        writer_map=workspace["writer_map"], writer_rows=current_rows)
     receipt = publish_plan(store, prepared, evidence_dir=workspace["evidence_dir"])
+    receipt_ref = immutable_json(Path(workspace["evidence_dir"]) / f"source-plan-publication-{prepared.sha256}.json", receipt)
     if receipt.get("outcome") not in ("committed", "replayed"):
-        raise PlanError("source-plan publication is uncertain; resolve the original guarded request before dispatch")
+        error = receipt.get("submission_error", receipt.get("error", "exact native readback did not prove publication"))
+        raise PlanError(f"source-plan publication is uncertain: {error}; original request: {receipt['request_path']}; "
+                        f"publication receipt: {receipt_ref['path']}; resolve the original guarded request before dispatch")
     # Creation assigns no worker or routing target. The existing native build
     # drain starts only after this declaration and successful decomposition.
 

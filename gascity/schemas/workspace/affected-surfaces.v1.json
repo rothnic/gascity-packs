@@ -2084,7 +2084,7 @@
     "gascity/assets/scripts/workspace_source_plan.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "8b329efbdc8ec9bf37e30c33c3e203401054915469a162f5ecb5afbe0c0f0afc"
+      "sha256": "21c5e11c1d0dacf4b4fc0f9bb1e17bb714e9aa8aeb9a06c95e5045915e560437"
     },
     "gascity/assets/scripts/workspace_run.py": {
       "classification": "new",
@@ -2114,7 +2114,7 @@
     "gascity/assets/scripts/create_beads_from_tasks.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "833fe565cd12be18b0dbfe49cf0dae6aab22804a110b8355d378f8c6cc47be38"
+      "sha256": "e1d447e5f76f0a5770132da697d6612beb5dabe61363463ff3d82e79b45ecc8f"
     },
     "gascity/pack.toml": {
       "classification": "reference",

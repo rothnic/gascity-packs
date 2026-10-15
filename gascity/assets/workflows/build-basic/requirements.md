@@ -42,17 +42,20 @@ issue fix workflow. Preserve the input target, normalize the artifact path, and
 make the acceptance criteria specific enough for plan review.
 
 Keep the artifact approachable for a first factory run. Include the required
-schema sections:
+schema sections. Use these level-two headings verbatim, in this order;
+a single `#` heading does not satisfy the artifact check:
 
-- Problem Statement
-- W6H
-- User Stories
-- Technical Stories
-- Behavior Requirements
-- Example Mapping
-- Acceptance Criteria
-- Out Of Scope
-- Open Questions
+```markdown
+## Problem Statement
+## W6H
+## User Stories
+## Technical Stories
+## Behavior Requirements
+## Example Mapping
+## Acceptance Criteria
+## Out Of Scope
+## Open Questions
+```
 
 Within those sections, make the goal, constraints, acceptance criteria,
 non-goals, and open questions explicit.

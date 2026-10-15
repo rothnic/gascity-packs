@@ -89,7 +89,7 @@ the body retains the member role and its declared record responsibilities.
 
 A scoped retry or Ralph control can retain the native setup or member role.
 Its scope check targets the logical control, which blocks on the current attempt.
-Admission compares these physical `blocks` edges from native `bd show` with the
+Admission compares these physical `blocks` edges from native `gc bd show` with the
 compiled source and the proven attempt history. Both native reads must retain the
 original row identities, revisions and metadata. The logical control and scope
 check remain read-only. Only that map's validated own CAS can advance the observed

@@ -262,7 +262,7 @@
     "gascity/assets/workflows/build-basic/plan.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "8c94aa9cbb1b2513e594567cdf11dd80fe1b38d853f79f78d3b51e7ebc576784"
+      "sha256": "1458541d67c7e4f2b8062ad76263acabd33b68073851cc81c5008ccc4e85c8dc"
     },
     "gascity/assets/workflows/build-basic/publish.md": {
       "classification": "new",
@@ -272,7 +272,7 @@
     "gascity/assets/workflows/build-basic/requirements.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "e2310f1df31a999555364e999f3d5e8fb6e3ee730afdd91cb2547264bb87415a"
+      "sha256": "36ac362a3f62b6920712cb6a700ffced45fa321730421a5691478dfe388c0030"
     },
     "gascity/assets/workflows/build-basic/review.md": {
       "classification": "legacy",

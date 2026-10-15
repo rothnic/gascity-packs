@@ -28,8 +28,14 @@ Trace front matter must use the validator shape exactly:
 
 - `trace.upstream[]` entries must include `path` and `hash`; do not use
   `id`/`title`/`type` entries as the upstream shape.
-- For the requirements artifact, use its recorded path and a scheme-qualified
-  hash such as `sha256:<digest>` or `git:<revision>`.
+- Every upstream entry must name a current readable file. Include the
+  requirements artifact at its recorded path. Use `sha256:<64-hex-digest>`
+  for the exact current file bytes, or `git:<full-immutable-commit-id>` only
+  when the current file bytes match that file at the named commit. Short Git
+  revisions and moving refs are not accepted.
+- Do not put bead IDs, `beads/<id>` pseudo-paths, or `bead:` hashes in plan
+  upstream entries. Keep request bead references in the narrative context;
+  they do not replace the file inputs reviewed with this plan.
 - If an upstream entry lists `ids`, every listed id must appear exactly once in
   `trace.coverage` and in the Markdown coverage table with the same status.
 - Coverage statuses are not artifact statuses. Use `covered` for satisfied
@@ -37,13 +43,16 @@ Trace front matter must use the validator shape exactly:
   Markdown coverage table.
 
 Ground the plan in the generated requirements and repository conventions.
-Include the required schema sections:
+Use these required level-two headings verbatim, in this order; a single `#`
+heading does not satisfy the artifact check:
 
-- Summary
-- Current System
-- Proposed Implementation
-- Non-Goals
-- Verification
+```markdown
+## Summary
+## Current System
+## Proposed Implementation
+## Non-Goals
+## Verification
+```
 
 Record the implementation plan path on the workflow root bead before closing.
 Use `gc bd update "<workflow-root-id>" --set-metadata "gc.build.plan_path=<absolute path>"`.

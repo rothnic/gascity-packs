@@ -28,7 +28,7 @@ Trace front matter must use the validator shape exactly:
 
 - `trace.upstream[]` entries must include `path` and `hash`; do not use
   `id`/`title`/`type` entries as the upstream shape.
-- Every upstream entry must name a current readable file. Include the
+- Every upstream entry must name a current readable file with a scheme-qualified hash. Include the
   requirements artifact at its recorded path. Use `sha256:<64-hex-digest>`
   for the exact current file bytes, or `git:<full-immutable-commit-id>` only
   when the current file bytes match that file at the named commit. Short Git

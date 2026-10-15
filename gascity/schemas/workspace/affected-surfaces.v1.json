@@ -262,7 +262,7 @@
     "gascity/assets/workflows/build-basic/plan.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "1458541d67c7e4f2b8062ad76263acabd33b68073851cc81c5008ccc4e85c8dc"
+      "sha256": "c8ceb7843b2314e7edf3e9e61d7f8651d47d51fe181c6917648f3deedff6ccb4"
     },
     "gascity/assets/workflows/build-basic/publish.md": {
       "classification": "new",

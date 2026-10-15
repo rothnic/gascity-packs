@@ -77,5 +77,13 @@ timeout = "5m"
 id = "plan-review"
 title = "Approve implementation plan"
 needs = ["plan"]
-metadata = { "gc.run_target" = "gc.review-synthesizer" }
+metadata = { "gc.run_target" = "gc.review-synthesizer", "gc.build.plan_review_required" = "true" }
 description_file = "../assets/workflows/planning-base/plan-review.md"
+
+[steps.check]
+max_attempts = 3
+
+[steps.check.check]
+mode = "exec"
+path = "../assets/scripts/checks/plan-review-approved.py"
+timeout = "5m"

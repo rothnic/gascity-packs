@@ -952,6 +952,13 @@ def create_from_tasks(path: Path, *, city: str | None, dry_run: bool, force: boo
                 path.write_text(update_front_matter(text, {"native_allocation_pending": key}), encoding="utf-8")
             runner.checkpoint = checkpoint
 
+    if not dry_run:
+        from validate_plan_review import check_creator_review, ERRORS
+        try:
+            check_creator_review(workspace, bd_command=runner.bd_base())
+        except ERRORS as exc:
+            raise PlanError(f"current plan review is not accepted; no task allocation: {exc}") from exc
+
     if dry_run:
         print(f"# target rig: {plan.target_rig}")
     try:

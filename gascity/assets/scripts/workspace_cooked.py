@@ -203,7 +203,7 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
         cooked = dynamic[ref]["metadata"] if ref in dynamic else compiled[ref]["metadata"]
         require(metadata.get("gc.step_id") == cooked["gc.step_id"],
                 "semantic step differs from the cooked source")
-        for fact in ("gc.kind", "gc.control_for", "gc.build.artifact_schema", "gc.lifecycle", "gc.run_target",
+        for fact in ("gc.kind", "gc.control_for", "gc.build.artifact_schema", "gc.build.plan_review_required", "gc.lifecycle", "gc.run_target",
                      "gc.scope_role", "gc.scope_ref", "gc.ralph_step_id", "gc.attempt", "gc.on_fail"):
             require(metadata.get(fact) == cooked.get(fact), "native writer designation differs from the cooked source")
         expected_dependencies = dynamic[ref]["dependencies"] if ref in dynamic else compiled_dependencies[metadata["gc.step_id"]]

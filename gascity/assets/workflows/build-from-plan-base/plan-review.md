@@ -5,6 +5,18 @@ approved, questions, changes_required, or blocked, and it must honor
 interaction_mode {{interaction_mode}}.
 
 Write the plan-review artifact to `{{plan_review_path}}` when supplied;
-otherwise write it under `{{artifact_root}}`. Close only after an approved or
-equivalent pass verdict is recorded, or after a blocked/changes-required verdict
-is recorded with a concrete reason.
+otherwise write it under `{{artifact_root}}`. Record its absolute path on the
+current workflow root as `gc.build.plan_review_report_path`.
+
+Follow the [default plan-review acceptance contract](../../../docs/plan-review-acceptance.md).
+The `gc.verdict-report.v1` report must bind its `subject` to this native
+workflow's current approved plan and current upstream bytes. Only a validated
+`verdict: pass`, `severity: none`, and empty findings permits
+`gc.outcome=pass`. A blocked/changes_required verdict is `gc.outcome=fail`,
+even after its concrete reason is recorded. Do not allocate tasks in that state.
+
+The native `plan-review-approved.py` check allows three attempts. Use
+`gc.attempt_log` from its control for an official repair, preserve the original
+findings, and review every authorized plan change again. Set the exact outcome
+with `gc bd update "<claimed-step-id>" --set-metadata "gc.outcome=<pass-or-fail>"`
+before `gc bd close "<claimed-step-id>" --reason "<concise reason>"`.

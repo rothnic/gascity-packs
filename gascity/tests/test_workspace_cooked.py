@@ -271,6 +271,17 @@ class CookedReaderTests(unittest.TestCase):
                 with self.assertRaises(RecordError):
                     self.read()
 
+    def test_authored_plan_review_requirement_cannot_be_removed_or_invented(self):
+        key = "gc.build.plan_review_required"
+        self.formula["steps"][0]["metadata"][key] = "true"
+        with self.assertRaises(RecordError):
+            self.read()
+        self.rows["prepare-worktree"]["metadata"][key] = "true"
+        self.read()
+        self.formula["steps"][0]["metadata"].pop(key)
+        with self.assertRaises(RecordError):
+            self.read()
+
     def test_unknown_duplicate_foreign_and_changed_native_facts_refuse(self):
         originals = copy.deepcopy(self.rows)
         for change in ("missing", "duplicate", "foreign", "dependencies", "role", "member"):

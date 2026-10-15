@@ -4449,6 +4449,7 @@ description = "Override sink that writes the base triage report contract."
                 "build-artifact-valid.sh",
                 "design-review-approved.sh",
                 "implementation-review-approved.sh",
+                "plan-review-approved.py",
                 "workspace-lifecycle-valid.py",
             },
         )

@@ -263,6 +263,12 @@ create-beads, implementation, post-implementation review, and publish helpers.
 Gap-analysis is a review lens inside the post-implementation review loop, so
 coverage findings are synthesized and fixed with the rest of the review output.
 
+Default plan review accepts only an approved current plan with a passing review
+bound to its exact plan and upstream bytes. Blocking findings, stale approval,
+and missing evidence refuse task allocation. See
+[plan-review acceptance](docs/plan-review-acceptance.md) for the report contract
+and bounded repair behavior.
+
 Continuation bases are nested suffixes. Each base validates its prerequisite
 inputs, performs one stage or handoff, and delegates to the next suffix:
 

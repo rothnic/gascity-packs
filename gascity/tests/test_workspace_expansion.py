@@ -150,6 +150,75 @@ class ExpansionCompositionTests(unittest.TestCase):
         ref = json.loads(self.port.rows["decompose-1"]["metadata"][entry.PLAN_REF])
         return self.store.read_record("source-plan", ref["bead_id"], ref["identity"])
 
+    def authored_plan_review(self, *, blocked=False):
+        from test_plan_review_acceptance import plan_text
+        import validate_plan_review as review
+        requirements = self.repo / "requirements.md"
+        requirements.write_text("REQ-1: implement the requested behavior.\n")
+        plan = self.repo / "plan.md"
+        plan.write_text(plan_text(self.repo, workflow="root-1"))
+        report = self.repo / "plan-review.md"
+        subject = review.current_subject(plan, workflow_root_id="root-1", artifact_root=self.repo)
+        data = {"schema": "gc.verdict-report.v1", "kind": "review",
+                "verdict": "fail" if blocked else "pass", "severity": "blocker" if blocked else "none",
+                "subject": subject, "findings": [{"id": "PLAN-1", "severity": "blocker",
+                    "title": "Plan is not implementation-ready", "evidence": "Exact node procedures are missing.",
+                    "required_fix": "Repair and review the current plan before decomposition."}] if blocked else []}
+        report.write_text("---\n" + tasks.yaml.safe_dump(data, sort_keys=False) + "---\n# Plan review\n")
+        self.port.rows["root-1"]["metadata"].update({"gc.build.plan_path": str(plan),
+            "gc.build.requirements_path": str(requirements), "gc.build.plan_review_report_path": str(report)})
+        self.port.rows["review-1"] = row("review-1", metadata={"gc.root_bead_id": "root-1",
+            "gc.root_store_ref": "rig:example", "gc.step_id": "build.plan-review",
+            "gc.step_ref": "build.plan-review", review.REQUIRED_KEY: "true", cooked.TOPOLOGY: "[]"})
+        formula = {"ok": True, "name": "build", "steps": [
+            {"id": "build.decompose", "metadata": {"gc.build.artifact_schema": "gc.build.decomposition.v1"}},
+            {"id": "build.plan-review", "metadata": {review.REQUIRED_KEY: "true"}}], "deps": []}
+        for target in (patch.object(cooked, "_native_list", return_value=["decompose-1", "review-1"]),
+                       patch.object(cooked, "native_json", return_value=formula)):
+            target.start()
+            self.addCleanup(target.stop)
+        return plan, report, requirements
+
+    def test_recorded_blocking_plan_review_cannot_allocate_tasks_or_publish(self):
+        self.authored_plan_review(blocked=True)
+        before, text = copy.deepcopy(self.port.rows), self.path.read_bytes()
+        with self.assertRaisesRegex(tasks.PlanError, "current plan review is not accepted.*unresolved findings"):
+            self.expand()
+        self.assertEqual(self.commands, [])
+        self.assertEqual(self.port.requests, [])
+        self.assertEqual(self.port.rows, before)
+        self.assertEqual(self.path.read_bytes(), text)
+
+    def test_stale_plan_review_refuses_before_the_first_native_allocation(self):
+        plan, _, _ = self.authored_plan_review()
+        plan.write_text(plan.read_text() + "\nA changed implementation procedure needs review.\n")
+        before = copy.deepcopy(self.port.rows)
+        with self.assertRaisesRegex(tasks.PlanError, "exact current plan"):
+            self.expand()
+        self.assertEqual((self.commands, self.port.requests), ([], []))
+        self.assertEqual(self.port.rows, before)
+        self.assertNotIn("native_allocation_pending", self.path.read_text())
+
+    def test_current_plan_approval_allows_the_unchanged_guarded_source_expansion(self):
+        self.authored_plan_review()
+        self.assertEqual(self.expand(), 0)
+        self.assertEqual(len(self.port.requests), 1)
+        self.assertEqual(self.published_plan()["terminal_owner_id"], "physical-d")
+        self.assertEqual(self.store.read_record("run", "run-record"), self.record)
+
+    def test_unresolved_native_allocation_is_not_refreshed_by_a_new_review(self):
+        _, report, _ = self.authored_plan_review()
+        self.fail_create = True
+        with self.assertRaisesRegex(tasks.PlanError, "uncertain"):
+            self.expand()
+        before, text = copy.deepcopy(self.port.rows), self.path.read_bytes()
+        report.unlink()
+        with self.assertRaisesRegex(tasks.PlanError, "previous native creation.*uncertain"):
+            self.expand()
+        self.assertEqual(self.port.rows, before)
+        self.assertEqual(self.path.read_bytes(), text)
+        self.assertEqual(self.port.requests, [])
+
     def test_native_expansion_publishes_pending_fan_in_and_exact_convoy_in_one_batch(self):
         self.assertEqual(self.expand(), 0)
         plan = self.published_plan()

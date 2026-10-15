@@ -11,6 +11,10 @@ version = 1
 contract = "graph.v2"
 
 [vars]
+[vars.failure_scope]
+description = "Optional enclosing native scope. Build entrypoints bind this to build-body; standalone use remains unscoped."
+default = ""
+
 [vars.worktree_checks]
 description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
 default = ""
@@ -44,14 +48,14 @@ default = "gc.implementation-worker"
 [[template]]
 id = "{target}.setup-build-basic-review"
 title = "Prepare build-basic starter review"
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/build-basic-review/{target}.setup-build-basic-review.md"
 
 [[template]]
 id = "{target}.build-basic-review-loop"
 title = "Run build-basic starter review until approved"
 needs = ["{target}.setup-build-basic-review"]
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/build-basic-review/{target}.build-basic-review-loop.md"
 
 [template.check]
@@ -102,7 +106,7 @@ description_file = "../assets/workflows/build-basic-review/{target}.apply-review
 id = "{target}"
 title = "Finalize build-basic starter review"
 needs = ["{target}.build-basic-review-loop"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
 description_file = "../assets/workflows/build-basic-review/{target}.md"
 
 [template.check]

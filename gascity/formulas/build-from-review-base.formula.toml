@@ -120,7 +120,7 @@ default = "false"
 [[steps]]
 id = "prepare-review"
 title = "Validate review continuation inputs"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
 description_file = "../assets/workflows/build-from-review-base/prepare-review.md"
 
 [steps.check]
@@ -135,7 +135,7 @@ timeout = "1m"
 id = "review"
 title = "Review continuation implementation"
 needs = ["prepare-review"]
-metadata = { "gc.run_target" = "gc.implementation-reviewer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.implementation-reviewer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
 description_file = "../assets/workflows/build-from-review-base/review.md"
 
 [steps.check]
@@ -150,7 +150,7 @@ timeout = "5m"
 id = "repair-review"
 title = "Repair or block continuation review findings"
 needs = ["review"]
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/build-from-review-base/repair-review.md"
 
 [[steps]]
@@ -158,14 +158,14 @@ id = "review-result"
 title = "Review the exact canonical source generation"
 needs = ["repair-review"]
 condition = "{{worktree_lifecycle}} == new"
-metadata = { "gc.run_target" = "gc.implementation-reviewer" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.implementation-reviewer" }
 description_file = "../assets/workflows/build-from-review-base/review-result.md"
 
 [[steps]]
 id = "finalize"
 title = "Finalize continuation result"
 needs = ["repair-review", "review-result"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.final-report.v1", "gc.build.artifact_path_keys" = "gc.build.final_report_path" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.final-report.v1", "gc.build.artifact_path_keys" = "gc.build.final_report_path" }
 description_file = "../assets/workflows/build-from-review-base/finalize.md"
 
 [steps.check]
@@ -180,5 +180,12 @@ timeout = "5m"
 id = "publish"
 title = "Optionally publish continuation result"
 needs = ["finalize"]
-metadata = { "gc.run_target" = "gc.publisher" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.publisher" }
 description_file = "../assets/workflows/build-from-review-base/publish.md"
+
+[[steps]]
+id = "build-body"
+title = "Build pipeline scope"
+needs = ["prepare-review", "review", "repair-review", "review-result", "finalize", "publish"]
+description_file = "../assets/workflows/build-from-review-base/build-body.md"
+metadata = { "gc.kind" = "scope", "gc.scope_name" = "build", "gc.scope_role" = "body" }

@@ -285,6 +285,23 @@ those bases. Methodology packs that want the same entrypoints should extend the
 matching `build-from-*-base` formula and override selector defaults, routes,
 drain item formulas, or review expansions instead of copying the suffix graph.
 
+Builds and continuations use one native `build-body` scope for required stages:
+
+- **Failed stage:** once its configured retries are exhausted, the pipeline
+  fails and remaining work is skipped. Implementation, finalization and
+  publication cannot start from a failed prerequisite.
+- **Repair attempts:** artifact checks and review loops keep their existing
+  attempt limits. A failed attempt can still be repaired before the logical
+  stage fails.
+- **Pack overrides:** replacement steps retain `gc.scope_ref = "build-body"`
+  and `gc.on_fail = "abort_scope"`. Expanded stages pass
+  `failure_scope = "build-body"` to their templates. Added required stages
+  also belong in the scope body's prerequisites.
+
+The scope body is a native control, with no worker route. Functional stages
+such as `finalize` and `publish` are required members, rather than teardown.
+Cleanup may run after failure only when explicitly authored as native teardown.
+
 Third-party methodology packs can extend `build-base` and override only the
 stages they need. For implementation, packs should keep the Gas City drain
 lifecycle and point the two static drain steps at pack-specific item formulas

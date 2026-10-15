@@ -12,22 +12,22 @@
     "gascity/formulas/build-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,implementation-delegator,path-reader,publish,review,review-fix,source-writer",
-      "sha256": "5d3fc4ca16099bf4fe39d6cdb07a8f42bccaddda145e49ac5991ebe4c1a80663"
+      "sha256": "9105476a3b60fa4260a1d0b04f3379218bb02bf129f98a910df9a63c1f8e5a53"
     },
     "gascity/formulas/build-basic-review.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "77e8ea3512fd6c65787f75c78cd9b8d2b8c269131658c234f7bf84647319b6cf"
+      "sha256": "20bf0e98ab3c2a471e13f1670d759a9d8f50fe0e746d350a1ed281eaf22c9720"
     },
     "gascity/formulas/build-basic.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,publish,review-delegator",
-      "sha256": "19d6de2192ce6a3378d7b26cef3442654ce4716afa08655d5910996ef6b02764"
+      "sha256": "bbc3df76681cc2cfcaa4300be73e639869a8edf78d3728e26c3e05330b23b6b7"
     },
     "gascity/formulas/build-from-convoy-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,continuation,implementation-delegator",
-      "sha256": "eaf4f2deca78987f694f88696f5301a9a5188e82606a9fe807298af9bb3a449b"
+      "sha256": "4a18b76ced819a2e2f425699e6eb57b0b50dc00a580b46ed77724005cef03f2e"
     },
     "gascity/formulas/build-from-convoy.formula.toml": {
       "classification": "new",
@@ -37,7 +37,7 @@
     "gascity/formulas/build-from-decompose-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,continuation",
-      "sha256": "3c8f7eed02cdd9ff2b2fcb216fa4c202c2f6a4d246ec3398974582d576bd6a8a"
+      "sha256": "471656e3cd0f983f4c729a20ba2439b5be1a78dcd4ff532605ab748870bf8194"
     },
     "gascity/formulas/build-from-decompose.formula.toml": {
       "classification": "new",
@@ -47,7 +47,7 @@
     "gascity/formulas/build-from-plan-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,continuation",
-      "sha256": "c39f36f2d6553973d2ed3a58aa5a34a1d7d8f833cc38d95c95a3870a33263dc5"
+      "sha256": "dc5eb198b2f7624cd3166d8fb961e1725b7a15aa523c9fb5b7f70c6c3f6d219a"
     },
     "gascity/formulas/build-from-plan.formula.toml": {
       "classification": "new",
@@ -57,7 +57,7 @@
     "gascity/formulas/build-from-requirements-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,continuation",
-      "sha256": "fa02c9959e001f4eea9595579e47b18345ecf5ffa58be6b5c12804f8b54d8c69"
+      "sha256": "eb804e90245a3594c88c095f445dcbe2f7da50ad35afddb9221a55c4bea07d89"
     },
     "gascity/formulas/build-from-requirements.formula.toml": {
       "classification": "new",
@@ -67,7 +67,7 @@
     "gascity/formulas/build-from-review-base.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,canonical-summary,continuation,publish,review",
-      "sha256": "d76b96787b93e9e13fe84fa0187df12f62a546080cf16dabd163e9c415fecda2"
+      "sha256": "8ddd05c4531055942106da11a0e1742d865d4dacde50a490037db902213a7730"
     },
     "gascity/formulas/build-from-review.formula.toml": {
       "classification": "new",
@@ -772,12 +772,12 @@
     "compound-engineering/formulas/compound-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,review-delegator",
-      "sha256": "289697ead7f05b121a17b185a53658c9b8367044b425dda9ec6ff5c15b8954d6"
+      "sha256": "a75accbbd2b660352b1ad5df4fff3b7671ecc5bae444e10c812df007637fc868"
     },
     "compound-engineering/formulas/compound-code-review.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "ce23226cad5ce47dfabdee409e98296e0be5511aac171044d918a5a01f2bdf23"
+      "sha256": "86ffbcd7f3003239fac6f25d35adf51f3d9fba809b025cbf98ad31a72745f518"
     },
     "compound-engineering/formulas/compound-decomposition.formula.toml": {
       "classification": "reference",
@@ -797,7 +797,7 @@
     "compound-engineering/formulas/compound-plan-review.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "e604199bd5495b51fb3180356ec7db8bc1905a282b74cb5d53dc620d3c095dfd"
+      "sha256": "00a09a61f6fd651988b37abbfee7035b859524beeb9f8f86548daa88d8a49bdb"
     },
     "compound-engineering/formulas/compound-planning.formula.toml": {
       "classification": "reference",
@@ -807,7 +807,7 @@
     "compound-engineering/formulas/compound-resolution.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "66191d9a3da77fb1e7f89593fd89463b980dc1b5d5a35cbc4a806c1a654c00f3"
+      "sha256": "2b0c24e2ee1ad2440ff14aeba874f506e526a3f3fb2bac484264f9e55cb9e844"
     },
     "compound-engineering/formulas/compound-review.formula.toml": {
       "classification": "new",
@@ -1092,17 +1092,17 @@
     "superpowers/formulas/superpowers-brainstorming.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "9c31f6fac34424fff29eda0acacf6649df0ad73f503c916a06173075d44b1d98"
+      "sha256": "7b4ca80afd2ee5d9e3dd232fc7aa98fe0f9a3a51de06a90d38038a4952ec6695"
     },
     "superpowers/formulas/superpowers-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,review-delegator",
-      "sha256": "0e3267ae49a83bdc279573e2a9eb9c4996b6298d9b5b282efc7ffcaee082893a"
+      "sha256": "759e3e636dca9c19ae0f4c40dd29eb74a849aec0d5331120413e775f58bf0021"
     },
     "superpowers/formulas/superpowers-code-review.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "68a1cb349a5063ccdd7a350899cb59bf1fb24c9a3e7a034dcff29003d4aa6f55"
+      "sha256": "41613d63669d5fe882121ca41b286bf7caedb3e555d306d2ec3689477c6fce78"
     },
     "superpowers/formulas/superpowers-decomposition.formula.toml": {
       "classification": "reference",
@@ -1132,7 +1132,7 @@
     "superpowers/formulas/superpowers-plan-review.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "5b5a5d659e3f8dd3d110462058269b652455f8c05d81758369f1a92304c236d6"
+      "sha256": "472e08d52afb5cf7b62db9e2f04a018eb9a428a94c05dc722a58e8459a63030a"
     },
     "superpowers/formulas/superpowers-planning.formula.toml": {
       "classification": "reference",
@@ -1412,12 +1412,12 @@
     "bmad/formulas/bmad-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,review-delegator",
-      "sha256": "85af8caaf14cd9b95151c4b68a29f1ef6f2ddb0683dc89bb99620ac6934a5a9b"
+      "sha256": "5da8807a27bb6a4460c4c1ac0da1e2d1123c9ed082eab75c13ca716f3aad56be"
     },
     "bmad/formulas/bmad-code-review-flow.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "206e496208676456fac653591929229fb31be15e45644a74cea7d3ecb43e9085"
+      "sha256": "bca43fceca66c1be13d80f737a2ba6b28542605e9e95e2c697d51ca9fd60bba5"
     },
     "bmad/formulas/bmad-decomposition.formula.toml": {
       "classification": "reference",
@@ -1617,12 +1617,12 @@
     "gstack/formulas/gstack-build.formula.toml": {
       "classification": "new",
       "responsibility": "canonical-review,implementation-delegator,publish,review-delegator",
-      "sha256": "4ff00e5baa1036c23b437865cec89788dde3277bbd18b8320a5ff545df5fd6fd"
+      "sha256": "eee7516ad7028b7cd5dcdffba3e8c7d8732ef1e9bd192808e2691e262f134f68"
     },
     "gstack/formulas/gstack-code-review.formula.toml": {
       "classification": "new",
       "responsibility": "path-reader,review,review-fix,source-writer",
-      "sha256": "aec48feed023802c3c74af48b0653732e7ffa963e2cd19b4c488e872b8b7cde0"
+      "sha256": "db479347039a5a2d1c9941876e4a16be6e76f6ed31e15e7363bafe1a82638ff8"
     },
     "gstack/formulas/gstack-decomposition.formula.toml": {
       "classification": "reference",
@@ -1642,7 +1642,7 @@
     "gstack/formulas/gstack-plan-review.formula.toml": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "0a3bc28812447413efa4c6823bdc18ae809b3f77fa3885bc64c74648f4cbe00d"
+      "sha256": "eec034f9dd7bb8f5bd3c7216a4e041e45a5f01f443df058e96176ab2a37c0211"
     },
     "gstack/formulas/gstack-planning.formula.toml": {
       "classification": "reference",
@@ -1652,12 +1652,12 @@
     "gstack/formulas/gstack-qa-review.formula.toml": {
       "classification": "new",
       "responsibility": "review,review-fix,source-writer",
-      "sha256": "4e111eabb1703e58bcff65061923a5df43bf9a2acd42b3f23ef997a529c83595"
+      "sha256": "18e9de1904e180c04307e629e9d07c7a31fe187504b5a50f3408df25d80d7b54"
     },
     "gstack/formulas/gstack-release-readiness.formula.toml": {
       "classification": "new",
       "responsibility": "source-writer",
-      "sha256": "aea043617f58b205904fd278ca43d3dd6a9d48a970d66df8728cfb48095bdf6b"
+      "sha256": "1a8383eb3e4634cf45d2eb8e25d7656b7a3b897f01ecdf0e66fd9be900a62d14"
     },
     "gstack/formulas/gstack-review.formula.toml": {
       "classification": "new",
@@ -2028,6 +2028,46 @@
       "classification": "new",
       "responsibility": "canonical-review",
       "sha256": "7e3b3e373ba139ca160d17a4bde0581a802f5830bbd09db6cf3ac4217e21943e"
+    },
+    "bmad/assets/workflows/bmad-build/build-body.md": {
+      "classification": "reference",
+      "responsibility": "reference",
+      "sha256": "a3ba08be9cb300cbef189b71e41c839414180bd6b881acb747945b6ef744c9ed"
+    },
+    "gascity/assets/workflows/build-base/build-body.md": {
+      "classification": "reference",
+      "responsibility": "reference",
+      "sha256": "a3ba08be9cb300cbef189b71e41c839414180bd6b881acb747945b6ef744c9ed"
+    },
+    "gascity/assets/workflows/build-from-convoy-base/build-body.md": {
+      "classification": "reference",
+      "responsibility": "reference",
+      "sha256": "a3ba08be9cb300cbef189b71e41c839414180bd6b881acb747945b6ef744c9ed"
+    },
+    "gascity/assets/workflows/build-from-decompose-base/build-body.md": {
+      "classification": "reference",
+      "responsibility": "reference",
+      "sha256": "a3ba08be9cb300cbef189b71e41c839414180bd6b881acb747945b6ef744c9ed"
+    },
+    "gascity/assets/workflows/build-from-plan-base/build-body.md": {
+      "classification": "reference",
+      "responsibility": "reference",
+      "sha256": "a3ba08be9cb300cbef189b71e41c839414180bd6b881acb747945b6ef744c9ed"
+    },
+    "gascity/assets/workflows/build-from-requirements-base/build-body.md": {
+      "classification": "reference",
+      "responsibility": "reference",
+      "sha256": "a3ba08be9cb300cbef189b71e41c839414180bd6b881acb747945b6ef744c9ed"
+    },
+    "gascity/assets/workflows/build-from-review-base/build-body.md": {
+      "classification": "reference",
+      "responsibility": "reference",
+      "sha256": "a3ba08be9cb300cbef189b71e41c839414180bd6b881acb747945b6ef744c9ed"
+    },
+    "gstack/assets/workflows/gstack-build/build-body.md": {
+      "classification": "reference",
+      "responsibility": "reference",
+      "sha256": "a3ba08be9cb300cbef189b71e41c839414180bd6b881acb747945b6ef744c9ed"
     }
   },
   "source_helpers": {

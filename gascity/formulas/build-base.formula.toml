@@ -139,7 +139,7 @@ default = "false"
 [[steps]]
 id = "prepare"
 title = "Prepare build context"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
 description_file = "../assets/workflows/build-base/prepare.md"
 
 [steps.check]
@@ -154,7 +154,7 @@ timeout = "1m"
 id = "requirements"
 title = "Produce requirements"
 needs = ["prepare"]
-metadata = { "gc.run_target" = "gc.requirements-planner", "gc.build.artifact_schema" = "gc.build.requirements.v1", "gc.build.artifact_path_keys" = "gc.build.requirements_path,gc.var.requirements_path" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.requirements-planner", "gc.build.artifact_schema" = "gc.build.requirements.v1", "gc.build.artifact_path_keys" = "gc.build.requirements_path,gc.var.requirements_path" }
 description_file = "../assets/workflows/build-base/requirements.md"
 
 [steps.check]
@@ -169,7 +169,7 @@ timeout = "5m"
 id = "plan"
 title = "Produce implementation plan"
 needs = ["requirements"]
-metadata = { "gc.run_target" = "gc.design-author", "gc.build.artifact_schema" = "gc.build.plan.v1", "gc.build.artifact_path_keys" = "gc.build.plan_path,gc.var.plan_path" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.design-author", "gc.build.artifact_schema" = "gc.build.plan.v1", "gc.build.artifact_path_keys" = "gc.build.plan_path,gc.var.plan_path" }
 description_file = "../assets/workflows/build-base/plan.md"
 
 [steps.check]
@@ -184,7 +184,7 @@ timeout = "5m"
 id = "plan-review"
 title = "Review implementation plan"
 needs = ["plan"]
-metadata = { "gc.run_target" = "gc.review-synthesizer", "gc.build.plan_review_required" = "true" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.review-synthesizer", "gc.build.plan_review_required" = "true" }
 description_file = "../assets/workflows/build-base/plan-review.md"
 
 [steps.check]
@@ -199,7 +199,7 @@ timeout = "5m"
 id = "decompose"
 title = "Decompose approved plan"
 needs = ["plan-review"]
-metadata = { "gc.run_target" = "gc.task-decomposer", "gc.build.artifact_schema" = "gc.build.decomposition.v1", "gc.build.artifact_path_keys" = "gc.build.decomposition_path,gc.var.decomposition_path" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.task-decomposer", "gc.build.artifact_schema" = "gc.build.decomposition.v1", "gc.build.artifact_path_keys" = "gc.build.decomposition_path,gc.var.decomposition_path" }
 description_file = "../assets/workflows/build-base/decompose.md"
 
 [steps.check]
@@ -215,7 +215,7 @@ id = "implement"
 title = "Drain implementation convoy into separate sessions"
 needs = ["decompose"]
 condition = "{{drain_policy}} == separate"
-metadata = { "gc.run_target" = "{{implementation_target}}" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "{{implementation_target}}" }
 description_file = "../assets/workflows/build-base/implement.md"
 
 [steps.drain]
@@ -228,7 +228,7 @@ id = "implement-same-session"
 title = "Drain implementation convoy in one shared session"
 needs = ["decompose"]
 condition = "{{drain_policy}} == same-session"
-metadata = { "gc.run_target" = "{{implementation_target}}" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "{{implementation_target}}" }
 description_file = "../assets/workflows/build-base/implement-same-session.md"
 
 [steps.drain]
@@ -244,7 +244,7 @@ single_lane = true
 id = "summarize-implementation"
 title = "Write canonical implementation summary"
 needs = ["implement", "implement-same-session"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.implementation-summary.v1", "gc.build.artifact_path_keys" = "gc.build.implementation_summary_path" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.implementation-summary.v1", "gc.build.artifact_path_keys" = "gc.build.implementation_summary_path" }
 description_file = "../assets/workflows/build-base/summarize-implementation.md"
 
 [steps.check]
@@ -259,7 +259,7 @@ timeout = "5m"
 id = "review"
 title = "Review implementation"
 needs = ["summarize-implementation"]
-metadata = { "gc.run_target" = "gc.implementation-reviewer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.implementation-reviewer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
 description_file = "../assets/workflows/build-base/review.md"
 
 [steps.check]
@@ -275,14 +275,14 @@ id = "review-result"
 title = "Review the exact canonical source generation"
 needs = ["review"]
 condition = "{{worktree_lifecycle}} == new"
-metadata = { "gc.run_target" = "gc.implementation-reviewer" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.implementation-reviewer" }
 description_file = "../assets/workflows/build-base/review-result.md"
 
 [[steps]]
 id = "finalize"
 title = "Finalize build result"
 needs = ["review", "review-result"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.final-report.v1", "gc.build.artifact_path_keys" = "gc.build.final_report_path" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.final-report.v1", "gc.build.artifact_path_keys" = "gc.build.final_report_path" }
 description_file = "../assets/workflows/build-base/finalize.md"
 
 [steps.check]
@@ -297,5 +297,12 @@ timeout = "5m"
 id = "publish"
 title = "Optionally publish build result"
 needs = ["finalize"]
-metadata = { "gc.run_target" = "gc.publisher" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.publisher" }
 description_file = "../assets/workflows/build-base/publish.md"
+
+[[steps]]
+id = "build-body"
+title = "Build pipeline scope"
+needs = ["prepare", "requirements", "plan", "plan-review", "decompose", "implement", "implement-same-session", "summarize-implementation", "review", "review-result", "finalize", "publish"]
+description_file = "../assets/workflows/build-base/build-body.md"
+metadata = { "gc.kind" = "scope", "gc.scope_name" = "build", "gc.scope_role" = "body" }

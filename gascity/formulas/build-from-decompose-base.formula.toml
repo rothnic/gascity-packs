@@ -90,7 +90,7 @@ default = "decomposition-base"
 [[steps]]
 id = "prepare-decompose"
 title = "Validate decompose continuation inputs"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
 description_file = "../assets/workflows/build-from-decompose-base/prepare-decompose.md"
 
 [steps.check]
@@ -105,7 +105,7 @@ timeout = "1m"
 id = "decompose"
 title = "Create continuation implementation convoy"
 needs = ["prepare-decompose"]
-metadata = { "gc.run_target" = "gc.task-decomposer", "gc.build.artifact_schema" = "gc.build.decomposition.v1", "gc.build.artifact_path_keys" = "gc.build.decomposition_path,gc.var.decomposition_path" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.task-decomposer", "gc.build.artifact_schema" = "gc.build.decomposition.v1", "gc.build.artifact_path_keys" = "gc.build.decomposition_path,gc.var.decomposition_path" }
 description_file = "../assets/workflows/build-from-decompose-base/decompose.md"
 
 [steps.check]
@@ -120,7 +120,7 @@ timeout = "5m"
 id = "prepare-convoy"
 title = "Validate implementation convoy"
 needs = ["decompose"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
 description_file = "../assets/workflows/build-from-decompose-base/prepare-convoy.md"
 
 [steps.check]
@@ -130,3 +130,10 @@ max_attempts = 1
 mode = "exec"
 path = "../assets/scripts/checks/workspace-lifecycle-valid.py"
 timeout = "1m"
+
+[[steps]]
+id = "build-body"
+title = "Build pipeline scope"
+needs = ["prepare-review", "review", "repair-review", "review-result", "finalize", "publish", "prepare-convoy", "implement", "implement-same-session", "prepare-decompose", "decompose"]
+description_file = "../assets/workflows/build-from-decompose-base/build-body.md"
+metadata = { "gc.kind" = "scope", "gc.scope_name" = "build", "gc.scope_role" = "body" }

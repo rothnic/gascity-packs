@@ -11,6 +11,10 @@ version = 1
 contract = "graph.v2"
 
 [vars]
+[vars.failure_scope]
+description = "Optional enclosing native scope. Build entrypoints bind this to build-body; standalone use remains unscoped."
+default = ""
+
 [vars.worktree_checks]
 description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
 default = ""
@@ -41,14 +45,14 @@ enum = ["legacy", "new"]
 [[template]]
 id = "{target}.setup-compound-plan-review"
 title = "Prepare Compound Engineering plan review"
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/compound-plan-review/{target}.setup-compound-plan-review.md"
 
 [[template]]
 id = "{target}.compound-plan-review-loop"
 title = "Run Compound Engineering plan review lanes until approved"
 needs = ["{target}.setup-compound-plan-review"]
-metadata = { "gc.run_target" = "gc.run-operator" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator" }
 description_file = "../assets/workflows/compound-plan-review/{target}.compound-plan-review-loop.md"
 
 [template.check]
@@ -106,7 +110,7 @@ description_file = "../assets/workflows/compound-plan-review/{target}.apply-plan
 id = "{target}"
 title = "Finalize approved Compound Engineering plan review"
 needs = ["{target}.compound-plan-review-loop"]
-metadata = { "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.plan.v1", "gc.build.artifact_path_keys" = "gc.build.plan_path,gc.var.plan_path" }
+metadata = { "gc.scope_ref" = "{failure_scope}", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.build.artifact_schema" = "gc.build.plan.v1", "gc.build.artifact_path_keys" = "gc.build.plan_path,gc.var.plan_path" }
 description_file = "../assets/workflows/compound-plan-review/{target}.md"
 
 [template.check]

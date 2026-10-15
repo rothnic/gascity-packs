@@ -54,7 +54,7 @@ class SpecializedPlanReviewAcceptanceTests(unittest.TestCase):
             "import json, os, pathlib, sys",
             "args = sys.argv[1:]",
             "rows = json.loads(pathlib.Path(os.environ['REVIEW_TEST_ROWS']).read_text())",
-            "if len(args) != 4 or args[:2] != ['bd', 'show'] or args[3] != '--json' or args[2] not in rows:",
+            "if len(args) != 4 or args[0] != 'bd' or args[1] != 'show' or args[3] != '--json' or args[2] not in rows:",
             "    raise SystemExit('unexpected native command: ' + repr(args))",
             "with open(os.environ['REVIEW_TEST_CALLS'], 'a') as output:",
             "    output.write(json.dumps(args) + '\\n')",
@@ -164,9 +164,10 @@ class SpecializedPlanReviewAcceptanceTests(unittest.TestCase):
                 result = self.run_gate(pack, prefix)
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(json.loads(result.stdout), self.subject)
-                self.assertEqual([json.loads(line) for line in self.calls_path.read_text().splitlines()],
-                                 [["bd", "show", "plan-review-1", "--json"],
-                                  ["bd", "show", "workflow-1", "--json"]])
+                calls = [json.loads(line) for line in self.calls_path.read_text().splitlines()]
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(calls[0], ["bd", "show", "plan-review-1", "--json"])
+                self.assertEqual(calls[1], ["bd", "show", "workflow-1", "--json"])
 
     def test_required_findings_block_every_method_despite_approved_plan(self):
         for pack, prefix, _ in METHODS:

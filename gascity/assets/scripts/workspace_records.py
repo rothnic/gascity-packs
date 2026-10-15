@@ -157,11 +157,18 @@ def resolve_record_id(kind: str, record: dict[str, Any], references: list[dict[s
     return bead_id
 
 
+class _Once(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        if getattr(namespace, self.dest, None) is not None:
+            raise argparse.ArgumentError(self, "may only be specified once")
+        setattr(namespace, self.dest, values)
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--kind", required=True, choices=contracts())
-    parser.add_argument("--path", required=True, type=Path)
-    parser.add_argument("--stored", type=Path, help="Require an exact replay of this existing record")
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
+    parser.add_argument("--kind", required=True, choices=contracts(), action=_Once)
+    parser.add_argument("--path", required=True, type=Path, action=_Once)
+    parser.add_argument("--stored", type=Path, action=_Once, help="Require an exact replay of this existing record")
     args = parser.parse_args(argv)
     try:
         record = validate_record(args.kind, parse_record(args.path.read_text(encoding="utf-8")))

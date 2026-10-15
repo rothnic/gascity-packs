@@ -3,9 +3,12 @@ from __future__ import annotations
 import copy
 import hashlib
 import importlib.util
+import io
 import json
 import pathlib
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from unittest.mock import patch
 
 import jsonschema
 
@@ -241,6 +244,86 @@ class WorkspaceRecordTests(unittest.TestCase):
             with self.subTest(char=repr(char)):
                 with self.assertRaises(module.RecordError):
                     module.validate_record("run", invalid)
+
+
+class WorkspaceRecordCliTests(unittest.TestCase):
+    def setUp(self):
+        self.module = records_module()
+        self.candidate = pathlib.Path("/records-cli-test/candidate.json")
+        self.stored = pathlib.Path("/records-cli-test/stored.json")
+
+    def assert_argument_refusal(self, argv):
+        reads = []
+        read_text = pathlib.Path.read_text
+
+        def read(path, *args, **kwargs):
+            if path != self.module.SCHEMA_PATH:
+                reads.append(path)
+                raise AssertionError("record input read before argument refusal")
+            return read_text(path, *args, **kwargs)
+
+        out, err = io.StringIO(), io.StringIO()
+        with patch.object(pathlib.Path, "read_text", read), redirect_stdout(out), redirect_stderr(err):
+            with self.assertRaises(SystemExit) as refused:
+                self.module.main(argv)
+        self.assertEqual(refused.exception.code, 2)
+        self.assertEqual(reads, [])
+        self.assertEqual(out.getvalue(), "")
+        self.assertIn("error:", err.getvalue())
+
+    def test_duplicate_value_flags_refuse_before_record_io(self):
+        flags = {"--kind": "run", "--path": str(self.candidate), "--stored": str(self.stored)}
+        alternatives = {"--kind": "workspace", "--path": "/records-cli-test/other.json",
+                        "--stored": "/records-cli-test/other-stored.json"}
+        for flag, value in flags.items():
+            others = [item for name, val in flags.items() if name != flag for item in (name, val)]
+            for repeated in (value, alternatives[flag]):
+                spellings = ([flag, value, flag, repeated],
+                             [f"{flag}={value}", f"{flag}={repeated}"],
+                             [flag, value, f"{flag}={repeated}"],
+                             [f"{flag}={value}", flag, repeated])
+                for spelling in spellings:
+                    with self.subTest(flag=flag, repeated=repeated, spelling=spelling):
+                        self.assert_argument_refusal(others + spelling)
+
+    def test_invalid_arguments_refuse_before_record_io(self):
+        valid = ["--kind", "run", "--path", str(self.candidate)]
+        cases = ([], ["--kind", "run"], ["--path", str(self.candidate)],
+                 ["--kind"], ["--kind", "run", "--path"],
+                 ["--kind", "future", "--path", str(self.candidate)],
+                 ["--kind=run=other", "--path", str(self.candidate)],
+                 ["--ki", "run", "--path", str(self.candidate)],
+                 ["--kind", "run", "--pa", str(self.candidate)],
+                 valid + ["--sto", str(self.stored)], valid + ["--stored"],
+                 valid + ["--unknown"], valid + ["unexpected"])
+        for argv in cases:
+            with self.subTest(argv=argv):
+                self.assert_argument_refusal(argv)
+
+    def test_valid_record_and_exact_replay_emit_one_result(self):
+        record = fixture_records()["run"]
+        read_text = pathlib.Path.read_text
+        for replay in (False, True):
+            reads = []
+
+            def read(path, *args, **kwargs):
+                if path in (self.candidate, self.stored):
+                    reads.append(path)
+                    return json.dumps(record)
+                return read_text(path, *args, **kwargs)
+
+            argv = ["--kind=run", "--path", str(self.candidate)]
+            if replay:
+                argv += [f"--stored={self.stored}"]
+            out, err = io.StringIO(), io.StringIO()
+            with self.subTest(replay=replay), patch.object(pathlib.Path, "read_text", read), redirect_stdout(out), redirect_stderr(err):
+                self.assertEqual(self.module.main(argv), 0)
+            self.assertEqual(reads, [self.candidate, self.stored] if replay else [self.candidate])
+            self.assertEqual(len(out.getvalue().splitlines()), 1)
+            self.assertEqual(json.loads(out.getvalue()), {
+                "ok": True, "kind": "run", "identity": list(self.module.record_identity("run", record)),
+                "sha256": self.module.record_sha256(record)})
+            self.assertEqual(err.getvalue(), "")
 
 
 class WorkspaceSurfaceTests(unittest.TestCase):

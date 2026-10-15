@@ -28,6 +28,11 @@ def _number(value):
     return int(value)
 
 
+def _control_epoch(value):
+    # Native controller CAS increments store this field as a JSON integer.
+    return value if type(value) is int and value > 0 else _number(value)
+
+
 def _substitute(value, variables):
     if isinstance(value, str):
         return re.sub(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}",
@@ -243,7 +248,7 @@ def validate_attempts(writer_map, rows, claimed_step_id):
                      and item["root_id"] in rows and isinstance(item["refs"], dict) for item in attempts)
                  and [item["number"] for item in attempts] == list(range(1, len(attempts)+1))
                  and 2 <= len(attempts) <= mode["max_attempts"]
-                 and _number(metadata.get("gc.control_epoch")) in (len(attempts)-1, len(attempts)),
+                 and _control_epoch(metadata.get("gc.control_epoch")) in (len(attempts)-1, len(attempts)),
                  "native control counter, epoch or maximum differs from its attempt history")
         for attempt in attempts:
             number = attempt["number"]

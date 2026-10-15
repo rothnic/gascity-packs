@@ -164,6 +164,44 @@ class NativeAttemptTests(unittest.TestCase):
                 writer_map, _ = self.read()
                 self.assertIn(b'"kind":"retry"', writer_map.lineage_bytes)
 
+    def test_native_integer_control_epochs_keep_exact_second_and_third_history(self):
+        for number in (2, 3):
+            for kind in ("ralph", "retry"):
+                for epoch in (str(number), number - 1, number):
+                    with self.subTest(number=number, kind=kind, epoch=epoch):
+                        self.configure(latest=number, kind=kind)
+                        self.rows["control-1"]["metadata"]["gc.control_epoch"] = epoch
+                        writer_map, rows = self.read()
+                        self.assertEqual(rows, self.rows)
+                        self.assertIs(type(rows["control-1"]["metadata"]["gc.control_epoch"]), type(epoch))
+                        validate_cooked_writer_map(writer_map, rows, store_ref="rig:fixture",
+                            workflow_root_id="root-1", record_kind="source-plan", claimed_step_id=self.claim)
+
+    def test_invalid_control_epochs_refuse_discovery_and_retained_maps(self):
+        for epoch in (True, False, 2.0, None, [], {}, 0, -2, 9,
+                      "", "0", "-2", "02", "+2", " 2", "2 ", "2.0"):
+            with self.subTest(epoch=epoch):
+                self.configure(latest=2)
+                writer_map, rows = self.read()
+                self.rows["control-1"]["metadata"]["gc.control_epoch"] = epoch
+                rows["control-1"]["metadata"]["gc.control_epoch"] = epoch
+                with self.assertRaises(RecordError):
+                    self.read()
+                with self.assertRaises(RecordError):
+                    validate_cooked_writer_map(writer_map, rows, store_ref="rig:fixture",
+                        workflow_root_id="root-1", record_kind="source-plan", claimed_step_id=self.claim)
+
+    def test_native_integer_epoch_does_not_loosen_attempt_or_maximum_counters(self):
+        for kind, bead_id, key, value in (("ralph", "attempt-2", "gc.attempt", 2),
+                ("retry", "attempt-2", "gc.retry_attempt", 2),
+                ("ralph", "control-1", "gc.max_attempts", 3)):
+            with self.subTest(kind=kind, key=key):
+                self.configure(latest=2, kind=kind)
+                self.rows["control-1"]["metadata"]["gc.control_epoch"] = 2
+                self.rows[bead_id]["metadata"][key] = value
+                with self.assertRaises(RecordError):
+                    self.read()
+
     def test_scoped_native_body_follows_original_expansion_and_checks(self):
         for attached in (False, True):
             with self.subTest(attached=attached):

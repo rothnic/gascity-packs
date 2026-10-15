@@ -2074,7 +2074,7 @@
     "gascity/assets/scripts/workspace_attempts.py": {
       "classification": "new",
       "responsibility": "exact native retry/Ralph control and frozen-specification occurrence lineage",
-      "sha256": "f952b445bafe8d33ae03a67ba8ca6930a2bc1b2fffbaa2485460ad14eb8e9fd8"
+      "sha256": "d61c786fa51b8725c9274b69f8e32853b239497e9615aadb1c6932fb7385e963"
     },
     "gascity/assets/scripts/workspace_cooked.py": {
       "classification": "new",

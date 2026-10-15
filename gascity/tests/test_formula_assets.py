@@ -3621,6 +3621,16 @@ class FormulaAssetTests(unittest.TestCase):
 
     def test_formula_node_descriptions_delegate_to_shadowable_assets(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
+        description_aliases = {
+            ("build-base", "author-repair"): "../assets/workflows/planning-base/repair-plan-review.md",
+            ("build-base", "plan-review-verdict"): "../assets/workflows/build-base/plan-review.md",
+            ("build-basic", "author-repair"): "../assets/workflows/planning-base/repair-plan-review.md",
+            ("build-basic", "plan-review-verdict"): "../assets/workflows/build-basic/plan-review.md",
+            ("build-from-plan-base", "author-repair"): "../assets/workflows/planning-base/repair-plan-review.md",
+            ("build-from-plan-base", "plan-review-verdict"): "../assets/workflows/build-from-plan-base/plan-review.md",
+            ("planning-base", "author-repair"): "../assets/workflows/planning-base/repair-plan-review.md",
+            ("planning-base", "plan-review-verdict"): "../assets/workflows/planning-base/plan-review.md",
+        }
         for formula_path in sorted((root / "formulas").glob("*.formula.toml")):
             formula = formula_path.name.removesuffix(".formula.toml")
             data = tomllib.loads(formula_path.read_text(encoding="utf-8"))
@@ -3630,7 +3640,10 @@ class FormulaAssetTests(unittest.TestCase):
                     description_file = node.get("description_file")
                     self.assertEqual(
                         description_file,
-                        f"../assets/workflows/{formula}/{node['id']}.md",
+                        description_aliases.get(
+                            (formula, node["id"]),
+                            f"../assets/workflows/{formula}/{node['id']}.md",
+                        ),
                     )
                     self.assertTrue((formula_path.parent / description_file).resolve().is_file())
 

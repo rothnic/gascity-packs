@@ -1174,10 +1174,27 @@ print(json.dumps(receipt))
         store.rows['root-1']['revision'] = str(int(store.rows['root-1']['revision']) + 1)
         store.rows['root-1']['metadata']['gc.implementation_run_ref'] = '{"bead_id":"foreign","identity":["root-1"],"kind":"run"}'
         before = copy.deepcopy(store.rows)
+        with patch.object(store, 'snapshot', wraps=store.snapshot) as observed:
+            with self.assertRaisesRegex(self.mod.CheckoutError, 'changed after source selection'):
+                self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1', launch_step_ids=['producer-1'],
+                    writer_map=writer_map, writer_rows=original, **kwargs)
+        self.assertFalse(any('foreign' in call.args[0] for call in observed.call_args_list))
+        self.assertEqual(store.rows, before)
+        self.assertFalse(self.log.exists())
+        self.assertFalse(Path(self.workspace['work_dir']).exists())
+
+    def test_original_source_typed_metadata_change_refuses_without_revision_change(self):
+        import workspace_cooked as cooked
+        store, attempt, kwargs = self.managed_context()
+        store.rows['root-1']['metadata']['unrelated'] = True
+        writer_map, original = cooked.read_cooked_writer_map(store, workflow_root_id='root-1', claimed_step_id='prepare-1')
+        original.update(store.snapshot(list(store.rows)))
+        store.rows['root-1']['metadata']['unrelated'] = 1
+        before = copy.deepcopy(store.rows)
         with self.assertRaisesRegex(self.mod.CheckoutError, 'changed after source selection'):
             self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1', launch_step_ids=['producer-1'],
                 writer_map=writer_map, writer_rows=original, **kwargs)
-        self.assertEqual(store.rows, before)
+        self.assertEqual(canonical_bytes(store.rows), canonical_bytes(before))
         self.assertFalse(self.log.exists())
         self.assertFalse(Path(self.workspace['work_dir']).exists())
 
@@ -1208,6 +1225,39 @@ print(json.dumps(receipt))
         self.assertEqual(original, store.snapshot(list(original)))
         self.assertEqual(original['run-record']['metadata']['gc.workspace_required_checks.v1'],
                          prior['run-record']['metadata']['gc.workspace_required_checks.v1'])
+
+    def test_rejected_ack_does_not_advance_caller_originals(self):
+        import workspace_cooked as cooked
+        store, attempt, kwargs = self.managed_context()
+        writer_map, original = cooked.read_cooked_writer_map(store, workflow_root_id='root-1', claimed_step_id='prepare-1')
+        original.update(store.snapshot(list(store.rows)))
+        prior = copy.deepcopy(original)
+        def reject(prepared, resolved):
+            raise RecordError('caller refused the exact acknowledgement')
+        with self.assertRaisesRegex(self.mod.CheckoutError, 'acknowledgement is unresolved') as refusal:
+            self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1', launch_step_ids=['producer-1'],
+                writer_map=writer_map, writer_rows=original, acknowledge=reject, **kwargs)
+        self.assertEqual(canonical_bytes(original), canonical_bytes(prior))
+        self.assertNotEqual(original['member-1']['revision'], store.rows['member-1']['revision'])
+        self.assertTrue(Path(refusal.exception.request_path).is_file())
+        self.assertTrue(list(Path(refusal.exception.request_path).parent.glob('*.pending')))
+        self.assertFalse(self.log.exists())
+        self.assertFalse(Path(self.workspace['work_dir']).exists())
+
+    def test_unknown_publication_does_not_advance_caller_originals(self):
+        import workspace_cooked as cooked
+        store, attempt, kwargs = self.managed_context()
+        writer_map, original = cooked.read_cooked_writer_map(store, workflow_root_id='root-1', claimed_step_id='prepare-1')
+        original.update(store.snapshot(list(store.rows)))
+        prior = copy.deepcopy(original)
+        with patch.object(store, 'resolve', return_value={'outcome': 'unknown'}):
+            with self.assertRaisesRegex(self.mod.CheckoutError, 'publication is unknown') as refusal:
+                self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1', launch_step_ids=['producer-1'],
+                    writer_map=writer_map, writer_rows=original, **kwargs)
+        self.assertEqual(canonical_bytes(original), canonical_bytes(prior))
+        self.assertTrue(Path(refusal.exception.request_path).is_file())
+        self.assertFalse(self.log.exists())
+        self.assertFalse(Path(self.workspace['work_dir']).exists())
 
     def integration_input(self):
         inputs = []

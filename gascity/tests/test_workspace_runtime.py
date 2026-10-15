@@ -331,7 +331,7 @@ class NativeRuntimeTests(unittest.TestCase):
                        NativeWorktreeReference("producer", "workspace-record", launch)]
         prepared = self.store.install_grant(self.attempts["producer"], scope, "workspace-authority", writes,
             references=refs, projections=projections, writer_map=writer_map,
-            expected_rows=adapter.guard_rows, guards=adapter.guards)
+            expected_rows=adapter.original_rows, guards=adapter.guards)
         intended = json.loads(prepared.after_bytes)
         self.assertIn(CONTINUATION_KEY, intended["child"]["metadata"])
         self.assertEqual(intended["workspace-record"]["metadata"]["gc.root_bead_id"], "child")
@@ -418,7 +418,7 @@ class NativeRuntimeTests(unittest.TestCase):
             [RecordWrite("workspace", "workspace-record", workspace)],
             expected_grant=json.loads(self.rows["workspace-authority"]["metadata"][GRANT_KEY]),
             successor_relation=SuccessorRelation("plan-record", "plan-owner"), writer_map=writer_map,
-            expected_rows=adapter.guard_rows, guards=adapter.guards,
+            expected_rows=adapter.original_rows, guards=adapter.guards,
             projections=[InheritedRunReference(adapter.continuation), NativeOwnerProjection("workspace-record", owner),
                          NativeWorktreeReference("next-producer", "workspace-record", launch)])
 
@@ -435,7 +435,7 @@ class NativeRuntimeTests(unittest.TestCase):
         workspace = dict(self.workspace, phase="active")
         prepared = self.store.write_records(self.attempts["next-producer"], scope, "workspace-authority",
             [RecordWrite("workspace", "workspace-record", workspace)], writer_map=writer_map,
-            expected_rows=adapter.guard_rows, guards=adapter.guards)
+            expected_rows=adapter.original_rows, guards=adapter.guards)
         commit(prepared, workspace)
         (self.work / "next.py").write_text("NEXT = 1\n")
         self.git(self.work, "add", "next.py")
@@ -445,7 +445,7 @@ class NativeRuntimeTests(unittest.TestCase):
         workspace = dict(self.workspace, phase="result", current_oid=head, output_oid=head)
         prepared = self.store.write_records(self.attempts["next-producer"], scope, "workspace-authority",
             [RecordWrite("workspace", "workspace-record", workspace)], writer_map=writer_map,
-            expected_rows=adapter.guard_rows, guards=adapter.guards)
+            expected_rows=adapter.original_rows, guards=adapter.guards)
         commit(prepared, workspace)
         return adapter, head
 
@@ -512,8 +512,16 @@ class NativeRuntimeTests(unittest.TestCase):
         adapter.writer_map
         self.rows["child-unit"]["revision"] = "2"
         self.save()
-        with self.assertRaisesRegex(RecordError, "native row changed"):
+        state_path = self.root / "port.json"
+        before = state_path.read_bytes()
+        command_log = state_path.with_suffix(".commands")
+        mark = len(command_log.read_text().splitlines())
+        with self.assertRaisesRegex(RecordError, "cooked context changed after its original snapshot"):
             adapter.recheck_continuation()
+        commands = [json.loads(line) for line in command_log.read_text().splitlines()[mark:]]
+        self.assertFalse(any("guarded-metadata-batch" in args and any(arg.startswith("--request") for arg in args)
+                             for args in commands))
+        self.assertEqual(state_path.read_bytes(), before)
 
     def test_native_rows_and_real_git_qualify_with_opaque_attempts(self):
         adapter = self.adapter()

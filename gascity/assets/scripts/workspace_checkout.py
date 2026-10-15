@@ -634,13 +634,17 @@ def _reference(raw: Any, kind: str, bead_id: str, record: dict) -> dict:
     return expected
 
 
-def _retain_rows(rows: dict, incoming: dict) -> None:
+def _retain_rows(rows: dict, incoming: dict, *, originals=None) -> None:
     """Keep original full snapshots, including revisions and absent metadata."""
     if not isinstance(incoming, dict) or any(not isinstance(row, dict) or row.get('id') != key
                                               for key, row in incoming.items()):
         raise CheckoutError('original native rows must contain exact physical IDs')
+    if originals is not None and not isinstance(originals, dict):
+        raise CheckoutError('original native rows must contain exact physical IDs')
     for key, row in incoming.items():
-        if key in rows and rows[key] != row:
+        if (key in rows and canonical_bytes(rows[key]) != canonical_bytes(row)
+                or originals is not None and key in originals
+                and canonical_bytes(originals[key]) != canonical_bytes(row)):
             raise CheckoutError('native row changed after source selection: ' + key)
         rows.setdefault(key, copy.deepcopy(row))
     if len(rows) > 100:
@@ -680,21 +684,23 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
     ids = list(dict.fromkeys([workflow_root_id, run_record_id, plan_record_id, workspace_record_id,
                               claimed_step_id, *extra_ids]))
     rows = {}
+    def retain(incoming):
+        _retain_rows(rows, incoming, originals=writer_rows)
     if source_rows is not None:
-        _retain_rows(rows, source_rows)
-    _retain_rows(rows, store.snapshot(ids))
+        retain(source_rows)
+    retain(store.snapshot(ids))
     workspace = _record(rows[workspace_record_id], 'workspace')
     entry = read_entry(store, gc=gc, city_root=city_root, rig_name=rig_name,
                        workflow_root_id=workflow_root_id, claimed_step_id=claimed_step_id,
                        worktree_lifecycle='new', generation=workspace['generation'],
                        require_plan=True)
-    _retain_rows(rows, entry.get('_native_rows', {}))
+    retain(entry.get('_native_rows', {}))
     if input_convoy_id not in (entry['input_convoy_id'], entry.get('native_input_convoy_id', entry['input_convoy_id'])):
         raise CheckoutError('invocation input is neither the recorded implementation convoy nor its native child unit')
     workflow_root_id, input_convoy_id = entry['workflow_root_id'], entry['input_convoy_id']
     missing = [bead_id for bead_id in (workflow_root_id, input_convoy_id) if bead_id not in rows]
     if missing:
-        _retain_rows(rows, store.snapshot(missing))
+        retain(store.snapshot(missing))
     run, plan = entry['run'], entry['source_plan']
     verify_replay('run', _record(rows[run_record_id], 'run'), run)
     verify_replay('source-plan', _record(rows[plan_record_id], 'source-plan'), plan)
@@ -717,7 +723,7 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
             raise CheckoutError('malformed canonical reference')
         needed.append(canonical_ref['bead_id'])
     missing = [i for i in dict.fromkeys(needed) if i not in rows]
-    if missing: _retain_rows(rows, store.snapshot(missing))
+    if missing: retain(store.snapshot(missing))
     # Revalidate the frozen native rows rather than replacing their revisions
     # with later reads from the entry helper.
     for row in (root, rows[claimed_step_id], rows[run['input_convoy_id']], rows[run['source_anchor_id']], rows[input_convoy_id]):
@@ -776,7 +782,7 @@ def load_workspace_context(store, *, gc: str, city_root: str, rig_name: str,
             if observed is None:
                 raise CheckoutError('retained child workspace record disappeared')
             verify_replay('workspace', workspace, observed)
-            _retain_rows(rows, store.snapshot(list(dict.fromkeys([workspace_record_id, *retained.row_ids]))))
+            retain(store.snapshot(list(dict.fromkeys([workspace_record_id, *retained.row_ids]))))
     nodes = [n for n in plan['nodes'] if n['owner_id'] == workspace['workspace_owner_id']]
     if len(nodes) != 1:
         raise CheckoutError('workspace owner is missing or ambiguous in recorded source plan')
@@ -835,9 +841,8 @@ def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
                             + '; readback=' + str(resolved.get('outcome')) + '; original request=' + str(path)
                             + '; resolve the original request without repeating effects', str(path), str(path))
     # Native grants contain instance tokens; public results contain only the digest/outcome.
-    rows.update(resolved['rows'])
-    writer_rows.update(copy.deepcopy(rows))
     try:
+        merge_cooked_context(writer_rows, parse_record(prepared.before_bytes.decode()))
         if native_runtime is not None:
             native_runtime.advance_written_rows(resolved['rows'], prepared=prepared)
         if acknowledge is not None:
@@ -846,6 +851,8 @@ def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
         raise CheckoutError('guarded workspace publication acknowledgement is unresolved; original request=' + str(path)
                             + '; request_sha256=' + prepared.sha256 + '; resolve the original request without repeating effects',
                             str(path), str(path)) from exc
+    rows.update(copy.deepcopy(resolved['rows']))
+    writer_rows.update(copy.deepcopy(rows))
     if pending.exists() and pending.read_text() == str(path):
         pending.unlink()
     return {'outcome': resolved['outcome'], 'request_sha256': prepared.sha256,
@@ -1012,7 +1019,6 @@ def manage_workspace(store, attempt=None, *, action: str, gc: str, city_root: st
             writer_rows = merge_cooked_context(discovered, rows)
             if writer_map.declaration['source_member_id'] != workspace['active_member_id']:
                 raise CheckoutError('cooked occurrence belongs to a different active source member')
-        writer_rows = merge_cooked_context(writer_rows or {}, rows)
         workspace_continuation = _occurrence_continuation(store, workflow_root_id, workspace['writer_step_id'], rows,
                                                         require_reference=workspace['native_provenance'] is not None)
         if changing:

@@ -166,7 +166,8 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
         cooked = compiled[ref].get("metadata") or {}
         require(metadata.get("gc.step_id") == cooked.get("gc.step_id", compiled[ref]["id"]),
                 "semantic step differs from the cooked source")
-        for fact in ("gc.kind", "gc.control_for", "gc.build.artifact_schema", "gc.lifecycle", "gc.run_target"):
+        for fact in ("gc.kind", "gc.control_for", "gc.build.artifact_schema", "gc.lifecycle", "gc.run_target",
+                     "gc.scope_role", "gc.scope_ref", "gc.ralph_step_id", "gc.attempt", "gc.on_fail"):
             require(metadata.get(fact) == cooked.get(fact), "native writer designation differs from the cooked source")
         require(_dependencies(metadata) == sorted(compiled_dependencies[metadata["gc.step_id"]]),
                 "native dependency declaration differs from the cooked source")

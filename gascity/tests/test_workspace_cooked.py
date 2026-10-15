@@ -348,6 +348,72 @@ class CookedReaderTests(unittest.TestCase):
         with self.assertRaises(RecordError):
             self.read(claimed=attempt["id"])
 
+    def scope_check_pair(self):
+        body = self.rows["implement"]
+        body["metadata"].update({"gc.step_ref": "review.loop.iteration.1.implement",
+            "gc.scope_ref": "review.loop.iteration.1", "gc.scope_role": "member",
+            "gc.ralph_step_id": "review.loop", "gc.attempt": "1", "gc.on_fail": "abort_scope"})
+        self.formula["steps"][1]["metadata"].update({key: body["metadata"][key] for key in
+            ("gc.step_ref", "gc.scope_ref", "gc.scope_role", "gc.ralph_step_id", "gc.attempt", "gc.on_fail")})
+        control = copy.deepcopy(body)
+        control["id"] = "scope-check-1"
+        for key in ("gc.run_target", "gc.build.artifact_schema"):
+            control["metadata"].pop(key)
+        control["metadata"].update({"gc.kind": "scope-check", "gc.scope_role": "control",
+            "gc.control_for": body["metadata"]["gc.step_ref"],
+            "gc.step_ref": "do-work." + body["metadata"]["gc.step_ref"] + "-scope-check"})
+        self.rows[control["id"]] = control
+        self.formula["steps"].append({"id": control["metadata"]["gc.step_ref"], "metadata": {
+            key: value for key, value in control["metadata"].items() if key in
+            ("gc.kind", "gc.step_id", "gc.scope_role", "gc.scope_ref", "gc.control_for",
+             "gc.ralph_step_id", "gc.attempt", "gc.on_fail")}})
+        self.formula["deps"].append({"step_id": control["metadata"]["gc.step_ref"],
+            "depends_on_id": "do-work.implement", "type": "blocks"})
+
+    def test_exact_native_scope_check_body_pair_keeps_control_readonly(self):
+        self.scope_check_pair()
+        writer_map, _ = self.read("implement")
+        items = {item["bead_id"]: item for item in writer_map.declaration["steps"]}
+        self.assertEqual(items["implement"]["record_kinds"], ["workspace"])
+        self.assertEqual(items["scope-check-1"]["record_kinds"], [])
+        self.read("scope-check-1", read_only=True)
+        with self.assertRaises(RecordError):
+            self.read("scope-check-1")
+
+    def test_scope_check_pair_refuses_changed_lineage_and_second_writer(self):
+        self.scope_check_pair()
+        original_rows, original_formula = copy.deepcopy(self.rows), copy.deepcopy(self.formula)
+        for key, value in (("gc.control_for", "foreign"), ("gc.scope_ref", "foreign"),
+                           ("gc.scope_role", "member"), ("gc.ralph_step_id", "foreign"),
+                           ("gc.attempt", "2"), (cooked.TOPOLOGY, '[]'), ("gc.kind", "task")):
+            with self.subTest(key=key):
+                self.rows.clear(); self.rows.update(copy.deepcopy(original_rows))
+                self.formula = copy.deepcopy(original_formula)
+                self.rows["scope-check-1"]["metadata"][key] = value
+                if key != cooked.TOPOLOGY:
+                    self.formula["steps"][-1]["metadata"][key] = value
+                if key == "gc.kind":
+                    designation = {"gc.run_target": "gc.implementation-worker",
+                                   "gc.build.artifact_schema": "gc.build.implementation-summary.v1"}
+                    self.rows["scope-check-1"]["metadata"].update(designation)
+                    self.formula["steps"][-1]["metadata"].update(designation)
+                with self.assertRaises(RecordError):
+                    self.read("implement")
+
+    def test_scope_check_lineage_must_match_compiled_source_not_just_its_pair(self):
+        self.scope_check_pair()
+        original_rows, original_formula = copy.deepcopy(self.rows), copy.deepcopy(self.formula)
+        for key, value in (("gc.scope_ref", "foreign"), ("gc.ralph_step_id", "foreign"),
+                           ("gc.attempt", "2"), ("gc.on_fail", "continue"),
+                           ("gc.scope_role", "foreign")):
+            with self.subTest(key=key):
+                self.rows.clear(); self.rows.update(copy.deepcopy(original_rows))
+                for bead_id in ("implement", "scope-check-1"):
+                    self.rows[bead_id]["metadata"][key] = value
+                with self.assertRaisesRegex(RecordError, "writer designation differs from the cooked source"):
+                    self.read("implement")
+                self.assertEqual(self.formula, original_formula)
+
     def test_bounded_native_listing_uses_selected_city_store_and_no_ambient_route(self):
         class Result:
             returncode = 0

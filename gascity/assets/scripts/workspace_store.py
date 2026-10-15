@@ -265,7 +265,7 @@ def _dependencies(metadata):
 
 def _kinds(metadata, step_ref):
     """Fixed pack responsibilities; native control beads never write payloads."""
-    if metadata.get("gc.kind") in ("retry", "ralph", "check", "source-spec"):
+    if metadata.get("gc.kind") in ("retry", "ralph", "check", "scope-check", "source-spec"):
         return []
     stage = metadata.get("gc.step_id", step_ref).rsplit(".", 1)[-1]
     schema = metadata.get("gc.build.artifact_schema")
@@ -396,6 +396,21 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
         semantic.setdefault(item["step_id"], []).append(item)
     for step_id, occurrences in semantic.items():
         if len(occurrences) == 1:
+            continue
+        scope_checks = [item for item in occurrences
+                        if snapshots[item["bead_id"]]["metadata"].get("gc.kind") == "scope-check"]
+        if len(occurrences) == 2 and len(scope_checks) == 1:
+            control = scope_checks[0]
+            body = next(item for item in occurrences if item is not control)
+            control_meta, body_meta = (snapshots[item["bead_id"]]["metadata"] for item in (control, body))
+            require(control_meta.get("gc.scope_role") == "control"
+                    and body_meta.get("gc.scope_role") == "member"
+                    and isinstance(control_meta.get("gc.scope_ref"), str) and control_meta["gc.scope_ref"].strip()
+                    and control_meta.get("gc.control_for") == body["step_ref"]
+                    and all(control_meta.get(key) == body_meta.get(key)
+                            for key in ("gc.scope_ref", "gc.ralph_step_id", "gc.attempt", "gc.on_fail"))
+                    and not control["record_kinds"] and control["dependencies"] == body["dependencies"],
+                    "semantic scope check lacks its exact native body lineage")
             continue
         controls = [item for item in occurrences if snapshots[item["bead_id"]]["metadata"].get("gc.kind") in ("retry", "ralph")]
         attempts = [item for item in occurrences if snapshots[item["bead_id"]]["metadata"].get("gc.control_for") == step_id

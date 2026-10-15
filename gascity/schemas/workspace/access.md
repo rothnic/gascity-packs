@@ -65,6 +65,12 @@ step ID when the attempt names that control and both retain the same
 dependencies. The control cannot write records. The adapter refuses multiple
 writable attempts for the same semantic step.
 
+A native scope check may share its body's semantic step ID when it names that
+exact body reference. Both occurrences must match the compiled source's scope,
+roles, Ralph step, attempt and failure policy, and retain the same dependencies.
+The paired scope check has the control role and has no record responsibilities;
+the body retains the member role and its declared record responsibilities.
+
 Graph discovery retains at most 4096 original native rows, including the expansion
 and source context. Read-only snapshots use batches of at most 100 rows. A listing
 that reaches the extra sentinel row is refused rather than accepted as complete.

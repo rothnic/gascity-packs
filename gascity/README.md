@@ -18,7 +18,9 @@ publish. It ships three things:
 Managed workspace checks retain the original cooked workflow context separately
 from the rows guarded by each write. Formula metadata uses the expansion's saved
 variables and formula defaults; unresolved or changed writer designations refuse
-admission. See the [workspace access contract](schemas/workspace/access.md#bind-the-writer)
+admission. Checkout validates retained source rows before following their references
+and advances them only after confirming its own write.
+See the [workspace access contract](schemas/workspace/access.md#bind-the-writer)
 for the read and transaction limits.
 
 ## Quick Start: your first build

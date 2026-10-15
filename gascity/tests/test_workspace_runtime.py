@@ -84,6 +84,38 @@ sys.exit('unsupported command ' + repr(args))
 '''
 
 
+class OriginalCookedContextTests(unittest.TestCase):
+    def setUp(self):
+        self.rows = {str(i): dict(id=str(i), revision="1", metadata={"typed": True}) for i in range(110)}
+        rows = self.rows
+        class Store:
+            def snapshot(self, ids):
+                assert len(ids) <= 100
+                return {key: copy.deepcopy(rows[key]) for key in ids}
+        self.fence = runtime._ReadFence(Store())
+
+    def test_large_original_context_does_not_enroll_sibling_write_guards(self):
+        from workspace_store import read_cooked_context
+        self.fence.snapshot(["0", "1"])
+        read_cooked_context(self.fence, list(self.rows))
+        self.assertEqual(set(self.rows), set(self.fence.original_rows))
+        self.assertEqual({"0", "1"}, set(self.fence.rows))
+        original = self.fence.original_rows
+        original["2"]["metadata"]["typed"] = False
+        self.assertIs(self.fence.original_rows["2"]["metadata"]["typed"], True)
+
+    def test_original_sibling_changed_or_typed_conflict_cannot_be_refreshed(self):
+        for changed in (1, 1.0, False):
+            with self.subTest(changed=changed):
+                self.rows["2"]["metadata"]["typed"] = True
+                self.fence.cooked_snapshot(["2"])
+                self.rows["2"]["metadata"]["typed"] = changed
+                for read in (self.fence.snapshot, self.fence.cooked_snapshot):
+                    with self.assertRaisesRegex(RecordError, "original snapshot"):
+                        read(["2"])
+                self.assertIs(self.fence.original_rows["2"]["metadata"]["typed"], True)
+
+
 class NativeRuntimeTests(unittest.TestCase):
     def setUp(self):
         # Retain fixtures and exact command logs, including failed cases.
@@ -641,6 +673,7 @@ class NativeRuntimeTests(unittest.TestCase):
         prepared = recorder.prepare_member_result(result, record_id="result-record", authority_id="authority", initial_write=True)
         self.assertEqual(self.store.execute(prepared)["outcome"], "committed")
         resolved = self.store.resolve(prepared)
+        original_cooked = recorder.original_rows
         acknowledgement = recorder.advance_written_rows(resolved["rows"], prepared=prepared)
         self.assertEqual(acknowledgement["request_sha256"], prepared.sha256)
         state = json.loads((self.root / "port.json").read_text())
@@ -648,6 +681,8 @@ class NativeRuntimeTests(unittest.TestCase):
         recorder.recheck_continuation()
         self.assertTrue(recorder.qualify_native(result)["verified"])
         self.assertIn("gc.workspace_result_ref", recorder.guard_rows["member"]["metadata"])
+        for key, row in original_cooked.items():
+            self.assertEqual(recorder.original_rows[key], resolved["rows"].get(key, row))
         with self.assertRaises(RecordError): recorder.advance_written_rows({}, prepared=prepared)
         return result
 

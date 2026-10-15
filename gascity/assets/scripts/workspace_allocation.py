@@ -35,7 +35,8 @@ def admit_writer(store, attempt, scope, writer_map, writer_rows, *, origin=None)
     """Prove the current occurrence without changing the original allocation owner."""
     require(isinstance(writer_map, CookedWriterMap) and isinstance(writer_rows, dict) and writer_rows,
             "allocation requires original native writer rows")
-    require(store.snapshot(list(writer_rows)) == writer_rows,
+    from workspace_store import read_cooked_context
+    require(canonical_bytes(read_cooked_context(store, list(writer_rows))) == canonical_bytes(writer_rows),
             "native allocation writer changed after admission")
     declaration = validate_cooked_writer_map(writer_map, writer_rows, store_ref=store.store_ref,
         workflow_root_id=scope["workflow_root_id"], record_kind=scope["record_kind"],

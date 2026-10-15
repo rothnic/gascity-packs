@@ -202,6 +202,7 @@ def publish_checkpoint(frozen, attempt, workspace, *, authority_id, writer_map, 
     store = frozen.store
     require(isinstance(native_runtime, NativeSourceRuntime) and native_runtime.store is store,
             'checkpoint publication requires its actual runtime and durable request directory')
+    frozen.merge(native_runtime.original_rows, context_only=True)
     scope = dict(workflow_root_id=workspace['workflow_root_id'], generation=workspace['generation'],
                  writer_scope_id=workspace['workspace_owner_id'], record_kind='workspace')
     raw = frozen.metadata(authority_id, GRANT_KEY)

@@ -70,6 +70,16 @@ and source context. Read-only snapshots use batches of at most 100 rows. A listi
 that reaches the extra sentinel row is refused rather than accepted as complete.
 This read limit is separate from the 100-row atomic transaction limit.
 
+The runtime retains those original context rows separately from its write guards.
+Checkpoint, allocation and result helpers use that complete context when validating
+the cooked map. Acknowledging an exact committed request advances only its own
+affected rows; another read cannot replace an original row with a newer revision.
+
+Native formula previews leave metadata templates unresolved. Writer admission
+substitutes the expansion's recorded variables, with formula defaults for absent
+variables, before comparing designations. An unresolved variable or a different
+physical designation refuses admission.
+
 ## Publish a record
 
 Allocate record and grant placeholders as closed, unassigned native beads with

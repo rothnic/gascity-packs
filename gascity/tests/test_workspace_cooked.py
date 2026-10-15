@@ -184,6 +184,50 @@ class CookedReaderTests(unittest.TestCase):
         self.assertEqual(112, len(rows))
         self.assertEqual(set(rows), set().union(*(set(ids) for ids in reads)))
 
+    def test_native_preview_raw_metadata_uses_exact_persisted_vars_before_defaults(self):
+        self.rows["attach-1"]["metadata"].update({"gc.var.worktree_lifecycle": "new",
+            "gc.var.implementation_target": "gc.implementation-worker"})
+        self.formula["vars"] = [{"name": "worktree_lifecycle", "default": "legacy"},
+            {"name": "implementation_target", "default": "gc.other-worker"}]
+        self.formula["steps"][1]["metadata"].update({"gc.lifecycle": "{{worktree_lifecycle}}",
+            "gc.run_target": "{{implementation_target}}"})
+        self.rows["implement"]["metadata"]["gc.lifecycle"] = "new"
+        with patch.object(cooked, "native_json", return_value=self.formula) as native, \
+             patch.object(cooked, "_native_list", return_value=list(self.rows)[3:]):
+            writer_map, _ = cooked.read_cooked_writer_map(self.store, workflow_root_id="root-1",
+                claimed_step_id="prepare-worktree")
+        self.assertEqual(5, len(writer_map.declaration["steps"]))
+        arguments = native.call_args.args[2]
+        self.assertIn("worktree_lifecycle=new", arguments)
+        self.assertIn("implementation_target=gc.implementation-worker", arguments)
+        self.assertEqual("{{implementation_target}}", self.formula["steps"][1]["metadata"]["gc.run_target"])
+
+    def test_native_preview_defaults_are_used_only_when_no_persisted_var_exists(self):
+        self.formula["vars"] = [{"name": "target", "default": "gc.implementation-worker"}]
+        self.formula["steps"][1]["metadata"]["gc.run_target"] = "{{target}}"
+        self.read()
+        self.rows["attach-1"]["metadata"]["gc.var.target"] = ""
+        with self.assertRaisesRegex(RecordError, "writer designation"):
+            self.read()
+
+    def test_native_preview_unknown_or_changed_metadata_cannot_admit_a_writer(self):
+        self.formula["steps"][1]["metadata"]["gc.run_target"] = "{{target}}"
+        with self.assertRaisesRegex(RecordError, "unresolved variables"):
+            self.read()
+        self.rows["attach-1"]["metadata"]["gc.var.target"] = "gc.publisher"
+        with self.assertRaisesRegex(RecordError, "writer designation"):
+            self.read()
+        self.rows["attach-1"]["metadata"]["gc.var.target"] = "{{other}}"
+        with self.assertRaisesRegex(RecordError, "unresolved variables"):
+            self.read()
+
+    def test_native_preview_variable_defaults_require_unique_native_string_definitions(self):
+        for definitions in ({}, [{"name": "target", "default": True}],
+                            [{"name": "target"}, {"name": "target"}], [{"default": "x"}]):
+            with self.subTest(definitions=definitions), self.assertRaises(RecordError):
+                self.formula["vars"] = definitions
+                self.read()
+
     def use_explicit_native_refs(self):
         for step in self.formula["steps"]:
             stage = step["id"].removeprefix("do-work.")

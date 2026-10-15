@@ -6,6 +6,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 
 from workspace_records import RecordError, canonical_bytes
@@ -13,6 +14,22 @@ from workspace_run import native_json
 from workspace_store import (CookedWriterMap, MAX_COOKED_CONTEXT_ROWS, TOPOLOGY,
                              _dependencies, _formula_identity, _kinds, _root,
                              read_cooked_context, require, validate_cooked_writer_map)
+
+
+_VARIABLE = re.compile(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}")
+
+
+def _metadata(step, variables):
+    # Native formula show substitutes prose, but leaves metadata templates raw.
+    metadata = step.get("metadata")
+    metadata = {} if metadata is None else metadata
+    require(isinstance(metadata, dict) and all(isinstance(key, str) and isinstance(value, str)
+            for key, value in metadata.items()), "compiled native metadata is malformed")
+    resolved = {key: _VARIABLE.sub(lambda match: variables.get(match[1], match[0]), value)
+                for key, value in metadata.items()}
+    require(not any(_VARIABLE.search(value) for value in resolved.values()),
+            "compiled native metadata has unresolved variables")
+    return resolved
 
 
 def _formula(root):
@@ -85,18 +102,34 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
     rows = retained
     rig = store.store_ref.split(":", 1)[1] if store.store_ref.startswith("rig:") else None
     arguments = ["formula", "show", name, "--json"]
+    variables = {}
     for key, value in expansion["metadata"].items():
         if key.startswith("gc.var."):
             require(isinstance(value, str), "cooked formula variable is not a native string")
-            arguments += ["--var", key.removeprefix("gc.var.") + "=" + value]
+            variable = key.removeprefix("gc.var.")
+            variables[variable] = value
+            arguments += ["--var", variable + "=" + value]
     formula = native_json(store.gc, store.cwd, arguments, rig)
     require(formula.get("ok") is True and formula.get("name") == name and isinstance(formula.get("steps"), list),
             "native formula readback does not match the cooked expansion")
+    definitions = formula.get("vars", [])
+    require(isinstance(definitions, list), "compiled native variable definitions are malformed")
+    names = set()
+    for definition in definitions:
+        require(isinstance(definition, dict) and isinstance(definition.get("name"), str)
+                and definition["name"] and definition["name"] not in names,
+                "compiled native variable definitions are ambiguous")
+        names.add(definition["name"])
+        if "default" in definition:
+            require(isinstance(definition["default"], str), "compiled native variable default is not a string")
+            variables.setdefault(definition["name"], definition["default"])
     compiled_ids = {step["id"]: step for step in formula["steps"] if isinstance(step, dict) and isinstance(step.get("id"), str)}
     require(len(compiled_ids) == len(formula["steps"]), "compiled native steps are ambiguous")
     compiled = {}
     for step in compiled_ids.values():
-        metadata = step.get("metadata") or {}
+        metadata = _metadata(step, variables)
+        step = dict(step, metadata=metadata)
+        compiled_ids[step["id"]] = step
         ref = metadata.get("gc.step_ref", step["id"])
         require(isinstance(ref, str) and ref.strip() and ref not in compiled,
                 "compiled native step references are malformed or ambiguous")

@@ -15,6 +15,12 @@ publish. It ships three things:
   methodology packs in this repository (bmad, compound-engineering,
   superpowers, gstack) extend and override.
 
+Managed workspace checks retain the original cooked workflow context separately
+from the rows guarded by each write. Formula metadata uses the expansion's saved
+variables and formula defaults; unresolved or changed writer designations refuse
+admission. See the [workspace access contract](schemas/workspace/access.md#bind-the-writer)
+for the read and transaction limits.
+
 ## Quick Start: your first build
 
 Prerequisites: Gas City installed and a city running (`gc init`, `gc start`),

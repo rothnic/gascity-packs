@@ -15,7 +15,7 @@ from workspace_records import (RecordError, canonical_bytes, contracts, parse_re
 from workspace_run import (CHECKS_CONFIG_KEY, CHECKS_POLICY_KEY, capture_check_policy,
                            native_json, read_check_policy)
 from workspace_store import (Attempt, CONTINUATION_KEY, ROOT_KEYS, GuardRead, NativeRunContinuation,
-                             PreparedWrite, WorkspaceStore, validate_native_continuation)
+                             PreparedWrite, WorkspaceStore, merge_cooked_context, validate_native_continuation)
 from workspace_entry import healthy, native_root, read_entry, read_native_continuation, reference
 from workspace_cooked import read_cooked_writer_map
 from workspace_checkout import WorkspaceCheckout, load_workspace_context
@@ -39,7 +39,7 @@ def validate_check_policy(policy, run, run_record_id, native_config):
 class _ReadFence:
     """Keep the first full work-store row, including its original revision."""
     def __init__(self, store):
-        self.store, self.rows = store, {}
+        self.store, self.rows, self.cooked_rows = store, {}, {}
 
     def __getattr__(self, name):
         return getattr(self.store, name)
@@ -47,12 +47,14 @@ class _ReadFence:
     def retain(self, rows):
         require(isinstance(rows, dict) and all(isinstance(row, dict) and row.get("id") == key
                                              for key, row in rows.items()), "incomplete original native rows")
-        for key, row in rows.items():
-            require(key not in self.rows or self.rows[key] == row,
-                    "native row changed after qualification: " + key)
-            self.rows.setdefault(key, copy.deepcopy(row))
-        require(len(self.rows) <= 100, "complete native evidence exceeds the guarded row bound")
+        merge_cooked_context(self.original_rows, rows)
+        require(len(set(self.rows) | set(rows)) <= 100, "complete native evidence exceeds the guarded row bound")
+        self.rows.update(copy.deepcopy(rows))
         return copy.deepcopy(rows)
+
+    @property
+    def original_rows(self):
+        return merge_cooked_context(self.cooked_rows, self.rows)
 
     def snapshot(self, ids):
         rows = self.store.snapshot(ids)
@@ -63,9 +65,7 @@ class _ReadFence:
         """Read graph context without treating every sibling as an operation guard."""
         rows = self.store.snapshot(ids)
         require(set(rows) == set(ids), "native snapshot did not return the exact requested rows")
-        require(all(key not in self.rows or canonical_bytes(self.rows[key]) == canonical_bytes(row)
-                    for key, row in rows.items()),
-                "native row changed after qualification during cooked readback")
+        self.cooked_rows = merge_cooked_context(self.original_rows, rows)
         return rows
 
     def read_record(self, kind, bead_id, identity=None, *, continuation=None):
@@ -140,6 +140,11 @@ class NativeSourceRuntime:
         return copy.deepcopy(self._fence.rows)
 
     @property
+    def original_rows(self):
+        """Original graph context plus selected guards, without promoting siblings."""
+        return self._fence.original_rows
+
+    @property
     def attempt(self):
         return self._admitted()[1]
 
@@ -149,9 +154,10 @@ class NativeSourceRuntime:
 
     def _writer_map(self, claimed_step_id, *, read_only=False, require_reference=True):
         continuation = self._occurrence_continuation(claimed_step_id, require_reference=require_reference)
-        writer_map, rows = read_cooked_writer_map(self.store, workflow_root_id=self.run["workflow_root_id"],
+        writer_map, rows = read_cooked_writer_map(self._fence, workflow_root_id=self.run["workflow_root_id"],
             claimed_step_id=claimed_step_id, read_only=read_only, continuation=continuation,
             continuation_rows=self.guard_rows if continuation is not None else None)
+        self._fence.cooked_rows = merge_cooked_context(self.original_rows, rows)
         declaration = writer_map.declaration
         selected = {claimed_step_id, declaration["source_member_id"], declaration["expansion_root_id"]}
         selected.update(key for key in rows if key in self._fence.rows)
@@ -541,8 +547,10 @@ class NativeSourceRuntime:
                 "row advancement lacks exact native request/row readback")
         before = parse_record(prepared.before_bytes.decode())
         after = parse_record(prepared.after_bytes.decode())
+        original = self.original_rows
         require(set(self._fence.rows).issubset(before)
-                and all(before[key] == row for key, row in self._fence.rows.items()),
+                and all(canonical_bytes(before[key]) == canonical_bytes(original[key])
+                        for key in set(before) & set(original)),
                 "write did not guard the originally qualified rows")
         protected = {self.run_record_id: (contracts()["run"]["metadata_key"], CHECKS_POLICY_KEY),
                      self.plan_record_id: (contracts()["source-plan"]["metadata_key"],),
@@ -565,6 +573,8 @@ class NativeSourceRuntime:
             require(all(after[child]["metadata"].get(name) == value for name, value in expected.items()),
                     "acknowledged write lost its exact inherited run reference")
         self._written_requests[prepared.sha256] = prepared
+        self._fence.cooked_rows.update({key: copy.deepcopy(row) for key, row in resolved_rows.items()
+                                       if key in self._fence.cooked_rows})
         self._fence.rows.update(copy.deepcopy(resolved_rows))
         self._qualified.clear()
         return {"outcome": resolved["outcome"], "request_sha256": prepared.sha256}

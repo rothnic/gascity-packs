@@ -285,7 +285,39 @@ if 'bd' in args and 'list' in args and '--desc-contains' in args:
         from workspace_outputs import artifact
         from workspace_records import record_sha256
         f = self.fixture
+        for number in range(105):
+            bead_id = "readonly-" + str(number)
+            step = "do-work." + bead_id
+            designation = {"gc.run_target": "gc.implementation-worker"}
+            f.formula["steps"].append({"id": step, "metadata": designation})
+            f.rows[bead_id] = f.row(bead_id, dict(designation, **{"gc.step_id": step,
+                "gc.step_ref": step, "gc.attach_root_id": "expansion", "gc.source_anchor_id": "member",
+                "gc.drain_member_id": "member", "gc.native_step_dependencies.v1": "[]"}), status="closed")
+        f.workspace.update(phase="active", current_oid=f.base, output_oid=None)
+        from workspace_records import contracts
+        from workspace_entry import allocate_placeholder
+        from workspace_dependency import FrozenRecords
+        from workspace_store import NativeWorktreeReference, RecordWrite, ReferenceWrite, merge_cooked_context, record_reference
+        f.rows["workspace-record"]["metadata"].pop(contracts()["workspace"]["metadata_key"])
         f.select_role("producer")
+        authority = allocate_placeholder(f.store, title="Workspace writer")
+        runtime = f.adapter("producer")
+        writer_map = runtime.writer_map
+        selected = runtime.guard_rows
+        selected.update(f.store.snapshot([authority, "workspace-record", "member"]))
+        launch = json.loads(f.rows["producer"]["metadata"]["gc.worktree_ref"])
+        prepared = f.store.install_grant(f.attempts["producer"],
+            dict(workflow_root_id="root", generation=1, writer_scope_id="member", record_kind="workspace"),
+            authority, [RecordWrite("workspace", "workspace-record", f.workspace)],
+            [ReferenceWrite("member", "gc.workspace_ref", record_reference("workspace", "workspace-record", f.workspace))],
+            writer_map=writer_map, expected_rows=merge_cooked_context(runtime.original_rows, selected),
+            guards=FrozenRecords(f.store, selected).guards,
+            projections=[NativeWorktreeReference(role, "workspace-record", dict(launch, binding_step_id=role))
+                         for role in ("producer", "reviewer", "recorder")])
+        self.assertEqual("committed", f.store.execute(prepared)["outcome"])
+        self.assertEqual("committed", f.store.resolve(prepared)["outcome"])
+        state = json.loads((f.root / "port.json").read_text())
+        f.rows, f.sessions = state["stores"]["rig:fixture"], state["stores"]["city:fixture"]
         checks = f.adapter("producer").execute_checks("member", "member", f.oid)
         f.select_role("reviewer")
         reviewer = f.adapter("reviewer")
@@ -301,10 +333,12 @@ if 'bd' in args and 'list' in args and '--desc-contains' in args:
         self.assertEqual(output["receipt"]["outcome"], "committed")
         self.assertEqual(output["output"]["final_member_result_sha256"], record_sha256(recorded["result"]))
         state = json.loads((f.root / "port.json").read_text())
-        self.assertEqual(state["allocation_counter"], 4)
+        self.assertEqual(state["allocation_counter"], 5)
         member = state["stores"]["rig:fixture"]["member"]["metadata"]
         self.assertIn("gc.workspace_result_ref", member)
         self.assertIn("gc.workspace_output_ref", member)
+        self.assertGreater(len(flow.runtime.original_rows), 100)
+        self.assertLessEqual(len(flow.runtime.guard_rows), 100)
         commands = [json.loads(line) for line in (f.root / "port.commands").read_text().splitlines()]
         self.assertFalse(any("sling" in command or "start" in command for command in commands))
 

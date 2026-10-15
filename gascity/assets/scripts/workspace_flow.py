@@ -11,7 +11,6 @@ from pathlib import Path
 
 from workspace_records import RecordError, canonical_bytes, contracts, parse_record, record_sha256
 from workspace_entry import allocate_placeholder, native_json, read_entry, reference
-from workspace_cooked import read_cooked_writer_map
 from workspace_store import (GRANT_REFS_KEY, GRANT_KEY, MISSING, WorkspaceStore, validate_cooked_writer_map, validate_grant_index,
                              NativeSourceClose, RecordWrite, ReferenceWrite, SuccessorRelation, record_reference)
 from workspace_requests import retain_request, resolve_request, require_resolved_scope, allocation_directory
@@ -46,7 +45,7 @@ class WorkspaceFlow:
         self.runtime._fresh()
         self.runtime._admitted()
         outputs.require(not self._terminated, "this transition ended the retained runtime; load the next source plan")
-        validate_cooked_writer_map(self.writer_map, self.runtime.guard_rows,
+        validate_cooked_writer_map(self.writer_map, self.runtime.original_rows,
             workflow_root_id=self.run["workflow_root_id"], store_ref=self.store.store_ref,
             record_kind=kind, claimed_step_id=self.attempt.claimed_bead_id)
         scope = dict(workflow_root_id=self.run["workflow_root_id"], generation=generation or self.plan["generation"],
@@ -84,7 +83,7 @@ class WorkspaceFlow:
                             "retained native allocation source scope changed")
             outputs.require(packet is None or isinstance(packet.get("origin"), dict),
                             "retained allocation has no original cooked writer evidence")
-            admit_writer(self.store, self.attempt, scope, self.writer_map, self.runtime.guard_rows,
+            admit_writer(self.store, self.attempt, scope, self.writer_map, self.runtime.original_rows,
                          origin=packet.get("origin") if packet else None)
             if packet is None:
                 outputs.require(grant is MISSING, "missing record pointer under an existing grant requires the original allocation journal")
@@ -101,7 +100,7 @@ class WorkspaceFlow:
                        ("authority", "Workspace " + kind + " writer", None)),
                 allocate=allocate_placeholder, native_read=native_json,
                 admit=lambda: admit_writer(self.store, self.attempt, scope, self.writer_map,
-                                          self.runtime.guard_rows, origin=packet["origin"]))
+                                          self.runtime.original_rows, origin=packet["origin"]))
             self.runtime._fence.retain(original_rows)
         return dict(record_id=ids["record"], authority_id=ids["authority"], initial_write=True)
 
@@ -148,6 +147,7 @@ class WorkspaceFlow:
             self.runtime._fresh()
             return dict(outcome="replayed", output_oid=result["output_oid"])
         frozen = FrozenRecords(self.store, self.runtime.guard_rows)
+        frozen.merge(self.runtime.original_rows, context_only=True)
         scope = dict(workflow_root_id=result["workflow_root_id"], generation=result["generation"],
                      writer_scope_id=result["workspace_owner_id"], record_kind="workspace")
         authority_id = _authority(frozen, scope)
@@ -167,7 +167,8 @@ class WorkspaceFlow:
             parent=str(Path(workspace["work_dir"]).parent),
             allow_external_parent=workspace.get("layout", {}).get("allow_external_parent", True),
             launch_step_ids=(self.attempt.claimed_bead_id,), result_record_id=result_ref["bead_id"],
-            writer_map=self.writer_map, writer_rows=frozen.rows, native_runtime=self.runtime,
+            writer_map=self.writer_map, writer_rows=frozen.original_rows, source_rows=frozen.rows,
+            acknowledge=frozen.acknowledge, native_runtime=self.runtime,
             artifact_root=str(self.runtime.artifact_root))
         outputs.require(recovered.get("ok") is True and recovered["workspace"]["phase"] == "result"
                         and recovered["workspace"]["output_oid"] == result["output_oid"],
@@ -204,6 +205,7 @@ class WorkspaceFlow:
             return dict(outcome="replayed", member_id=member_id, status="closed")
         self.runtime._fresh()
         frozen = FrozenRecords(self.store, self.runtime.guard_rows)
+        frozen.merge(self.runtime.original_rows, context_only=True)
         authority_id = _authority(frozen, scope)
         outputs.require(authority_id, "source closure requires the existing exact workspace writer authority")
         frozen.ensure([authority_id])
@@ -212,7 +214,7 @@ class WorkspaceFlow:
         result_ref = reference(frozen.metadata(member_id, "gc.workspace_result_ref"), "member-result")
         frozen.ensure([result_ref["bead_id"]])
         checkpoint = writer_checkpoint(workspace, self.attempt)
-        arguments = dict(writer_map=self.writer_map, guards=frozen.guards, expected_rows=frozen.rows,
+        arguments = dict(writer_map=self.writer_map, guards=frozen.guards, expected_rows=frozen.original_rows,
             projections=[NativeSourceClose(member_id, result_ref["bead_id"], reason)])
         if grant["attempt"] == self.attempt.admission:
             method = self.store.write_records
@@ -245,7 +247,7 @@ class WorkspaceFlow:
             qualifications=qualifications, integration_inputs=workspace["integration_inputs"],
             integration_evidence=evidence)
         allocation = self._allocation("owner-output", owner_id, owner_id)
-        prepared = outputs.prepare_owner_output(self.store, self.attempt, output,
+        prepared = outputs.prepare_owner_output(self.runtime._fence, self.attempt, output,
             plan_owner_id=self.plan["source_plan_owner_id"], qualifications=qualifications,
             artifact_root=self.runtime.artifact_root, qualify_native=self.runtime.qualify_native,
             writer_map=self.writer_map, **allocation)
@@ -262,7 +264,7 @@ class WorkspaceFlow:
         result, context = self.subject()
         owner_id = result["workspace_owner_id"]
         allocation = self._allocation("canonical", self.plan["source_plan_owner_id"], self.run["workflow_root_id"])
-        prepared = outputs.prepare_canonical(self.store, self.attempt,
+        prepared = outputs.prepare_canonical(self.runtime._fence, self.attempt,
             run_owner_id=self.run["workflow_root_id"], plan_owner_id=self.plan["source_plan_owner_id"],
             output_owner_id=owner_id, result_member_id=result["member_id"],
             summary=outputs.artifact(summary_path, self.runtime.artifact_root),
@@ -288,7 +290,7 @@ class WorkspaceFlow:
             artifact_root=self.runtime.artifact_root, work_dir=current["work_dir"],
             report=report, evidence_path=evidence_path, status=status)
         allocation = self._allocation("review", approval["review_id"], self.run["workflow_root_id"])
-        prepared = review.prepare_review_record(self.store, self.attempt, approval,
+        prepared = review.prepare_review_record(self.runtime._fence, self.attempt, approval,
             result_member_id=result["member_id"], artifact_root=self.runtime.artifact_root,
             plan_owner_id=self.plan["source_plan_owner_id"], qualify_native=self.runtime.qualify_native,
             writer_map=self.writer_map, **current, **allocation)
@@ -300,9 +302,8 @@ class WorkspaceFlow:
         approval = self.record("review", review_owner_id or self.run["workflow_root_id"])
         review.validate_approval(approval, canonical, result,
                                 artifact_root=self.runtime.artifact_root, **context)
-        _, rows = read_cooked_writer_map(self.runtime._fence,
-            workflow_root_id=self.run["workflow_root_id"], claimed_step_id=approval["writer_step_id"])
-        self.runtime._fence.retain(rows)
+        self.runtime._writer_map(approval["writer_step_id"])
+        rows = self.runtime.guard_rows
         native_reviewer, _ = self.runtime._session(rows[approval["writer_step_id"]])
         proof = outputs.read_artifact({"path": approval["report_path"], "sha256": approval["report_sha256"]},
                                      self.runtime.artifact_root)
@@ -324,7 +325,7 @@ class WorkspaceFlow:
         prepared = declare_plan(self.store, self.attempt, plan,
             run_record_id=self.runtime.run_record_id, record_bead_id=allocation["record_id"],
             authority_id=allocation["authority_id"], implementation_convoy_id=implementation_convoy_id,
-            writer_map=self.writer_map, writer_rows=self.runtime.guard_rows)
+            writer_map=self.writer_map, writer_rows=self.runtime.original_rows)
         receipt = self._commit(prepared, plan, terminal=True)
         return dict(source_plan=plan, receipt=receipt)
 
@@ -372,7 +373,7 @@ class WorkspaceFlow:
             return dict(pr_spec=spec, prs=prs)
         def persist(value):
             allocation = self._allocation("publish", publish_id, publish_id)
-            prepared = publish.prepare_publication_record(self.store, self.attempt, value,
+            prepared = publish.prepare_publication_record(self.runtime._fence, self.attempt, value,
                 review_owner_id=review_owner_id, result_member_id=result["member_id"],
                 artifact_root=self.runtime.artifact_root, plan_owner_id=self.plan["source_plan_owner_id"],
                 qualify_native=self.runtime.qualify_native, writer_map=self.writer_map,

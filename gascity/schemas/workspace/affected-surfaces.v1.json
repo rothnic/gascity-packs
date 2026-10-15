@@ -2084,7 +2084,7 @@
     "gascity/assets/scripts/workspace_records.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "f9094db5cb8f67ab937e429db9f8d8f3a54b24d1345ee7827f41aa8ace74d0d4"
+      "sha256": "81cc7c5e8faf20755d893c54914fb97783f4d1d48d0a281326c06303d428f0da"
     },
     "gascity/assets/scripts/workspace_review.py": {
       "classification": "new",

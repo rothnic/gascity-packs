@@ -87,6 +87,15 @@ roles, Ralph step, attempt and failure policy, and retain the same dependencies.
 The paired scope check has the control role and has no record responsibilities;
 the body retains the member role and its declared record responsibilities.
 
+A scoped retry or Ralph control can retain the native setup or member role.
+Its scope check targets the logical control, which blocks on the current attempt.
+Admission compares these physical `blocks` edges from native `bd show` with the
+compiled source and the proven attempt history. Both native reads must retain the
+original row identities, revisions and metadata. The logical control and scope
+check remain read-only. Only that map's validated own CAS can advance the observed
+revisions without changing the map identity. The row guards do not provide an
+atomic predicate against unrelated dependency-edge edits.
+
 Graph discovery retains at most 4096 original native rows, including the expansion
 and source context. Read-only snapshots use batches of at most 100 rows. A listing
 that reaches the extra sentinel row is refused rather than accepted as complete.

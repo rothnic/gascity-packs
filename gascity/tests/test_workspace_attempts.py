@@ -32,6 +32,7 @@ class NativeAttemptTests(unittest.TestCase):
 
     def configure(self, latest=2, kind="ralph", scoped=False, attached=False):
         self.latest, self.kind, self.scoped = latest, kind, scoped
+        self.scope_details = {}
         logical = "implement" if scoped else "decompose"
         self.logical = logical
         control_ref = "build-basic." + logical
@@ -141,11 +142,52 @@ class NativeAttemptTests(unittest.TestCase):
         def native(gc, cwd, argv, rig, **options):
             if argv[:2] == ["bd", "show"]:
                 self.assertTrue(options["unwrap_singleton"] and options["require_array"])
+                if argv[2] in self.scope_details:
+                    return copy.deepcopy(self.scope_details[argv[2]])
                 return copy.deepcopy(self.detail)
             return copy.deepcopy(self.formula)
         with patch.object(cooked, "_native_list", return_value=list(self.rows)), patch.object(cooked, "native_json", side_effect=native):
             return cooked.read_cooked_writer_map(self.store, workflow_root_id="root-1", claimed_step_id=claimed or self.claim,
                                                   read_only=read_only)
+
+    def configure_outer_scope(self, latest=3, kind="ralph", role="member"):
+        self.configure(latest=latest, kind=kind)
+        scope = {"gc.scope_ref": "build-body", "gc.scope_role": role, "gc.on_fail": "abort_scope"}
+        self.rows["control-1"]["metadata"].update(scope)
+        control = next(step for step in self.formula["steps"] if step["metadata"].get("gc.kind") == kind)
+        control["metadata"].update(scope)
+        check_meta = {"gc.kind": "scope-check", "gc.step_id": self.logical,
+            "gc.step_ref": control["id"] + "-scope-check", "gc.control_for": self.logical,
+            "gc.scope_ref": "build-body", "gc.scope_role": "control", "gc.on_fail": "abort_scope",
+            cooked.TOPOLOGY: self.rows["control-1"]["metadata"][cooked.TOPOLOGY]}
+        self.rows["outer-check"] = self.row("outer-check", check_meta, "open")
+        self.formula["steps"].append(dict(id=check_meta["gc.step_ref"],
+            metadata={key: value for key, value in check_meta.items() if key != cooked.TOPOLOGY}))
+        self.formula["deps"].append(dict(step_id=check_meta["gc.step_ref"], depends_on_id=control["id"], type="blocks"))
+        self.scope_details["outer-check"] = dict(copy.deepcopy(self.rows["outer-check"]), dependencies=[
+            dict(id="control-1", dependency_type="blocks")])
+        seed = next(step for step in self.formula["steps"] if step["metadata"].get("gc.control_for") == self.logical
+                    and step["metadata"].get("gc.kind") != "scope-check")
+        self.formula["deps"].append(dict(step_id=control["id"], depends_on_id=seed["id"], type="blocks"))
+        self.scope_details["control-1"] = dict(copy.deepcopy(self.rows["control-1"]), dependencies=[
+            dict(id="prior-1", dependency_type="blocks"), dict(id=self.claim, dependency_type="blocks")])
+
+    def test_outer_scope_check_composes_with_current_native_attempt_history(self):
+        for latest in (2, 3):
+            for kind in ("ralph", "retry"):
+                for role in ("setup", "member"):
+                    with self.subTest(latest=latest, kind=kind, role=role):
+                        self.configure_outer_scope(latest=latest, kind=kind, role=role)
+                        writer_map, rows = self.read()
+                        self.assertIsNotNone(writer_map.lineage_bytes)
+                        entry = next(item for item in writer_map.declaration["steps"] if item["bead_id"] == "outer-check")
+                        self.assertEqual(entry["record_kinds"], [])
+                        validate_cooked_writer_map(writer_map, rows, store_ref="rig:fixture",
+                            workflow_root_id="root-1", record_kind="source-plan", claimed_step_id=self.claim)
+                        with self.assertRaises(RecordError):
+                            self.read("attempt-1")
+                        with self.assertRaises(RecordError):
+                            self.read("outer-check")
 
     def test_real_shaped_second_and_third_iterations_keep_exact_history(self):
         for number in (2, 3):
@@ -229,8 +271,11 @@ class NativeAttemptTests(unittest.TestCase):
         with self.assertRaises(RecordError):
             self.read("check-3")
 
-    def prepare_grant(self):
-        self.configure(latest=3)
+    def prepare_grant(self, outer_scope=False):
+        if outer_scope:
+            self.configure_outer_scope(latest=3)
+        else:
+            self.configure(latest=3)
         self.rows[self.claim]["metadata"]["gc.session_id"] = "session-current"
         writer_map, rows = self.read()
         for bead_id in ("grant-1", "payload-1"):
@@ -262,12 +307,16 @@ class NativeAttemptTests(unittest.TestCase):
                 store.install_grant(attempt, scope, "grant-1", writes, writer_map=writer_map)
 
     def test_only_matching_native_cas_advances_spec_revision_without_changing_map_identity(self):
-        for native_receipt in ("matched", "incomplete", "resolve-only"):
-            with self.subTest(native_receipt=native_receipt):
-                store, writer_map, rows, attempt, scope, writes = self.prepare_grant()
+        for outer_scope, native_receipt in ((outer, receipt) for outer in (False, True)
+                                           for receipt in ("matched", "incomplete", "resolve-only")):
+            with self.subTest(outer_scope=outer_scope, native_receipt=native_receipt):
+                store, writer_map, rows, attempt, scope, writes = self.prepare_grant(outer_scope)
                 initial_hash = writer_map.sha256
                 prepared = store.install_grant(attempt, scope, "grant-1", writes,
                                                writer_map=writer_map, expected_rows=rows)
+                if outer_scope:
+                    self.assertTrue({"outer-check", "control-1", self.claim}.issubset(
+                        row["id"] for row in prepared.request["rows"]))
                 actual = json.loads(prepared.after_bytes)
                 response = []
                 for patch_row in prepared.request["rows"]:
@@ -291,8 +340,9 @@ class NativeAttemptTests(unittest.TestCase):
                                                      writer_map=writer_map, expected_rows=rows)
                     self.assertEqual(next(row["expected_revision"] for row in next_write.request["rows"]
                                           if row["id"] == "spec-1"), rows["spec-1"]["revision"])
-                    rows["spec-1"]["revision"] = "9007199254740995"
-                with self.assertRaisesRegex(RecordError, "specification revision changed after discovery"):
+                    rows["outer-check" if outer_scope else "spec-1"]["revision"] = "9007199254740995"
+                with self.assertRaisesRegex(RecordError, "scope check revision changed after discovery" if outer_scope and native_receipt == "matched"
+                                            else "specification revision changed after discovery"):
                     store.write_records(attempt, scope, "grant-1", writes, writer_map=writer_map, expected_rows=rows)
 
     def test_native_forgery_foreign_stale_and_policy_changes_refuse(self):

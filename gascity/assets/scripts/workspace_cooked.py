@@ -218,6 +218,56 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
     declaration = {"version": 1, "workflow_root_id": workflow_root_id, "store_ref": store.store_ref,
         "source_member_id": member, "expansion_root_id": expansion_id, "formula_name": name,
         "formula_hash": digest, "formula_source": source, "steps": sorted(entries, key=lambda item: item["step_ref"])}
+    physical = {item["step_ref"]: item["bead_id"] for item in entries}
+    scope_checks = []
+    for check in entries:
+        if rows[check["bead_id"]]["metadata"].get("gc.kind") != "scope-check":
+            continue
+        subjects = [item for item in entries if item["step_id"] == check["step_id"]
+                    and rows[item["bead_id"]]["metadata"].get("gc.kind") in ("ralph", "retry")]
+        if not subjects:
+            continue
+        require(len(subjects) == 1, "native scope check subject is ambiguous")
+        subject = subjects[0]
+        candidates = [item for item in entries if item["step_id"] == check["step_id"]
+                      and item not in (check, subject) and rows[item["bead_id"]]["metadata"].get("gc.kind") != "scope-check"]
+        proven = [item for item in candidates if owners.get(item["bead_id"], (None,))[0] == subject["bead_id"]]
+        current = max(proven, key=lambda item: owners[item["bead_id"]][1]) if proven else (
+            candidates[0] if len(candidates) == 1 else None)
+        require(current is not None and check["step_ref"] in compiled and subject["step_ref"] in compiled,
+                "native scope check lacks its exact compiled control and attempt")
+        binding = dict(check_id=check["bead_id"], subject_id=subject["bead_id"], attempt_id=current["bead_id"])
+        for occurrence in (check, subject):
+            expected = [physical.get(compiled_ids[edge["depends_on_id"]]["metadata"]["gc.step_ref"])
+                        for edge in formula.get("deps", []) if edge.get("type") == "blocks"
+                        and edge["step_id"] == compiled[occurrence["step_ref"]]["id"]]
+            if occurrence is subject and proven:
+                first = next(item["bead_id"] for item in proven if owners[item["bead_id"]][1] == 1)
+                expected = [current["bead_id"] if bead_id == first else bead_id for bead_id in expected]
+            require(expected and None not in expected and len(set(expected)) == len(expected)
+                    and (expected == [subject["bead_id"]] if occurrence is check else current["bead_id"] in expected),
+                    "compiled scope check control dependencies are ambiguous or absent")
+            bead_id = occurrence["bead_id"]
+            detail = native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
+                                 unwrap_singleton=True, require_array=True)
+            require(all(detail.get(key) == rows[bead_id][key] for key in ("id", "revision", "status", "metadata"))
+                    and detail.get("assignee", "") == rows[bead_id]["assignee"],
+                    "native scope check readback differs from its original guarded row")
+            dependencies = detail.get("dependencies", [])
+            require(isinstance(dependencies, list) and len(dependencies) <= MAX_COOKED_CONTEXT_ROWS
+                    and all(isinstance(edge, dict) and isinstance(edge.get("id"), str)
+                            and isinstance(edge.get("dependency_type"), str) for edge in dependencies),
+                    "native scope check dependency readback is malformed")
+            actual = [edge["id"] for edge in dependencies if edge["dependency_type"] == "blocks"]
+            require(sorted(actual) == sorted(expected), "native scope check physical blocks dependencies differ from compiled lineage")
+            require(read_cooked_context(store, [bead_id])[bead_id] == rows[bead_id]
+                    and native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
+                                    unwrap_singleton=True, require_array=True) == detail,
+                    "native scope check changed during dependency readback")
+            binding[("check" if occurrence is check else "subject") + "_revision"] = detail["revision"]
+        scope_checks.append(binding)
+    if scope_checks:
+        declaration["scope_checks"] = scope_checks
     writer_map = CookedWriterMap(canonical_bytes(declaration), continuation=continuation,
         lineage_bytes=canonical_bytes(dict(version=1, controls=descriptors)) if descriptors else None)
     kind = None if read_only else next(iter(_kinds(claim["metadata"], claim["metadata"].get("gc.step_ref", ""))), "")

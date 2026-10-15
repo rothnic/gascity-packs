@@ -13,7 +13,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "assets" / "scripts"))
 import workspace_cooked as cooked
-from workspace_records import RecordError
+from workspace_records import RecordError, canonical_bytes
+from workspace_store import CookedWriterMap
 
 
 class CookedReaderTests(unittest.TestCase):
@@ -447,6 +448,129 @@ class CookedReaderTests(unittest.TestCase):
             with self.subTest(kind=type(rows)), patch.object(cooked.subprocess, "run", return_value=Result()), \
                  self.assertRaises(RecordError):
                 cooked._native_list(self.store, "gc.attach_root_id", "attach-1")
+
+
+class NativeScopedAttemptTests(unittest.TestCase):
+    """Retained native Compound subgraph with explicit snapshot test doubles."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR"))
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / "compound-build.formula.toml"
+        self.configure_fixture()
+
+    def configure_fixture(self, default=False):
+        self.fixture = json.loads((Path(__file__).parent / "fixtures/workspace-records/native-scoped-prepare.json").read_text())
+        if default:
+            self.fixture = self.fixture["default"]
+        formula_name = self.fixture["formula_name"]
+        self.path.write_text('formula = "' + formula_name + '"\n')
+        self.root, self.claim, self.control, self.check = (self.fixture[key] for key in
+            ("root_id", "claim_id", "control_id", "check_id"))
+        self.rows = {row["id"]: dict(id=row["id"], revision="1", status="open", assignee="",
+            type="task", labels=[], metadata=copy.deepcopy(row["metadata"])) for row in self.fixture["rows"]}
+        self.rows[self.claim].update(status="in_progress", assignee="worker")
+        self.rows[self.claim]["metadata"]["gc.session_id"] = "session-current"
+        self.rows[self.root] = dict(id=self.root, revision="1", status="in_progress", assignee="",
+            type="task", labels=[], metadata={"gc.kind": "workflow", "gc.root_bead_id": self.root,
+                "gc.root_store_ref": "rig:fixture", "gc.formula_name": formula_name,
+                "gc.formula_source": str(self.path), "gc.formula_hash": hashlib.sha256(self.path.read_bytes()).hexdigest(),
+                "gc.var.worktree_lifecycle": "new"})
+        self.details = {row["id"]: dict(copy.deepcopy(self.rows[row["id"]]), dependencies=[
+            dict(id=edge["depends_on_id"], dependency_type=edge["type"]) for edge in row["dependencies"]])
+            for row in self.fixture["rows"]}
+        for detail in self.details.values():
+            if not detail["assignee"]:
+                del detail["assignee"]  # Native IssueDetails omits an empty assignee.
+        self.formula = dict(ok=True, name=formula_name, vars=[], steps=copy.deepcopy(self.fixture["steps"]),
+                            deps=copy.deepcopy(self.fixture["deps"]))
+        outer = self
+        class Store:
+            cwd = outer.tmp.name
+            store_ref = "rig:fixture"
+            gc = "gc"
+            def snapshot(self, ids):
+                return {key: copy.deepcopy(outer.rows[key]) for key in ids}
+        self.store = Store()
+
+    def read(self, claimed=None, read_only=False):
+        def native(gc, cwd, argv, rig, **options):
+            if argv[:2] == ["bd", "show"]:
+                self.assertTrue(options["unwrap_singleton"] and options["require_array"])
+                return copy.deepcopy(self.details[argv[2]])
+            return copy.deepcopy(self.formula)
+        with patch.object(cooked, "_native_list", return_value=list(self.rows)), \
+             patch.object(cooked, "native_json", side_effect=native):
+            return cooked.read_cooked_writer_map(self.store, workflow_root_id=self.root,
+                claimed_step_id=claimed or self.claim, read_only=read_only)
+
+    def validate(self, writer_map, rows, claimed=None, kind="run"):
+        return cooked.validate_cooked_writer_map(writer_map, rows, store_ref="rig:fixture",
+            workflow_root_id=self.root, record_kind=kind, claimed_step_id=claimed or self.claim,
+            read_only=kind is None)
+
+    def test_retained_native_setup_ralph_and_scope_check_admit_only_the_attempt(self):
+        writer_map, rows = self.read()
+        self.assertEqual(rows, self.rows)
+        entries = {row["bead_id"]: row for row in writer_map.declaration["steps"]}
+        self.assertEqual(entries[self.claim]["record_kinds"], ["run"])
+        for control in (self.control, self.check):
+            self.assertEqual(entries[control]["record_kinds"], [])
+            self.read(control, read_only=True)
+            with self.assertRaises(RecordError):
+                self.validate(writer_map, rows, control)
+
+    def test_composed_scope_refuses_foreign_ambiguous_and_missing_physical_edges(self):
+        original = copy.deepcopy(self.details)
+        for mutation in ("missing", "foreign", "duplicate", "not-blocks", "revision", "metadata", "id"):
+            with self.subTest(mutation=mutation):
+                self.details = copy.deepcopy(original)
+                detail = self.details[self.check]
+                edge = next(edge for edge in detail["dependencies"] if edge["dependency_type"] == "blocks")
+                if mutation == "missing": detail["dependencies"] = []
+                elif mutation == "foreign": edge["id"] = self.claim
+                elif mutation == "duplicate": detail["dependencies"].append(copy.deepcopy(edge))
+                elif mutation == "not-blocks": edge["dependency_type"] = "tracks"
+                elif mutation == "revision": detail["revision"] = "2"
+                elif mutation == "metadata": detail["metadata"]["gc.root_store_ref"] = "rig:foreign"
+                elif mutation == "id": detail["id"] = "foreign-check"
+                with self.assertRaises(RecordError):
+                    self.read()
+
+    def test_retained_native_default_prepare_has_the_same_composed_binding(self):
+        self.configure_fixture(default=True)
+        writer_map, rows = self.read()
+        self.validate(writer_map, rows)
+        self.assertEqual(writer_map.declaration["scope_checks"][0]["subject_id"], self.control)
+        self.assertEqual(writer_map.declaration["scope_checks"][0]["attempt_id"], self.claim)
+
+    def test_retained_composed_scope_refuses_changed_policy_and_observation(self):
+        writer_map, original = self.read()
+        for bead_id, key, value in ((self.check, "gc.control_for", "foreign"),
+                (self.check, "gc.scope_ref", "foreign"), (self.control, "gc.scope_role", "control"),
+                (self.control, "gc.on_fail", "continue"), (self.claim, "gc.control_for", "foreign"),
+                (self.claim, "gc.root_store_ref", "rig:other")):
+            with self.subTest(key=key):
+                rows = copy.deepcopy(original)
+                rows[bead_id]["metadata"][key] = value
+                with self.assertRaises(RecordError):
+                    self.validate(writer_map, rows)
+        rows = copy.deepcopy(original)
+        rows[self.check]["revision"] = "2"
+        with self.assertRaisesRegex(RecordError, "scope check revision changed after discovery"):
+            self.validate(writer_map, rows)
+
+    def test_composed_scope_requires_its_exact_retained_observation(self):
+        writer_map, rows = self.read()
+        for mutation in ("absent", "subject", "attempt", "duplicate", "revision"):
+            with self.subTest(mutation=mutation):
+                declaration = writer_map.declaration
+                if mutation == "absent": del declaration["scope_checks"]
+                elif mutation == "subject": declaration["scope_checks"][0]["subject_id"] = self.root
+                elif mutation == "attempt": declaration["scope_checks"][0]["attempt_id"] = self.root
+                elif mutation == "duplicate": declaration["scope_checks"].append(copy.deepcopy(declaration["scope_checks"][0]))
+                elif mutation == "revision": declaration["scope_checks"][0]["check_revision"] = True
+                with self.assertRaises(RecordError):
+                    self.validate(CookedWriterMap(canonical_bytes(declaration)), rows)
 
 
 if __name__ == "__main__":

@@ -130,6 +130,7 @@ class CookedWriterMap:
     continuation: NativeRunContinuation | None = None
     lineage_bytes: bytes | None = None
     _spec_revisions: dict = field(default_factory=dict, init=False, repr=False, compare=False)
+    _scope_revisions: dict = field(default_factory=dict, init=False, repr=False, compare=False)
 
     @property
     def declaration(self) -> dict:
@@ -141,23 +142,30 @@ class CookedWriterMap:
 
     @property
     def sha256(self) -> str:
+        declaration = self.declaration
+        if "scope_checks" in declaration:
+            declaration["scope_checks"] = [{key: value for key, value in item.items()
+                if key not in ("check_revision", "subject_revision")} for item in declaration["scope_checks"]]
         if self.lineage_bytes is not None:
             from workspace_attempts import decode_lineage
-            return hashlib.sha256(canonical_bytes(dict(declaration=self.declaration,
+            return hashlib.sha256(canonical_bytes(dict(declaration=declaration,
                 continuation=self.continuation.binding if self.continuation is not None else None,
                 native_attempts=[{key: value for key, value in descriptor.items() if key != "spec_revision"}
                                  for descriptor in decode_lineage(self)]))).hexdigest()
         if self.continuation is None:
-            return hashlib.sha256(self.declaration_bytes).hexdigest()
+            return hashlib.sha256(canonical_bytes(declaration)).hexdigest()
         require(isinstance(self.continuation, NativeRunContinuation), "typed continuation is required")
-        return hashlib.sha256(canonical_bytes({"declaration": self.declaration,
+        return hashlib.sha256(canonical_bytes({"declaration": declaration,
                                               "continuation": self.continuation.binding})).hexdigest()
 
     def _acknowledge_specs(self, prepared, response):
-        """Advance observation tokens only from this request's validated native CAS."""
+        """Advance spec and scope tokens only from this request's validated native CAS."""
         from workspace_attempts import decode_lineage
         controls = decode_lineage(self)
-        if not controls:
+        observations = [(self._spec_revisions, item["spec_id"], item["spec_revision"]) for item in controls]
+        observations += [(self._scope_revisions, item[key + "_id"], item[key + "_revision"])
+                         for item in self.declaration.get("scope_checks", []) for key in ("check", "subject")]
+        if not observations:
             return
         require(prepared.writer_map is self, "native specification acknowledgement belongs to another map")
         before = parse_record(prepared.before_bytes.decode())
@@ -171,20 +179,20 @@ class CookedWriterMap:
                 and grants[0]["attempt"] == request["admission"],
                 "native specification acknowledgement lacks its exact grant and request")
         nonce = grants[0]["operation_nonce"]
-        updates = {}
-        for descriptor in controls:
-            bead_id = descriptor["spec_id"]
+        updates = []
+        for observed, bead_id, original in observations:
             if bead_id not in patches:
                 continue
-            previous = self._spec_revisions.get(bead_id, descriptor["spec_revision"])
+            previous = observed.get(bead_id, original)
             patch = patches[bead_id]
             require(before[bead_id]["revision"] == previous == patch["expected_revision"]
                     and patch["require_change"] is True
                     and patch["set"].get(TRANSITION_NONCE_KEY) == nonce
                     == after[bead_id]["metadata"].get(TRANSITION_NONCE_KEY),
                     "native specification acknowledgement differs from its original guarded request")
-            updates[bead_id] = revisions[bead_id]
-        self._spec_revisions.update(updates)
+            updates.append((observed, bead_id, revisions[bead_id]))
+        for observed, bead_id, revision in updates:
+            observed[bead_id] = revision
 
 
 def require(condition, message):
@@ -399,8 +407,9 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
             "a designated record kind is required outside explicit read-only admission")
     require(isinstance(writer_map, CookedWriterMap), "typed native occurrence map is required")
     data = writer_map.declaration
-    require(set(data) == {"version", "workflow_root_id", "store_ref", "source_member_id", "expansion_root_id",
-                         "formula_name", "formula_hash", "formula_source", "steps"}
+    fields = {"version", "workflow_root_id", "store_ref", "source_member_id", "expansion_root_id",
+              "formula_name", "formula_hash", "formula_source", "steps"}
+    require(set(data) in (fields, fields | {"scope_checks"})
             and type(data["version"]) is int and data["version"] == 1
             and data["workflow_root_id"] == workflow_root_id and data["store_ref"] == store_ref
             and canonical_bytes(data) == writer_map.declaration_bytes, "native occurrence map scope changed")
@@ -455,9 +464,54 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
                 and item["record_kinds"] == _kinds(metadata, item["step_ref"]),
                 "native writer facts or responsibilities changed")
         semantic.setdefault(item["step_id"], []).append(item)
+    scope_bindings = {}
+    if "scope_checks" in data:
+        require(isinstance(data["scope_checks"], list) and 1 <= len(data["scope_checks"]) <= MAX_COOKED_CONTEXT_ROWS,
+                "native scope check observations are malformed")
+        for item in data["scope_checks"]:
+            require(isinstance(item, dict) and set(item) == {"check_id", "subject_id", "attempt_id", "check_revision", "subject_revision"},
+                    "native scope check observation is malformed")
+            for key in ("check_id", "subject_id", "attempt_id"):
+                _id(item[key], key)
+            require(item["check_id"] not in scope_bindings and len({item[key] for key in ("check_id", "subject_id", "attempt_id")}) == 3,
+                    "native scope check observation is ambiguous")
+            for key in ("check", "subject"):
+                bead_id, revision = item[key + "_id"], item[key + "_revision"]
+                require(isinstance(revision, str) and re.fullmatch(r"-?(?:0|[1-9][0-9]*)", revision)
+                        and -(2**63) <= int(revision) < 2**63 and bead_id in seen_ids
+                        and snapshots[bead_id]["revision"] == writer_map._scope_revisions.get(bead_id, revision),
+                        "native scope check revision changed after discovery")
+            scope_bindings[item["check_id"]] = item
+    used_scope_bindings = set()
     for step_id, occurrences in semantic.items():
         if len(occurrences) == 1:
             continue
+        scope_checks = [item for item in occurrences
+                        if snapshots[item["bead_id"]]["metadata"].get("gc.kind") == "scope-check"]
+        controls = [item for item in occurrences if snapshots[item["bead_id"]]["metadata"].get("gc.kind") in ("retry", "ralph")]
+        if scope_checks and controls:
+            require(len(scope_checks) == len(controls) == 1, "semantic scope check has ambiguous native subjects")
+            check, subject = scope_checks[0], controls[0]
+            check_meta, subject_meta = (snapshots[item["bead_id"]]["metadata"] for item in (check, subject))
+            binding = scope_bindings.get(check["bead_id"])
+            require(binding is not None and binding["subject_id"] == subject["bead_id"]
+                    and check_meta.get("gc.scope_role") == "control" and subject_meta.get("gc.scope_role") in ("setup", "member")
+                    and isinstance(check_meta.get("gc.scope_ref"), str) and check_meta["gc.scope_ref"].strip()
+                    and check_meta.get("gc.control_for") in (step_id, subject["step_ref"])
+                    and all(check_meta.get(key) == subject_meta.get(key)
+                            for key in ("gc.scope_ref", "gc.ralph_step_id", "gc.attempt", "gc.on_fail"))
+                    and not check["record_kinds"] and not subject["record_kinds"]
+                    and check["dependencies"] == subject["dependencies"],
+                    "semantic scope check lacks its exact native control subject")
+            candidates = [item for item in occurrences if item not in (check, subject)]
+            proven_current = [item for item in candidates if item["bead_id"] in attempt_owners
+                              and attempt_owners[item["bead_id"]][0] == subject["bead_id"]]
+            current = max(proven_current, key=lambda item: attempt_owners[item["bead_id"]][1]) if proven_current else (
+                candidates[0] if len(candidates) == 1 else None)
+            require(current is not None and binding["attempt_id"] == current["bead_id"],
+                    "native scope check differs from its current exact attempt")
+            used_scope_bindings.add(check["bead_id"])
+            occurrences = [item for item in occurrences if item is not check]
         proven = [item for item in occurrences if item["bead_id"] in attempt_owners]
         controls = [item for item in occurrences if snapshots[item["bead_id"]]["metadata"].get("gc.kind") in ("retry", "ralph")]
         if proven and len(proven) + len(controls) == len(occurrences):
@@ -485,6 +539,7 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
         require(len(occurrences) == 2 and len(controls) == len(attempts) == 1
                 and controls[0]["dependencies"] == attempts[0]["dependencies"],
                 "multiple semantic writer occurrences lack exact native retry or iteration lineage")
+    require(used_scope_bindings == set(scope_bindings), "native scope check observation has no exact semantic composition")
     require(claimed_step_id in seen_ids, "claimed native step has no exact physical occurrence")
     if not (read_only and record_kind is None):
         require(record_kind in next(item["record_kinds"] for item in data["steps"]

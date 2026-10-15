@@ -1,0 +1,304 @@
+{
+  "check_id": "fi-8l4",
+  "claim_id": "fi-8by",
+  "control_id": "fi-o7p",
+  "default": {
+    "check_id": "fi-cmk",
+    "claim_id": "fi-1cz",
+    "control_id": "fi-dnf",
+    "deps": [
+      {
+        "depends_on_id": "build-basic.prepare.iteration.1",
+        "step_id": "build-basic.prepare",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.prepare",
+        "step_id": "build-basic.prepare-scope-check",
+        "type": "blocks"
+      }
+    ],
+    "formula_name": "build-basic",
+    "root_id": "fi-31d",
+    "rows": [
+      {
+        "dependencies": [
+          {
+            "depends_on_id": "fi-31d",
+            "issue_id": "fi-1cz",
+            "type": "tracks"
+          }
+        ],
+        "id": "fi-1cz",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "prepare",
+          "gc.iteration": "1",
+          "gc.lifecycle": "new",
+          "gc.logical_bead_id": "fi-dnf",
+          "gc.native_step_dependencies.v1": "[]",
+          "gc.ralph_step_id": "prepare",
+          "gc.root_bead_id": "fi-31d",
+          "gc.root_store_ref": "rig:fixture",
+          "gc.run_target": "gc.run-operator",
+          "gc.step_id": "prepare",
+          "gc.step_ref": "prepare.iteration.1"
+        }
+      },
+      {
+        "dependencies": [
+          {
+            "depends_on_id": "fi-31d",
+            "issue_id": "fi-cmk",
+            "type": "tracks"
+          },
+          {
+            "depends_on_id": "fi-dnf",
+            "issue_id": "fi-cmk",
+            "type": "blocks"
+          }
+        ],
+        "id": "fi-cmk",
+        "metadata": {
+          "gc.control_for": "prepare",
+          "gc.kind": "scope-check",
+          "gc.native_step_dependencies.v1": "[]",
+          "gc.on_fail": "abort_scope",
+          "gc.root_bead_id": "fi-31d",
+          "gc.root_store_ref": "rig:fixture",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "prepare",
+          "gc.step_ref": "build-basic.prepare-scope-check"
+        }
+      },
+      {
+        "dependencies": [
+          {
+            "depends_on_id": "fi-31d",
+            "issue_id": "fi-dnf",
+            "type": "tracks"
+          },
+          {
+            "depends_on_id": "fi-1cz",
+            "issue_id": "fi-dnf",
+            "type": "blocks"
+          }
+        ],
+        "id": "fi-dnf",
+        "metadata": {
+          "gc.check_mode": "exec",
+          "gc.check_path": "/owned/checks/workspace-lifecycle-valid.py",
+          "gc.check_timeout": "1m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.lifecycle": "new",
+          "gc.max_attempts": "1",
+          "gc.native_step_dependencies.v1": "[]",
+          "gc.on_fail": "abort_scope",
+          "gc.root_bead_id": "fi-31d",
+          "gc.root_store_ref": "rig:fixture",
+          "gc.run_target": "gc.run-operator",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "setup",
+          "gc.step_id": "prepare",
+          "gc.step_ref": "build-basic.prepare"
+        }
+      }
+    ],
+    "steps": [
+      {
+        "id": "build-basic.prepare.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "prepare",
+          "gc.iteration": "1",
+          "gc.lifecycle": "{{worktree_lifecycle}}",
+          "gc.lifecycle.compatibility": "legacy",
+          "gc.lifecycle.source_modes": "{\"workflow\":\"new\"}",
+          "gc.ralph_step_id": "prepare",
+          "gc.run_target": "gc.run-operator",
+          "gc.step_id": "prepare",
+          "gc.step_ref": "prepare.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.prepare",
+        "metadata": {
+          "gc.check_mode": "exec",
+          "gc.check_path": "/owned/checks/workspace-lifecycle-valid.py",
+          "gc.check_timeout": "1m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.lifecycle": "{{worktree_lifecycle}}",
+          "gc.lifecycle.compatibility": "legacy",
+          "gc.lifecycle.source_modes": "{\"workflow\":\"new\"}",
+          "gc.max_attempts": "1",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.run-operator",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "setup",
+          "gc.step_id": "prepare"
+        }
+      },
+      {
+        "id": "build-basic.prepare-scope-check",
+        "metadata": {
+          "gc.control_for": "prepare",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "prepare"
+        }
+      }
+    ]
+  },
+  "deps": [
+    {
+      "depends_on_id": "compound-build.prepare.iteration.1",
+      "step_id": "compound-build.prepare",
+      "type": "blocks"
+    },
+    {
+      "depends_on_id": "compound-build.prepare",
+      "step_id": "compound-build.prepare-scope-check",
+      "type": "blocks"
+    }
+  ],
+  "formula_name": "compound-build",
+  "root_id": "fi-4bo",
+  "rows": [
+    {
+      "dependencies": [
+        {
+          "depends_on_id": "fi-4bo",
+          "issue_id": "fi-8by",
+          "type": "tracks"
+        }
+      ],
+      "id": "fi-8by",
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "prepare",
+        "gc.iteration": "1",
+        "gc.lifecycle": "new",
+        "gc.logical_bead_id": "fi-o7p",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.ralph_step_id": "prepare",
+        "gc.root_bead_id": "fi-4bo",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.step_id": "prepare",
+        "gc.step_ref": "prepare.iteration.1"
+      }
+    },
+    {
+      "dependencies": [
+        {
+          "depends_on_id": "fi-4bo",
+          "issue_id": "fi-8l4",
+          "type": "tracks"
+        },
+        {
+          "depends_on_id": "fi-o7p",
+          "issue_id": "fi-8l4",
+          "type": "blocks"
+        }
+      ],
+      "id": "fi-8l4",
+      "metadata": {
+        "gc.control_for": "prepare",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "fi-4bo",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "prepare",
+        "gc.step_ref": "compound-build.prepare-scope-check"
+      }
+    },
+    {
+      "dependencies": [
+        {
+          "depends_on_id": "fi-4bo",
+          "issue_id": "fi-o7p",
+          "type": "tracks"
+        },
+        {
+          "depends_on_id": "fi-8by",
+          "issue_id": "fi-o7p",
+          "type": "blocks"
+        }
+      ],
+      "id": "fi-o7p",
+      "metadata": {
+        "gc.check_mode": "exec",
+        "gc.check_path": "/owned/checks/workspace-lifecycle-valid.py",
+        "gc.check_timeout": "1m",
+        "gc.control_epoch": "1",
+        "gc.kind": "ralph",
+        "gc.lifecycle": "new",
+        "gc.max_attempts": "1",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "fi-4bo",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "setup",
+        "gc.step_id": "prepare",
+        "gc.step_ref": "compound-build.prepare"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "id": "compound-build.prepare.iteration.1",
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "prepare",
+        "gc.iteration": "1",
+        "gc.lifecycle": "{{worktree_lifecycle}}",
+        "gc.lifecycle.compatibility": "legacy",
+        "gc.lifecycle.source_modes": "{\"workflow\":\"new\"}",
+        "gc.ralph_step_id": "prepare",
+        "gc.run_target": "gc.run-operator",
+        "gc.step_id": "prepare",
+        "gc.step_ref": "prepare.iteration.1"
+      }
+    },
+    {
+      "id": "compound-build.prepare",
+      "metadata": {
+        "gc.check_mode": "exec",
+        "gc.check_path": "/owned/checks/workspace-lifecycle-valid.py",
+        "gc.check_timeout": "1m",
+        "gc.control_epoch": "1",
+        "gc.kind": "ralph",
+        "gc.lifecycle": "{{worktree_lifecycle}}",
+        "gc.lifecycle.compatibility": "legacy",
+        "gc.lifecycle.source_modes": "{\"workflow\":\"new\"}",
+        "gc.max_attempts": "1",
+        "gc.on_fail": "abort_scope",
+        "gc.run_target": "gc.run-operator",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "setup",
+        "gc.step_id": "prepare"
+      }
+    },
+    {
+      "id": "compound-build.prepare-scope-check",
+      "metadata": {
+        "gc.control_for": "prepare",
+        "gc.kind": "scope-check",
+        "gc.on_fail": "abort_scope",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "prepare"
+      }
+    }
+  ]
+}

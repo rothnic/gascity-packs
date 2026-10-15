@@ -2071,10 +2071,15 @@
       "responsibility": "composed native workspace helper and command entrypoint",
       "sha256": "79c9938c246d34671631ca02d6d1de46467c260b23b480cd2c14503bf862a959"
     },
+    "gascity/assets/scripts/workspace_attempts.py": {
+      "classification": "new",
+      "responsibility": "exact native retry/Ralph control and frozen-specification occurrence lineage",
+      "sha256": "f952b445bafe8d33ae03a67ba8ca6930a2bc1b2fffbaa2485460ad14eb8e9fd8"
+    },
     "gascity/assets/scripts/workspace_cooked.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "707e2a6a00b43c3d56ccba022c32bce89ee74ca41d132ace5f3ea369683f20a4"
+      "sha256": "6415392a5aa4c403c007aae2780b54a5f0bb57f0fd905ff151ce0532dceef00e"
     },
     "gascity/assets/scripts/workspace_source_plan.py": {
       "classification": "new",
@@ -2089,7 +2094,7 @@
     "gascity/assets/scripts/workspace_store.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "d1ec806db1a6ef926eacb6aed724ce2b409a6e61e8c7715a2892615065847a03"
+      "sha256": "7da5d44524459d6a9888bd92e817ae6b5e4c2b24a2bb87b9f350fd252f65199a"
     },
     "gascity/assets/scripts/workspace_entry.py": {
       "classification": "new",

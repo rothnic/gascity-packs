@@ -60,10 +60,26 @@ claimed step can write. Physical steps match the compiled formula's explicit
 edges still resolve through full compiled IDs. Duplicate or malformed references
 are refused.
 
-A native retry or Ralph control and its single attempt may share a semantic
-step ID when the attempt names that control and both retain the same
-dependencies. The control cannot write records. The adapter refuses multiple
-writable attempts for the same semantic step.
+A native retry or Ralph control and its attempts may share a semantic step ID.
+Later controller attachments must join the original compiled seed, exact native
+control and frozen source-specification bead. The adapter verifies the complete
+contiguous attempt history, native counters and maximum, attachment idempotency,
+root, store, source membership, designations and dependencies. Scoped iteration
+bodies and their checks retain their exact compiled roles. Reference suffixes
+alone never authorize an occurrence.
+
+The frozen specification is read through native `bd show --json`; its opaque
+revision and exact description are checked against the compiled source and a
+second read. The cooked map retains this source binding and opaque revision.
+Only the validated native CAS response to that map's own exact request can
+advance its observed spec revision. Fresh snapshots and resolve-only readback
+cannot advance it. This observation token is separate from the map's semantic
+identity, so repeated acknowledged publications retain the same grant identity.
+Earlier occurrences must be closed and remain read-only history; only the latest in-progress claimed
+writer can publish records. Its control and specification join the atomic guard
+set. An explicitly admitted replacement can advance only to the immediate native
+attempt with the same source member, expansion and record responsibility.
+Logical controls and scope checks cannot write records.
 
 A native scope check may share its body's semantic step ID when it names that
 exact body reference. Both occurrences must match the compiled source's scope,

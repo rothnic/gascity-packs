@@ -21,7 +21,7 @@ import stat
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +115,8 @@ class CookedWriterMap:
     """Exact physical occurrences and responsibilities from one native expansion."""
     declaration_bytes: bytes
     continuation: NativeRunContinuation | None = None
+    lineage_bytes: bytes | None = None
+    _spec_revisions: dict = field(default_factory=dict, init=False, repr=False, compare=False)
 
     @property
     def declaration(self) -> dict:
@@ -126,11 +128,50 @@ class CookedWriterMap:
 
     @property
     def sha256(self) -> str:
+        if self.lineage_bytes is not None:
+            from workspace_attempts import decode_lineage
+            return hashlib.sha256(canonical_bytes(dict(declaration=self.declaration,
+                continuation=self.continuation.binding if self.continuation is not None else None,
+                native_attempts=[{key: value for key, value in descriptor.items() if key != "spec_revision"}
+                                 for descriptor in decode_lineage(self)]))).hexdigest()
         if self.continuation is None:
             return hashlib.sha256(self.declaration_bytes).hexdigest()
         require(isinstance(self.continuation, NativeRunContinuation), "typed continuation is required")
         return hashlib.sha256(canonical_bytes({"declaration": self.declaration,
                                               "continuation": self.continuation.binding})).hexdigest()
+
+    def _acknowledge_specs(self, prepared, response):
+        """Advance observation tokens only from this request's validated native CAS."""
+        from workspace_attempts import decode_lineage
+        controls = decode_lineage(self)
+        if not controls:
+            return
+        require(prepared.writer_map is self, "native specification acknowledgement belongs to another map")
+        before = parse_record(prepared.before_bytes.decode())
+        after = parse_record(prepared.after_bytes.decode())
+        request = prepared.request
+        patches = {row["id"]: row for row in request["rows"]}
+        revisions = {row["id"]: row["revision"] for row in response}
+        grants = [parse_record(patch["set"][GRANT_KEY])
+                  for patch in patches.values() if GRANT_KEY in patch["set"]]
+        require(len(grants) == 1 and grants[0]["writer_map_sha256"] == self.sha256
+                and grants[0]["attempt"] == request["admission"],
+                "native specification acknowledgement lacks its exact grant and request")
+        nonce = grants[0]["operation_nonce"]
+        updates = {}
+        for descriptor in controls:
+            bead_id = descriptor["spec_id"]
+            if bead_id not in patches:
+                continue
+            previous = self._spec_revisions.get(bead_id, descriptor["spec_revision"])
+            patch = patches[bead_id]
+            require(before[bead_id]["revision"] == previous == patch["expected_revision"]
+                    and patch["require_change"] is True
+                    and patch["set"].get(TRANSITION_NONCE_KEY) == nonce
+                    == after[bead_id]["metadata"].get(TRANSITION_NONCE_KEY),
+                    "native specification acknowledgement differs from its original guarded request")
+            updates[bead_id] = revisions[bead_id]
+        self._spec_revisions.update(updates)
 
 
 def require(condition, message):
@@ -368,6 +409,8 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
     require((data["source_member_id"] == workflow_root_id or _root(member_row) == workflow_root_id)
             and member_row["metadata"].get("gc.root_store_ref") == store_ref,
             "source member belongs to another native root/store")
+    from workspace_attempts import validate_attempts
+    attempt_owners, _, _ = validate_attempts(writer_map, snapshots, None if read_only else claimed_step_id)
     seen_ids, seen_refs, semantic = set(), set(), {}
     for item in data["steps"]:
         require(isinstance(item, dict) and set(item) == {"bead_id", "step_id", "step_ref", "dependencies", "record_kinds"},
@@ -383,7 +426,8 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
         require((_exact_root(row, physical_root) if continuation is not None else _root(row) == physical_root)
                 and metadata.get("gc.root_store_ref") == store_ref,
                 "native step belongs to another root/store")
-        require((metadata.get("gc.attach_root_id") or physical_root) == data["expansion_root_id"],
+        require((metadata.get("gc.attach_root_id") or physical_root) == data["expansion_root_id"]
+                or item["bead_id"] in attempt_owners,
                 "native step belongs to a sibling expansion")
         member = metadata.get("gc.source_anchor_id", metadata.get("gc.drain_member_id",
             binding["member_id"] if continuation is not None else workflow_root_id))
@@ -396,6 +440,12 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
         semantic.setdefault(item["step_id"], []).append(item)
     for step_id, occurrences in semantic.items():
         if len(occurrences) == 1:
+            continue
+        proven = [item for item in occurrences if item["bead_id"] in attempt_owners]
+        controls = [item for item in occurrences if snapshots[item["bead_id"]]["metadata"].get("gc.kind") in ("retry", "ralph")]
+        if proven and len(proven) + len(controls) == len(occurrences):
+            require(len({attempt_owners[item["bead_id"]][0] for item in proven}) == 1,
+                    "semantic attempts belong to different native controls")
             continue
         scope_checks = [item for item in occurrences
                         if snapshots[item["bead_id"]]["metadata"].get("gc.kind") == "scope-check"]
@@ -551,6 +601,7 @@ class PreparedWrite:
     scope_bytes: bytes
     binding_bytes: bytes
     replay: bool
+    writer_map: CookedWriterMap | None = field(default=None, repr=False, compare=False)
 
     @property
     def request(self) -> dict:
@@ -930,6 +981,10 @@ class WorkspaceStore:
                 "native occurrence map is incomplete")
         map_ids = [item["bead_id"] for item in declaration["steps"]]
         binding_ids = [declaration["expansion_root_id"], declaration["source_member_id"]]
+        from workspace_attempts import decode_lineage, validate_attempts
+        lineage_ids = []
+        for control in decode_lineage(writer_map):
+            lineage_ids.extend((control["control_id"], control["spec_id"]))
         if continuation is not None:
             binding_ids.extend(continuation.row_ids)
         if previous_continuation is not None:
@@ -949,7 +1004,7 @@ class WorkspaceStore:
                                  *([expected_grant["attempt"]["claimed_bead_id"],
                                     expected_grant["writer_occurrence"]["expansion_root_id"]] if operation == "replace" else []),
                                  *([successor_relation.source_plan_bead_id, successor_relation.reference_bead_id] if successor_relation else [])]))
-        context_ids = list(dict.fromkeys([*ids, *map_ids]))
+        context_ids = list(dict.fromkeys([*ids, *map_ids, *lineage_ids]))
         rows = read_cooked_context(self, context_ids) if expected_rows is None else merge_cooked_context(expected_rows)
         if any(i not in rows or rows[i].get("id") != i for i in context_ids):
             raise StoreError("expected_rows must contain every exact original snapshot")
@@ -995,6 +1050,8 @@ class WorkspaceStore:
             raise StoreError("retained claimed step lacks exact native session, root, store or step binding")
         declaration = validate_cooked_writer_map(writer_map, rows, store_ref=self.store_ref,
             workflow_root_id=root_id, record_kind=scope["record_kind"], claimed_step_id=attempt.claimed_bead_id)
+        _, _, native_attempt_guards = validate_attempts(writer_map, rows, attempt.claimed_bead_id)
+        ids = list(dict.fromkeys([*ids, *native_attempt_guards]))
         map_sha256 = writer_map.sha256
         authority = rows[authority_id]
         self._dedicated(authority)
@@ -1022,7 +1079,7 @@ class WorkspaceStore:
             else:
                 if old_grant != expected_grant:
                     raise StoreError("replacement requires the exact recorded predecessor grant")
-                predecessor_path = self._successor(old_grant, attempt, scope, successor_relation, rows, declaration, map_sha256, continuation)
+                predecessor_path = self._successor(old_grant, attempt, scope, successor_relation, rows, declaration, map_sha256, continuation, writer_map)
         if old_grant is not None and old_grant["operation_nonce"] == nonce:
             raise StoreError("a consumed operation nonce cannot be reused for a new transaction")
         grant = {"version": 1, "scope": scope, "authority_id": authority_id,
@@ -1401,7 +1458,7 @@ class WorkspaceStore:
                 "complete guarded source close exceeds 100 native items; chunking is forbidden")
         request = {"admission": attempt.admission, "rows": list(patches.values())}
         return PreparedWrite(canonical_bytes(request), canonical_bytes(rows), canonical_bytes(after),
-                             canonical_bytes(scope), self._binding(), replay)
+                             canonical_bytes(scope), self._binding(), replay, writer_map)
 
     @staticmethod
     def _dedicated(row, workspace=None, *, native_roots=()):
@@ -1505,7 +1562,7 @@ class WorkspaceStore:
                     and binding["member_id"] == occurrence["source_member_id"], "retained grant continuation scope changed")
 
     @staticmethod
-    def _successor(grant, attempt, scope, relation, rows, declaration, map_sha256, continuation=None):
+    def _successor(grant, attempt, scope, relation, rows, declaration, map_sha256, continuation=None, writer_map=None):
         old = Attempt(**grant["attempt"])
         if old.admission == attempt.admission:
             raise StoreError("replacement needs a proven new native incarnation or declared successor")
@@ -1519,15 +1576,29 @@ class WorkspaceStore:
         previous_binding = previous.get("continuation")
         previous_root = previous_binding["child_root_id"] if previous_binding is not None else scope["workflow_root_id"]
         old_native = rows[old.claimed_bead_id]["metadata"]
+        owners = {}
+        if writer_map is not None and writer_map.lineage_bytes is not None:
+            from workspace_attempts import validate_attempts
+            owners, _, _ = validate_attempts(writer_map, rows, attempt.claimed_bead_id)
         old_member = old_native.get("gc.source_anchor_id", old_native.get("gc.drain_member_id",
             previous_binding["member_id"] if previous_binding is not None else scope["workflow_root_id"]))
         if (old_member != previous["source_member_id"] or old_native.get("gc.drain_member_id", old_member) != old_member
                 or old_native.get("gc.step_id") != previous["step_id"] or old_native.get("gc.step_ref") != previous["step_ref"]
-                or (old_native.get("gc.attach_root_id") or previous_root) != previous["expansion_root_id"]
+                or ((old_native.get("gc.attach_root_id") or previous_root) != previous["expansion_root_id"]
+                    and old.claimed_bead_id not in owners)
                 or _formula_identity(rows[previous["expansion_root_id"]]) != tuple(previous["formula_" + key] for key in ("name", "hash", "source"))
                 or scope["record_kind"] not in _kinds(old_native, previous["step_ref"])):
             raise StoreError("predecessor differs from its retained native cooked writer occurrence")
         entries = {item["bead_id"]: item for item in declaration["steps"]}
+        if owners:
+            before_owner, after_owner = owners.get(old.claimed_bead_id), owners.get(attempt.claimed_bead_id)
+            if before_owner and after_owner and before_owner[0] == after_owner[0]:
+                require(after_owner[1] == before_owner[1] + 1
+                        and previous["step_id"] == entries[attempt.claimed_bead_id]["step_id"]
+                        and previous["source_member_id"] == declaration["source_member_id"]
+                        and previous["expansion_root_id"] == declaration["expansion_root_id"],
+                        "replacement is not the immediate proven native attempt successor")
+                return [old.claimed_bead_id, before_owner[0]]
         if old.claimed_bead_id in entries:
             before, after = entries[old.claimed_bead_id], entries[attempt.claimed_bead_id]
             if grant["writer_map_sha256"] != map_sha256 or scope["record_kind"] not in before["record_kinds"]:
@@ -1609,6 +1680,8 @@ class WorkspaceStore:
                                 or type(actual["changed"]) is not bool
                                 or (patch["require_change"] and not actual["changed"])):
                             raise StoreError("native batch result mismatches the frozen request")
+                    if prepared.writer_map is not None:
+                        prepared.writer_map._acknowledge_specs(prepared, response)
                 except StoreError as exc:
                     return {"outcome": "unknown", "request_sha256": prepared.sha256,
                             "error": str(exc), "retry_allowed": False}

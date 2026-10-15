@@ -239,6 +239,14 @@ provider = "your-provider"
 Launch formulas from target rig context, or pass normal `--rig <target-rig>`
 selection so `gc.run-operator` resolves to rig-local role.
 
+The claim command can deliver an expanded workflow root as a launch anchor.
+Workers keep that root open and use the same claim command for its next native
+step; they do not fail or close it because its kind is `workflow`. During item
+preparation, the [shared recipe](assets/workflows/do-work/prepare-worktree.md)
+runs `workspace_entry.py read --require-plan` to discover the original run and
+the plan's producer through the native drain relationship. A source-plan
+reference need not be stored on the item root or original workflow root.
+
 Default formula routes use these qualified targets: `gc.run-operator`,
 `gc.requirements-planner`, `gc.design-author`, `gc.task-decomposer`,
 `gc.issue-triager`, `gc.design-implementation-reviewer`,

@@ -457,7 +457,7 @@
     "gascity/assets/workflows/do-work/prepare-worktree.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,workspace-prepare",
-      "sha256": "90fa1fc8359fb76e5232701901c726225009d22b0c1f88267154dc78e53e6550"
+      "sha256": "1d61a2dd3af5550e2f3d891108ade1897b80d9ab66788d909376c82d2d539e6f"
     },
     "gascity/assets/workflows/do-work-item/implement-item.md": {
       "classification": "new",
@@ -2017,7 +2017,7 @@
     "gascity/assets/workflows/do-work-item/prepare-worktree.md": {
       "classification": "new",
       "responsibility": "path-reader,workspace-prepare",
-      "sha256": "68a7e38a4f0b1c510c27b8483b88f5b9184e82bfeaf1544882941417cf5bf4e1"
+      "sha256": "4d003aac963de6cbf1323f2125b88ceb7e9fb229e9a483f18cce7d5459a6e3dc"
     },
     "gascity/assets/workflows/implement/record-canonical.md": {
       "classification": "new",

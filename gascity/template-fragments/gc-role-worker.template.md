@@ -38,6 +38,24 @@ Never ask a human whether to proceed after a successful claim. Do not stop for
 confirmation in a headless workflow. If required task input is missing, record
 the bead's failure contract and close it instead of idling.
 
+## Workflow root delivery
+
+A claimed `gc.kind=workflow` with `gc.formula_contract=graph.v2` and
+`gc.workflow_expanded=true` is a native launch or continuation anchor. Read its
+description and retain the claim. Its kind is not a failure, and its launch
+inputs are not a completed implementation result. Do not set `gc.outcome`,
+fail, or close that root merely to reach its children; native workflow
+finalization owns its completion.
+
+Run `gc gc claim` again to receive the next executable step. This launch
+handoff precedes the close and continuation-group rules below, including when
+the anchor's continuation group is empty. Use only the next claim's returned
+identifiers; never select, assign, or manufacture a sibling claim. If the same
+anchor returns while its steps are pending, leave it unchanged and end the
+turn for native runtime continuation; do not loop or drain-ack the held root.
+An executable root without this expanded graph contract still follows its
+own description and result contract.
+
 ## Close
 
 Honor bead's requested `gc.outcome` metadata. If no failure contract exists,
@@ -99,7 +117,9 @@ Then exit. Never claim "drained" without acknowledgement.
 
 ## Invariants
 
-- `gc.kind=workflow` and `gc.kind=scope`: latch beads, not normal work.
+- A workflow root delivered by `gc gc claim` follows the root-delivery protocol
+  above; never reject it solely because `gc.kind=workflow`.
+- `gc.kind=scope`: a graph latch, not a source of worker-selected work.
 - `gc.kind=check|fanout|scope-check|workflow-finalize`: implicit
   `workflow-control` work, not normal worker work.
 {{- end }}

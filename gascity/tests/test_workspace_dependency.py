@@ -426,10 +426,21 @@ class DependencyNativeCompositionTests(unittest.TestCase):
             expansion='expansion-C', published=False)
 
     def test_native_child_prepares_exact_dependency_and_inherits_original_run_atomically(self):
+        from workspace_entry import read_entry
         from workspace_store import CONTINUATION_KEY
         self.child_fixture(); f = self.fixture
         before = self.state()
-        result = self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        discovered = read_entry(f.store, gc=str(f.port), city_root=str(f.city), rig_name='fixture',
+            workflow_root_id='child-C', claimed_step_id='prepare-C', worktree_lifecycle='new',
+            generation=1, require_plan=True)
+        member_id = discovered['native_continuation']['member_id']
+        owners = [node['owner_id'] for node in discovered['source_plan']['nodes'] if member_id in node['member_ids']]
+        self.assertEqual(['C'], owners)
+        self.assertNotIn('gc.source_plan_ref', before['stores']['rig:fixture']['child-C']['metadata'])
+        self.assertNotIn('gc.source_plan_ref', before['stores']['rig:fixture']['root']['metadata'])
+        result = self.prepare(workflow_root_id=discovered['workflow_root_id'],
+            input_convoy_id=discovered['native_input_convoy_id'],
+            member_id=member_id, workspace_owner_id=owners[0])
         rows = self.state()['stores']['rig:fixture']
         workspace = result['workspace']
         self.assertEqual(f.oid, result['input_oid'])

@@ -364,14 +364,25 @@ class ExpansionCompositionTests(unittest.TestCase):
         self.port.rows[native.claim]["metadata"]["gc.session_id"] = "session-1"
         self.attempt = self.workspace["attempt"] = Attempt("session-1", "incarnation-1", native.claim)
         def read(gc, city, arguments, rig, **options):
-            return copy.deepcopy(native.detail if arguments[:2] == ["bd", "show"] else native.formula)
+            if arguments[:2] == ["bd", "show"]:
+                bead_id = arguments[2]
+                if bead_id == native.detail["id"]:
+                    return copy.deepcopy(native.detail)
+                detail = copy.deepcopy(self.port.rows[bead_id])
+                detail["dependencies"] = copy.deepcopy(native.scope_details[bead_id]["dependencies"])
+                return detail
+            return copy.deepcopy(native.formula)
+        touched = False
         def touch():
+            nonlocal touched
             current = self.port.rows["spec-1"]
             current["revision"] = native.detail["revision"] = str(int(current["revision"]) + 1)
+            touched = True
         with patch.object(cooked, "_native_list", return_value=list(native.rows)), \
              patch.object(cooked, "native_json", side_effect=read), self.during_last_allocation(touch):
             with self.assertRaisesRegex(RecordError, "specification.*revision"):
                 self.expand()
+        self.assertTrue(touched)
         self.assertEqual(self.port.requests, [])
 
 

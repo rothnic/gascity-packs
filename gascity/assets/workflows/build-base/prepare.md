@@ -25,6 +25,36 @@ Launch inputs:
 - push: {{push}}
 - open_pr: {{open_pr}}
 
+Resolve and read the original input before deciding that required build input
+is missing:
+
+1. Read the claimed step and its exact workflow root as described below. Keep
+   the native claim, selected city, root store, and registered rig explicit.
+2. Read the root’s `gc.input_convoy_id` in that same native store. Resolve the
+   original task or convoy under the existing [workspace entry
+   contract](../workspace-entry.md); its native reader remains authoritative
+   for source identity and immutable source/store-pin compatibility, including
+   supported preserved root and claimed-step pins. For a task launch, read the
+   original task recorded by the native singleton input; for a genuine convoy
+   launch, read the convoy itself. Retain the validated original identity; do
+   not restamp or select another source. A `tracks` edge may corroborate that
+   source, but it neither selects the source nor adds a required edge.
+3. Read the complete original task or convoy description. Read the supplied
+   `context_path` bundle in full and each declared request and behavior input.
+   Compare a materialized request with its original native source; do not guess
+   input paths from the working directory or an earlier workflow.
+4. Blank `requirements_path`, `plan_path`, and `decomposition_path` are valid
+   before their producer stages. Derive their output paths under `artifact_root`
+   as specified below. Neither those blank outputs nor the attached workflow
+   root's generic description proves that the original request is missing.
+
+These are input reads for the already claimed step, not work discovery or
+permission to claim, update, or close the source task, input convoy, or another
+step. They do not replace the mandatory workspace entry and selected-mode
+checks below. If a required input is actually missing, unreadable, foreign,
+ambiguous, or inconsistent, retain the failing read or helper diagnostic and
+use the blocked outcome below; never manufacture input or infer success.
+
 Validate the target, artifact root, and optional context inputs. Record the normalized artifact paths on the workflow root bead so later stages can reuse them without inventing new locations.
 
 Apply the [workspace entry contract](../workspace-entry.md) before handoff:

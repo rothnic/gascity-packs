@@ -259,6 +259,12 @@ and `gc.publisher`.
 
 ## Build Methodology Contract
 
+The default `build-basic` requirements stage reads the original native request
+and declared context/behavior inputs before drafting. The requirements preserve
+the full requested behavior, source topology and constraints. `worktree_checks`
+supplies validation policy. Missing or inconsistent required inputs block the
+stage. See the [requirements recipe](assets/workflows/build-basic/requirements.md).
+
 `build-base` is the virtual full-lifecycle workflow contract. It defines the
 stable stage sequence that concrete build methodology packs can override:
 

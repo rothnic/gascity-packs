@@ -10,7 +10,7 @@ from workspace_records import canonical_bytes, parse_record
 
 
 FACTS = ("gc.kind", "gc.step_id", "gc.step_ref", "gc.control_for",
-         "gc.build.artifact_schema", "gc.lifecycle", "gc.run_target", "gc.scope_role",
+         "gc.build.artifact_schema", "gc.build.plan_review_required", "gc.lifecycle", "gc.run_target", "gc.scope_role",
          "gc.scope_ref", "gc.scope_name", "gc.ralph_step_id", "gc.attempt", "gc.retry_attempt",
          "gc.iteration", "gc.on_fail")
 POLICY = ("gc.max_attempts", "gc.check_mode", "gc.check_path", "gc.check_timeout",
@@ -45,7 +45,7 @@ def _substitute(value, variables):
 
 
 def attempt_metadata(seed, control, number, prefix):
-    """Mirror native buildAttemptRecipe's owned fields, keeping compiled designations."""
+    """Later roots come from the frozen authored step, not its stripped first seed."""
     metadata = copy.deepcopy(seed)
     old_prefix = control["seed_ref"]
     for key in ("gc.step_ref", "gc.scope_ref", "gc.control_for"):
@@ -55,10 +55,14 @@ def attempt_metadata(seed, control, number, prefix):
     root = seed["gc.step_ref"] == old_prefix
     kind = control["kind"]
     if root:
+        metadata = copy.deepcopy(control["source_spec"].get("metadata") or {})
+        metadata["gc.step_id"] = control["step_id"]
+        metadata["gc.step_ref"] = prefix
         metadata["gc.kind"] = "scope" if control["scoped"] else "task"
         metadata["gc.control_for"] = metadata["gc.logical_bead_id"] = control["control_id"]
-        if not control["scoped"]:
-            metadata.pop("gc.ralph_step_id", None)
+        if control["scoped"]:
+            metadata.update({"gc.scope_role": "body", "gc.scope_name": control["step_id"],
+                             "gc.ralph_step_id": control["step_id"]})
         if kind == "retry":
             metadata["gc.retry_attempt"] = str(number)
             iteration = control["iteration"]
@@ -76,6 +80,105 @@ def attempt_metadata(seed, control, number, prefix):
         metadata["gc.kind"] = metadata.get("gc.kind") or "task"
         metadata["gc.attempt"] = metadata["gc.iteration"] = str(number)
     return metadata
+
+
+def attempt_recipe(control, number, prefix):
+    """Reconstruct native attempt metadata and blocks, including minted scope checks."""
+    templates, seed_ref = control["templates"], control["seed_ref"]
+    def rename(ref):
+        template = templates.get(ref)
+        if template and template["metadata"].get("gc.kind") == "scope-check":
+            subject = template["metadata"].get("gc.control_for", "")
+            if subject == seed_ref or subject.startswith(seed_ref + "."):
+                return ref if number == 1 else prefix + subject[len(seed_ref):] + "-scope-check"
+        return prefix + ref[len(seed_ref):] if ref == seed_ref or ref.startswith(
+            (seed_ref + ".", seed_ref + "-")) else ref
+    recipe = {rename(ref): dict(metadata=(copy.deepcopy(template["metadata"]) if number == 1 else
+                attempt_metadata(template["metadata"], control, number, prefix)),
+                blocks=[rename(ref) for ref in template["blocks"]],
+                dependencies=template["dependencies"])
+              for ref, template in templates.items()}
+    if number == 1:
+        return recipe
+    # buildAttemptRecipe has no external root blocks. Its scoped root waits on
+    # raw children; a child scope-check closes that root, so rewriting that edge
+    # would create the cycle deliberately excluded by RewriteRecipeDepsToControls.
+    children = control["source_spec"].get("children") or []
+    recipe[prefix]["blocks"] = [prefix + "." + child["id"] for child in children]
+    authored_refs = {prefix, *recipe[prefix]["blocks"]}
+    for ref, entry in list(recipe.items()):
+        # These compiler-minted controls are re-minted by the native attempt
+        # builder, even when the first compiled iteration already had them.
+        subject = entry["metadata"].get("gc.control_for")
+        if (ref not in authored_refs and entry["metadata"].get("gc.kind") == "scope-check"
+                and subject in recipe and ref == subject + "-scope-check"):
+            del recipe[ref]
+    for child in children:
+        ref = prefix + "." + child["id"]
+        _require(ref in recipe, "native attempt child lacks its exact compiled seed")
+        if not any(child.get(key) for key in ("retry", "ralph", "drain")):
+            metadata = copy.deepcopy(child.get("metadata") or {})
+            metadata.update({"gc.attempt": str(number), "gc.step_ref": ref, "gc.step_id": child["id"],
+                "gc.scope_ref": prefix, "gc.ralph_step_id": control["step_id"], "gc.scope_role": "member",
+                "gc.on_fail": "abort_scope"})
+            iteration = str(number) if control["kind"] == "ralph" else control["iteration"]
+            if iteration:
+                metadata["gc.iteration"] = iteration
+            else:
+                metadata.pop("gc.iteration", None)
+            metadata["gc.kind"] = metadata.get("gc.kind") or "task"
+            recipe[ref]["metadata"] = metadata
+        recipe[ref]["blocks"] = [prefix + "." + need for need in child.get("needs", [])]
+    replacements = {}
+    for ref, entry in list(recipe.items()):
+        metadata = entry["metadata"]
+        if (not metadata.get("gc.scope_ref") or metadata.get("gc.scope_role") == "teardown"
+                or metadata.get("gc.kind") in ("scope", "scope-check", "workflow-finalize", "fanout", "check", "drain", "spec")):
+            continue
+        check_ref = ref + "-scope-check"
+        if check_ref in recipe:
+            continue
+        check = {"gc.kind": "scope-check", "gc.scope_role": "control",
+                 "gc.scope_ref": metadata["gc.scope_ref"], "gc.control_for": ref,
+                 "gc.step_ref": check_ref}
+        check.update({key: metadata[key] for key in
+                      ("gc.step_id", "gc.ralph_step_id", "gc.attempt", "gc.on_fail") if metadata.get(key)})
+        recipe[check_ref] = dict(metadata=check, blocks=[ref])
+        replacements[ref] = check_ref
+    for ref, entry in recipe.items():
+        _require(all(need in recipe for need in entry["blocks"]), "native attempt block leaves its source recipe")
+        if ref in replacements.values():
+            continue
+        entry["blocks"] = [replacements.get(need, need) if not (
+            entry["metadata"].get("gc.kind") == "scope" and entry["metadata"].get("gc.scope_role") == "body"
+            and recipe[need]["metadata"].get("gc.scope_ref") == ref) else need
+            for need in entry["blocks"]]
+    # Native topology groups the local recipe's physical edges by semantic ID;
+    # only the attempt root inherits its logical control's external topology.
+    topology = {}
+    for ref, entry in recipe.items():
+        step_id = entry["metadata"]["gc.step_id"]
+        topology.setdefault(step_id, set()).update(recipe[need]["metadata"]["gc.step_id"]
+            for need in entry["blocks"] if recipe[need]["metadata"]["gc.step_id"] != step_id)
+    for entry in recipe.values():
+        entry["dependencies"] = sorted(topology[entry["metadata"]["gc.step_id"]])
+    recipe[prefix]["dependencies"] = control["dependencies"]
+    return recipe
+
+
+def physical_attempt_edges(control):
+    """Expected native blocks by physical ID, retaining all prior attempt roots."""
+    physical = {ref: bead_id for attempt in control["attempts"] for ref, bead_id in attempt["refs"].items()}
+    physical.update(control["external_refs"])
+    edges = {control["control_id"]: sorted(set(
+        [physical[ref] for ref in control["control_blocks"]] + [item["root_id"] for item in control["attempts"]]))}
+    for attempt in control["attempts"]:
+        prefix = next(ref for ref, bead_id in attempt["refs"].items() if bead_id == attempt["root_id"])
+        recipe = attempt_recipe(control, attempt["number"], prefix)
+        for ref, entry in recipe.items():
+            _require(all(need in physical for need in entry["blocks"]), "native attempt block has no exact physical source")
+            edges[attempt["refs"][ref]] = sorted(physical[need] for need in entry["blocks"])
+    return edges
 
 
 def decode_lineage(writer_map):
@@ -100,6 +203,13 @@ def discover_attempts(compiled, dependencies, rows, expansion_id, raw_formula, v
                  if isinstance(step, dict) and isinstance(step.get("id"), str)}
     _require(len(raw_steps) == len(raw_formula["steps"]) and set(raw_steps) == {step["id"] for step in compiled.values()},
              "native raw formula steps are malformed or ambiguous")
+    refs_by_id = {entry["id"]: ref for ref, entry in compiled.items()}
+    blocks = {ref: [] for ref in compiled}
+    for edge in raw_formula.get("deps", []):
+        if edge.get("type") == "blocks":
+            _require(edge.get("step_id") in refs_by_id and edge.get("depends_on_id") in refs_by_id,
+                     "native attempt block has no exact compiled source")
+            blocks[refs_by_id[edge["step_id"]]].append(refs_by_id[edge["depends_on_id"]])
     for control_ref, step in compiled.items():
         meta = step["metadata"]
         kind = meta.get("gc.kind")
@@ -123,10 +233,13 @@ def discover_attempts(compiled, dependencies, rows, expansion_id, raw_formula, v
         _require(len(seeds) == 1, "native control lacks one exact compiled first attempt")
         seed = seeds[0]["metadata"]
         seed_ref = seed["gc.step_ref"]
+        seed_refs = {ref for ref in compiled if ref == seed_ref or ref.startswith(seed_ref + ".")}
         templates = {ref: dict(metadata=copy.deepcopy(entry["metadata"]),
-                               dependencies=sorted(dependencies[entry["metadata"]["gc.step_id"]]))
+                               dependencies=sorted(dependencies[entry["metadata"]["gc.step_id"]]), blocks=blocks[ref])
                      for ref, entry in compiled.items()
-                     if ref == seed_ref or ref.startswith(seed_ref + ".") or ref == seed_ref + "-scope-check"}
+                     if ref in seed_refs or ref == seed_ref + "-scope-check" or (
+                         entry["metadata"].get("gc.kind") == "scope-check"
+                         and entry["metadata"].get("gc.control_for") in seed_refs)}
         specs = [entry for entry in compiled.values()
                  if entry["metadata"].get("gc.kind") == "spec"
                  and entry["metadata"].get("gc.spec_for_ref") == control_ref]
@@ -157,7 +270,8 @@ def discover_attempts(compiled, dependencies, rows, expansion_id, raw_formula, v
             control_metadata={key: meta.get(key) for key in (*FACTS, *POLICY)},
             source_description=detail["description"],
             description_sha256=hashlib.sha256(detail["description"].encode()).hexdigest(),
-            templates=templates, attempts=[])
+            dependencies=_dependencies(control_row["metadata"]), control_blocks=blocks[control_ref],
+            templates=templates, external_refs={}, attempts=[])
         roots = {1: [row for row in rows.values() if original(row) and row["metadata"].get("gc.step_ref") == seed_ref]}
         for row in attached:
             counter = _number(row["metadata"].get("gc.retry_attempt") if kind == "retry"
@@ -171,8 +285,7 @@ def discover_attempts(compiled, dependencies, rows, expansion_id, raw_formula, v
             root = values[0]
             prefix = seed_ref if number == 1 else control_ref + (".iteration." if kind == "ralph" else ".attempt.") + str(number)
             occurrence = dict(number=number, root_id=root["id"], refs={})
-            for ref, template in templates.items():
-                actual_ref = ref if number == 1 else prefix + ref[len(seed_ref):]
+            for actual_ref, entry in attempt_recipe(descriptor, number, prefix).items():
                 candidates = [row for row in rows.values() if row["metadata"].get("gc.step_ref") == actual_ref
                               and (original(row) if number == 1 else
                                    row["id"] == root["id"] or row["metadata"].get("gc.attach_root_id") == root["id"])]
@@ -182,10 +295,14 @@ def discover_attempts(compiled, dependencies, rows, expansion_id, raw_formula, v
                 owners[bead_id] = (control_id, number)
                 occurrence["refs"][actual_ref] = bead_id
                 if number > 1:
-                    metadata = attempt_metadata(template["metadata"], descriptor, number, prefix)
-                    expected[actual_ref] = dict(metadata=metadata, dependencies=(
-                        _dependencies(control_row["metadata"]) if ref == seed_ref else template["dependencies"]))
+                    expected[actual_ref] = entry
             descriptor["attempts"].append(occurrence)
+        family_refs = {ref for attempt in descriptor["attempts"] for ref in attempt["refs"]}
+        external = set(descriptor["control_blocks"]) | {ref for template in templates.values() for ref in template["blocks"]}
+        for ref in external - family_refs:
+            candidates = [row for row in rows.values() if original(row) and row["metadata"].get("gc.step_ref") == ref]
+            _require(ref in compiled and len(candidates) == 1, "native attempt prerequisite is absent or ambiguous")
+            descriptor["external_refs"][ref] = candidates[0]["id"]
         descriptors.append(descriptor)
     return expected, descriptors, owners
 
@@ -242,7 +359,22 @@ def validate_attempts(writer_map, rows, claimed_step_id):
                      and isinstance(template.get("dependencies"), list)
                      and all(isinstance(dep, str) for dep in template["dependencies"])
                      and template["dependencies"] == sorted(set(template["dependencies"]))
+                     and isinstance(template.get("blocks"), list)
+                     and all(isinstance(ref, str) for ref in template["blocks"])
+                     and len(set(template["blocks"])) == len(template["blocks"])
                      for ref, template in templates.items()), "native compiled attempt seeds are malformed")
+        _require(descriptor.get("dependencies") == _dependencies(metadata)
+                 and isinstance(descriptor.get("control_blocks"), list)
+                 and all(isinstance(ref, str) for ref in descriptor["control_blocks"])
+                 and len(set(descriptor["control_blocks"])) == len(descriptor["control_blocks"])
+                 and isinstance(descriptor.get("external_refs"), dict), "native attempt block declaration is malformed")
+        for ref, bead_id in descriptor["external_refs"].items():
+            _require(isinstance(ref, str) and isinstance(bead_id, str) and bead_id in rows
+                     and rows[bead_id]["metadata"].get("gc.step_ref") == ref
+                     and _root(rows[bead_id]) == physical_root
+                     and rows[bead_id]["metadata"].get("gc.root_store_ref") == metadata.get("gc.root_store_ref")
+                     and (rows[bead_id]["metadata"].get("gc.attach_root_id") or physical_root) == expansion_id,
+                     "native attempt prerequisite belongs to a foreign source occurrence")
         _require(isinstance(attempts, list) and all(isinstance(item, dict) and set(item) == {"number", "root_id", "refs"}
                      and type(item["number"]) is int and isinstance(item["root_id"], str)
                      and item["root_id"] in rows and isinstance(item["refs"], dict) for item in attempts)
@@ -256,7 +388,8 @@ def validate_attempts(writer_map, rows, claimed_step_id):
             prefix = descriptor["seed_ref"] if number == 1 else descriptor["control_ref"] + (
                 ".iteration." if descriptor["kind"] == "ralph" else ".attempt.") + str(number)
             _require(root["metadata"].get("gc.step_ref") == prefix, "native attempt root reference changed")
-            _require(set(attempt["refs"]) == {prefix + ref[len(descriptor["seed_ref"]):] for ref in templates}
+            recipe = attempt_recipe(descriptor, number, prefix)
+            _require(set(attempt["refs"]) == set(recipe)
                      and attempt["refs"].get(prefix) == root["id"],
                      "native attempt body differs from its exact compiled seeds")
             if number > 1:
@@ -267,25 +400,32 @@ def validate_attempts(writer_map, rows, claimed_step_id):
                 _require(bead_id in rows and bead_id not in owners and _root(rows[bead_id]) == _root(control)
                          and rows[bead_id]["metadata"].get("gc.root_store_ref") == metadata.get("gc.root_store_ref"),
                          "native attempt belongs to a foreign or ambiguous root/store")
-                seed_ref = descriptor["seed_ref"] + ref[len(prefix):]
-                _require(ref.startswith(prefix) and seed_ref in descriptor["templates"],
-                         "native attempt has no exact compiled seed")
-                template = descriptor["templates"][seed_ref]
-                wanted = template["metadata"] if number == 1 else attempt_metadata(template["metadata"], descriptor, number, prefix)
+                wanted = recipe[ref]["metadata"]
                 observed = rows[bead_id]["metadata"]
                 _require(all(observed.get(key) == wanted.get(key) for key in FACTS),
                          "native attempt designation differs from its frozen source")
-                deps = _dependencies(control["metadata"]) if number > 1 and bead_id == root["id"] else template["dependencies"]
+                deps = recipe[ref]["dependencies"]
                 _require(_dependencies(observed) == sorted(deps), "native attempt dependency lineage changed")
                 attach = observed.get("gc.attach_root_id")
                 _require(not attach or attach in (writer_map.declaration["expansion_root_id"], root["id"]),
                          "native attempt belongs to a sibling attachment")
+                if number > 1 and bead_id != root["id"]:
+                    _require(attach == root["id"], "native attempt child lost its exact attachment root")
                 if number < len(attempts):
                     _require(rows[bead_id]["status"] == "closed", "older native attempt is still live")
                 owners[bead_id] = (descriptor["control_id"], number)
                 expected[ref] = dict(metadata=wanted, dependencies=deps)
+        physical_edges = physical_attempt_edges(descriptor)
+        revisions = descriptor.get("physical_revisions")
+        _require(isinstance(revisions, dict) and set(revisions) == set(physical_edges),
+                 "native attempt physical dependency observations are incomplete")
+        for bead_id, revision in revisions.items():
+            _require(isinstance(revision, str) and re.fullmatch(r"-?(?:0|[1-9][0-9]*)", revision)
+                     and -(2**63) <= int(revision) < 2**63
+                     and rows[bead_id]["revision"] == writer_map._attempt_revisions.get(bead_id, revision),
+                     "native attempt physical dependency revision changed after discovery")
         if claimed_step_id in owners and owners[claimed_step_id][0] == descriptor["control_id"]:
             _require(owners[claimed_step_id][1] == len(attempts) and rows[claimed_step_id]["status"] == "in_progress",
                      "claimed writer is not the current live native attempt")
-            guards.extend((descriptor["control_id"], descriptor["spec_id"]))
+            guards.extend((descriptor["spec_id"], *physical_edges))
     return owners, expected, guards

@@ -10,7 +10,7 @@ import re
 import subprocess
 
 from workspace_records import RecordError, canonical_bytes
-from workspace_attempts import discover_attempts
+from workspace_attempts import discover_attempts, physical_attempt_edges
 from workspace_run import native_json
 from workspace_store import (CookedWriterMap, MAX_COOKED_CONTEXT_ROWS, TOPOLOGY,
                              _dependencies, _formula_identity, _kinds, _root,
@@ -219,9 +219,36 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
         "source_member_id": member, "expansion_root_id": expansion_id, "formula_name": name,
         "formula_hash": digest, "formula_source": source, "steps": sorted(entries, key=lambda item: item["step_ref"])}
     physical = {item["step_ref"]: item["bead_id"] for item in entries}
+    observed_blocks = {}
+    def observe_blocks(bead_id, expected):
+        require(bead_id not in observed_blocks or observed_blocks[bead_id] == sorted(expected),
+                "native physical dependency proofs disagree")
+        if bead_id in observed_blocks:
+            return rows[bead_id]["revision"]
+        detail = native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
+                             unwrap_singleton=True, require_array=True)
+        require(all(detail.get(key) == rows[bead_id][key] for key in ("id", "revision", "status", "metadata"))
+                and detail.get("assignee", "") == rows[bead_id]["assignee"],
+                "native scope check readback differs from its original guarded row")
+        dependencies = detail.get("dependencies", [])
+        require(isinstance(dependencies, list) and len(dependencies) <= MAX_COOKED_CONTEXT_ROWS
+                and all(isinstance(edge, dict) and isinstance(edge.get("id"), str)
+                        and isinstance(edge.get("dependency_type"), str) for edge in dependencies),
+                "native scope check dependency readback is malformed")
+        actual = [edge["id"] for edge in dependencies if edge["dependency_type"] == "blocks"]
+        require(sorted(actual) == sorted(expected), "native scope check physical blocks dependencies differ from compiled lineage")
+        require(read_cooked_context(store, [bead_id])[bead_id] == rows[bead_id]
+                and native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
+                                unwrap_singleton=True, require_array=True) == detail,
+                "native scope check changed during dependency readback")
+        observed_blocks[bead_id] = sorted(expected)
+        return detail["revision"]
+    for descriptor in descriptors:
+        descriptor["physical_revisions"] = {bead_id: observe_blocks(bead_id, expected)
+            for bead_id, expected in physical_attempt_edges(descriptor).items()}
     scope_checks = []
     for check in entries:
-        if rows[check["bead_id"]]["metadata"].get("gc.kind") != "scope-check":
+        if rows[check["bead_id"]]["metadata"].get("gc.kind") != "scope-check" or check["bead_id"] in owners:
             continue
         subjects = [item for item in entries if item["step_id"] == check["step_id"]
                     and rows[item["bead_id"]]["metadata"].get("gc.kind") in ("ralph", "retry")]
@@ -242,29 +269,11 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
                         for edge in formula.get("deps", []) if edge.get("type") == "blocks"
                         and edge["step_id"] == compiled[occurrence["step_ref"]]["id"]]
             if occurrence is subject and proven:
-                first = next(item["bead_id"] for item in proven if owners[item["bead_id"]][1] == 1)
-                expected = [current["bead_id"] if bead_id == first else bead_id for bead_id in expected]
+                expected = sorted(set(expected) | {item["bead_id"] for item in proven})
             require(expected and None not in expected and len(set(expected)) == len(expected)
                     and (expected == [subject["bead_id"]] if occurrence is check else current["bead_id"] in expected),
                     "compiled scope check control dependencies are ambiguous or absent")
-            bead_id = occurrence["bead_id"]
-            detail = native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
-                                 unwrap_singleton=True, require_array=True)
-            require(all(detail.get(key) == rows[bead_id][key] for key in ("id", "revision", "status", "metadata"))
-                    and detail.get("assignee", "") == rows[bead_id]["assignee"],
-                    "native scope check readback differs from its original guarded row")
-            dependencies = detail.get("dependencies", [])
-            require(isinstance(dependencies, list) and len(dependencies) <= MAX_COOKED_CONTEXT_ROWS
-                    and all(isinstance(edge, dict) and isinstance(edge.get("id"), str)
-                            and isinstance(edge.get("dependency_type"), str) for edge in dependencies),
-                    "native scope check dependency readback is malformed")
-            actual = [edge["id"] for edge in dependencies if edge["dependency_type"] == "blocks"]
-            require(sorted(actual) == sorted(expected), "native scope check physical blocks dependencies differ from compiled lineage")
-            require(read_cooked_context(store, [bead_id])[bead_id] == rows[bead_id]
-                    and native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
-                                    unwrap_singleton=True, require_array=True) == detail,
-                    "native scope check changed during dependency readback")
-            binding[("check" if occurrence is check else "subject") + "_revision"] = detail["revision"]
+            binding[("check" if occurrence is check else "subject") + "_revision"] = observe_blocks(occurrence["bead_id"], expected)
         scope_checks.append(binding)
     if scope_checks:
         declaration["scope_checks"] = scope_checks

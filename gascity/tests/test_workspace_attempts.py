@@ -30,9 +30,10 @@ class NativeAttemptTests(unittest.TestCase):
                     assignee="worker" if status == "in_progress" else "", type="task", labels=[],
                     metadata={"gc.root_bead_id": "root-1", "gc.root_store_ref": "rig:fixture", **(metadata or {})})
 
-    def configure(self, latest=2, kind="ralph", scoped=False, attached=False):
+    def configure(self, latest=2, kind="ralph", scoped=False, attached=False, authored_suffix=False):
         self.latest, self.kind, self.scoped = latest, kind, scoped
         self.scope_details = {}
+        child_id = "checkpoint-scope-check" if authored_suffix else "apply-story-findings"
         logical = "implement" if scoped else "decompose"
         self.logical = logical
         control_ref = "build-basic." + logical
@@ -45,7 +46,9 @@ class NativeAttemptTests(unittest.TestCase):
         if kind == "ralph":
             source[kind]["check"] = dict(mode="exec", path="/owned/check.sh", timeout="1m")
         if scoped:
-            source["children"] = [dict(id="apply-story-findings", title="Apply findings", metadata=designation)]
+            source["children"] = [dict(id=child_id, title="Apply findings", metadata=designation)]
+            if authored_suffix:
+                source["children"].append(dict(id="checkpoint", title="Exempt checkpoint", metadata={"gc.kind": "check"}))
         self.source = source
         self.formula = dict(ok=True, name="build-basic", vars=[], steps=[], deps=[])
         self.rows = {"root-1": self.row("root-1")}
@@ -63,10 +66,12 @@ class NativeAttemptTests(unittest.TestCase):
             for need in dependencies:
                 self.formula["deps"].append(dict(step_id=ref, depends_on_id=need, type="blocks"))
         prior = "build-basic.plan-review"
+        native_dependencies = json.dumps(sorted([prior] + ([child_id] if scoped else [])
+            + (["checkpoint"] if scoped and authored_suffix else [])), separators=(",", ":"))
         template(prior, {"gc.step_id": prior})
         self.rows["prior-1"] = self.row("prior-1", initial({"gc.step_id": prior, "gc.step_ref": prior, cooked.TOPOLOGY: "[]"}))
         control = {**designation, "gc.kind": kind, "gc.step_id": logical, "gc.step_ref": control_ref,
-                   "gc.max_attempts": "3", "gc.control_epoch": str(latest), cooked.TOPOLOGY: json.dumps([prior])}
+                   "gc.max_attempts": "3", "gc.control_epoch": str(latest), cooked.TOPOLOGY: native_dependencies}
         self.rows["control-1"] = self.row("control-1", initial(control), "open")
         template(control_ref, {key: value for key, value in control.items() if key != cooked.TOPOLOGY}, (prior,))
         spec_ref = control_ref + ".spec"
@@ -84,9 +89,11 @@ class NativeAttemptTests(unittest.TestCase):
         if scoped:
             seed_meta.update({"gc.kind": "scope", "gc.scope_role": "body", "gc.scope_name": logical})
         template("build-basic." + logical + "." + suffix + ".1", seed_meta, (prior,))
-        child_seed = seed_ref + ".apply-story-findings"
+        self.formula["deps"].append(dict(step_id=control_ref,
+            depends_on_id="build-basic." + logical + "." + suffix + ".1", type="blocks"))
+        child_seed = seed_ref + "." + child_id
         if scoped:
-            child_meta = {**designation, "gc.step_id": "apply-story-findings", "gc.step_ref": child_seed,
+            child_meta = {**designation, "gc.step_id": child_id, "gc.step_ref": child_seed,
                 "gc.scope_ref": seed_ref, "gc.scope_role": "member", "gc.ralph_step_id": logical,
                 "gc.attempt": "1", "gc.iteration": "1", "gc.on_fail": "abort_scope"}
             template(child_seed, child_meta)
@@ -95,6 +102,17 @@ class NativeAttemptTests(unittest.TestCase):
             check_meta.update({"gc.kind": "scope-check", "gc.scope_role": "control",
                                "gc.step_ref": child_seed + "-scope-check", "gc.control_for": child_seed})
             template(child_seed + "-scope-check", check_meta)
+            self.formula["deps"].extend([
+                dict(step_id="build-basic." + logical + "." + suffix + ".1", depends_on_id=child_seed, type="blocks"),
+                dict(step_id=child_seed + "-scope-check", depends_on_id=child_seed, type="blocks")])
+            if authored_suffix:
+                checkpoint_meta = {key: value for key, value in child_meta.items()
+                                   if key not in designation}
+                checkpoint_meta.update({"gc.kind": "check", "gc.step_id": "checkpoint",
+                                        "gc.step_ref": seed_ref + ".checkpoint"})
+                template(seed_ref + ".checkpoint", checkpoint_meta)
+                self.formula["deps"].append(dict(step_id="build-basic." + logical + "." + suffix + ".1",
+                    depends_on_id=seed_ref + ".checkpoint", type="blocks"))
         for number in range(1, latest+1):
             root_id = "attempt-" + str(number)
             prefix = seed_ref if number == 1 else control_ref + "." + suffix + "." + str(number)
@@ -111,11 +129,11 @@ class NativeAttemptTests(unittest.TestCase):
                     metadata["gc.retry_attempt"] = str(number)
             else:
                 metadata["gc.logical_bead_id"] = "control-1"
-            metadata[cooked.TOPOLOGY] = json.dumps([prior])
+            metadata[cooked.TOPOLOGY] = native_dependencies
             self.rows[root_id] = self.row(root_id, initial(metadata), "in_progress" if number == latest and not scoped else "closed")
             if scoped:
                 child = copy.deepcopy(child_meta)
-                child.update({"gc.step_ref": prefix + ".apply-story-findings", "gc.scope_ref": prefix,
+                child.update({"gc.step_ref": prefix + "." + child_id, "gc.scope_ref": prefix,
                               "gc.attempt": str(number), "gc.iteration": str(number), cooked.TOPOLOGY: "[]"})
                 check = copy.deepcopy(check_meta)
                 check.update({"gc.step_ref": child["gc.step_ref"] + "-scope-check", "gc.scope_ref": prefix,
@@ -126,6 +144,25 @@ class NativeAttemptTests(unittest.TestCase):
                 self.rows["child-"+str(number)] = self.row("child-"+str(number), initial(child) if number == 1 else child,
                     "in_progress" if number == latest else "closed")
                 self.rows["check-"+str(number)] = self.row("check-"+str(number), initial(check) if number == 1 else check)
+                if authored_suffix:
+                    checkpoint = copy.deepcopy(checkpoint_meta)
+                    checkpoint.update({"gc.step_ref": prefix + ".checkpoint", "gc.scope_ref": prefix,
+                        "gc.attempt": str(number), "gc.iteration": str(number), cooked.TOPOLOGY: "[]"})
+                    if number > 1:
+                        checkpoint["gc.attach_root_id"] = root_id
+                    self.rows["checkpoint-"+str(number)] = self.row("checkpoint-"+str(number),
+                        initial(checkpoint) if number == 1 else checkpoint)
+        physical_blocks = {"control-1": ["prior-1", *("attempt-" + str(number) for number in range(1, latest+1))]}
+        for number in range(1, latest+1):
+            physical_blocks["attempt-"+str(number)] = (["prior-1"] if number == 1 else []) + (
+                ["child-"+str(number)] + (["checkpoint-"+str(number)] if authored_suffix else []) if scoped else [])
+            if scoped:
+                physical_blocks["child-"+str(number)] = []
+                physical_blocks["check-"+str(number)] = ["child-"+str(number)]
+                if authored_suffix:
+                    physical_blocks["checkpoint-"+str(number)] = []
+        self.scope_details = {bead_id: dict(copy.deepcopy(self.rows[bead_id]), dependencies=[
+            dict(id=need, dependency_type="blocks") for need in needs]) for bead_id, needs in physical_blocks.items()}
         self.claim = "child-"+str(latest) if scoped else "attempt-"+str(latest)
         self.detail = dict(id="spec-1", revision=self.rows["spec-1"]["revision"], status="closed",
             updated_at="2026-10-15T00:00:00Z", description=json.dumps(source).replace("{{checks}}", '[{\\"id\\":\\"test\\",\\"argv\\":[\\"true\\"]}]'))
@@ -150,10 +187,17 @@ class NativeAttemptTests(unittest.TestCase):
             return cooked.read_cooked_writer_map(self.store, workflow_root_id="root-1", claimed_step_id=claimed or self.claim,
                                                   read_only=read_only)
 
-    def configure_outer_scope(self, latest=3, kind="ralph", role="member"):
-        self.configure(latest=latest, kind=kind)
+    def configure_outer_scope(self, latest=3, kind="ralph", role="member", scoped=False):
+        self.configure(latest=latest, kind=kind, scoped=scoped)
         scope = {"gc.scope_ref": "build-body", "gc.scope_role": role, "gc.on_fail": "abort_scope"}
+        self.source["metadata"].update(scope)
+        spec = next(step for step in self.formula["steps"] if step["metadata"].get("gc.kind") == "spec")
+        spec["description"] = json.dumps(self.source)
+        description = json.loads(self.detail["description"])
+        description["metadata"].update(scope)
+        self.detail["description"] = json.dumps(description)
         self.rows["control-1"]["metadata"].update(scope)
+        self.scope_details["control-1"]["metadata"].update(scope)
         control = next(step for step in self.formula["steps"] if step["metadata"].get("gc.kind") == kind)
         control["metadata"].update(scope)
         check_meta = {"gc.kind": "scope-check", "gc.step_id": self.logical,
@@ -166,11 +210,22 @@ class NativeAttemptTests(unittest.TestCase):
         self.formula["deps"].append(dict(step_id=check_meta["gc.step_ref"], depends_on_id=control["id"], type="blocks"))
         self.scope_details["outer-check"] = dict(copy.deepcopy(self.rows["outer-check"]), dependencies=[
             dict(id="control-1", dependency_type="blocks")])
-        seed = next(step for step in self.formula["steps"] if step["metadata"].get("gc.control_for") == self.logical
-                    and step["metadata"].get("gc.kind") != "scope-check")
-        self.formula["deps"].append(dict(step_id=control["id"], depends_on_id=seed["id"], type="blocks"))
-        self.scope_details["control-1"] = dict(copy.deepcopy(self.rows["control-1"]), dependencies=[
-            dict(id="prior-1", dependency_type="blocks"), dict(id=self.claim, dependency_type="blocks")])
+        for number in range(2, latest+1):
+            root_id = "attempt-" + str(number)
+            inherited = dict(scope, **({"gc.scope_role": "body"} if scoped else {}))
+            self.rows[root_id]["metadata"].update(inherited)
+            self.scope_details[root_id]["metadata"].update(inherited)
+            if not scoped:
+                prefix = self.rows[root_id]["metadata"]["gc.step_ref"]
+                check = {"gc.kind": "scope-check", "gc.step_id": self.logical,
+                         "gc.step_ref": prefix+"-scope-check", "gc.control_for": prefix,
+                         "gc.scope_ref": "build-body", "gc.scope_role": "control",
+                         "gc.on_fail": "abort_scope", "gc.attempt": str(number), cooked.TOPOLOGY: "[]"}
+                bead_id = "attempt-check-" + str(number)
+                self.rows[bead_id] = self.row(bead_id, dict(check, **{"gc.attach_root_id": root_id}),
+                    "open" if number == latest else "closed")
+                self.scope_details[bead_id] = dict(copy.deepcopy(self.rows[bead_id]), dependencies=[
+                    dict(id=root_id, dependency_type="blocks")])
 
     def test_outer_scope_check_composes_with_current_native_attempt_history(self):
         for latest in (2, 3):
@@ -213,6 +268,7 @@ class NativeAttemptTests(unittest.TestCase):
                     with self.subTest(number=number, kind=kind, epoch=epoch):
                         self.configure(latest=number, kind=kind)
                         self.rows["control-1"]["metadata"]["gc.control_epoch"] = epoch
+                        self.scope_details["control-1"]["metadata"]["gc.control_epoch"] = epoch
                         writer_map, rows = self.read()
                         self.assertEqual(rows, self.rows)
                         self.assertIs(type(rows["control-1"]["metadata"]["gc.control_epoch"]), type(epoch))
@@ -252,6 +308,41 @@ class NativeAttemptTests(unittest.TestCase):
                 self.assertEqual(writer_map.declaration["expansion_root_id"], self.expansion_id)
                 self.assertEqual(next(step["record_kinds"] for step in writer_map.declaration["steps"] if step["bead_id"] == self.claim), ["workspace"])
 
+    def test_authored_scope_check_suffix_keeps_writer_and_exempt_sibling(self):
+        # Native applyAttemptRecipeScopeChecks reserves every authored ID before
+        # minting checks; a suffix alone does not identify a generated control.
+        for latest in (2, 3):
+            for attached in (False, True):
+                with self.subTest(latest=latest, attached=attached):
+                    self.configure(latest=latest, scoped=True, attached=attached, authored_suffix=True)
+                    writer_map, rows = self.read(read_only=True)
+                    entries = {step["bead_id"]: step for step in writer_map.declaration["steps"]}
+                    self.assertEqual(entries[self.claim]["record_kinds"], [])
+                    with self.assertRaises(RecordError):
+                        self.read()
+                    for number in range(1, latest + 1):
+                        writer, checkpoint, control = (name + "-" + str(number)
+                                                       for name in ("child", "checkpoint", "check"))
+                        writer_ref = rows[writer]["metadata"]["gc.step_ref"]
+                        self.assertTrue(writer_ref.endswith(".checkpoint-scope-check"))
+                        self.assertEqual(rows[checkpoint]["metadata"]["gc.kind"], "check")
+                        self.assertEqual(entries[checkpoint]["record_kinds"], [])
+                        self.assertEqual(entries[control]["record_kinds"], [])
+                        self.assertEqual(rows[control]["metadata"]["gc.control_for"], writer_ref)
+                        self.assertEqual(rows[control]["metadata"]["gc.step_ref"], writer_ref + "-scope-check")
+                        self.assertEqual([edge["id"] for edge in self.scope_details[control]["dependencies"]], [writer])
+                        self.assertEqual([edge["id"] for edge in self.scope_details["attempt-" + str(number)]["dependencies"]],
+                                         (["prior-1"] if number == 1 else []) + [writer, checkpoint])
+                    validate_cooked_writer_map(writer_map, rows, store_ref="rig:fixture",
+                        workflow_root_id="root-1", record_kind=None, claimed_step_id=self.claim, read_only=True)
+                    for bead_id in ("checkpoint-" + str(latest), "check-" + str(latest)):
+                        self.read(bead_id, read_only=True)
+                        with self.assertRaises(RecordError):
+                            self.read(bead_id)
+                    self.rows["check-" + str(latest)]["metadata"]["gc.control_for"] = rows["checkpoint-" + str(latest)]["metadata"]["gc.step_ref"]
+                    with self.assertRaises(RecordError):
+                        self.read(read_only=True)
+
     def test_same_named_sibling_expansion_is_not_adopted(self):
         self.configure(latest=3, scoped=True, attached=True)
         for bead_id in ("control-1", "spec-1", "attempt-1", "child-1", "check-1"):
@@ -277,6 +368,7 @@ class NativeAttemptTests(unittest.TestCase):
         else:
             self.configure(latest=3)
         self.rows[self.claim]["metadata"]["gc.session_id"] = "session-current"
+        self.scope_details[self.claim]["metadata"]["gc.session_id"] = "session-current"
         writer_map, rows = self.read()
         for bead_id in ("grant-1", "payload-1"):
             rows[bead_id] = dict(id=bead_id, revision="1", status="closed", assignee="", type="task", labels=[], metadata={})
@@ -400,6 +492,159 @@ class NativeAttemptTests(unittest.TestCase):
                 rows[previous]["status"] = "in_progress"
                 with self.assertRaises(RecordError):
                     WorkspaceStore._successor(grant, successor, scope, None, rows, data, writer_map.sha256, writer_map=writer_map)
+
+
+class NativeScopeHistoryTests(unittest.TestCase):
+    """Portable native-generated graph; no original cohort identities or prose."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(dir=os.environ.get("TMPDIR"))
+        self.addCleanup(self.tmp.cleanup)
+        self.path = Path(self.tmp.name) / "build-basic.formula.toml"
+        self.path.write_text('formula = "build-basic"\n')
+        self.fixture = json.loads((Path(__file__).parent /
+            "fixtures/workspace-records/native-attempt-scope-history.json").read_text())
+        self.configure()
+
+    def configure(self):
+        self.formula = copy.deepcopy(self.fixture["formula"])
+        self.root, self.claim = self.fixture["root_id"], self.fixture["claimed_id"]
+        self.rows = {row["id"]: {key: copy.deepcopy(row[key]) for key in
+            ("id", "revision", "status", "assignee", "type", "labels", "metadata")} for row in self.fixture["rows"]}
+        self.rows[self.root]["metadata"].update({"gc.formula_source": str(self.path),
+            "gc.formula_hash": hashlib.sha256(self.path.read_bytes()).hexdigest()})
+        # Model the same native third-attempt graph while its writer is claimed.
+        self.rows[self.claim].update(status="in_progress", assignee="worker")
+        logical = self.rows[self.claim]["metadata"]["gc.control_for"]
+        self.rows[logical]["status"] = "open"
+        self.details = {row["id"]: dict(copy.deepcopy(row), **copy.deepcopy(self.rows[row["id"]]))
+                        for row in self.fixture["rows"]}
+        outer = self
+        class Store:
+            gc = "gc"
+            cwd = outer.tmp.name
+            store_ref = "rig:fixture"
+            def snapshot(self, ids):
+                return {bead_id: copy.deepcopy(outer.rows[bead_id]) for bead_id in ids}
+        self.store = Store()
+
+    def by_ref(self, ref):
+        return next(row for row in self.rows.values() if row["metadata"].get("gc.step_ref") == ref)
+
+    def read(self, claim=None, read_only=False):
+        def native(gc, cwd, argv, rig, **options):
+            if argv[:2] == ["bd", "show"]:
+                self.assertTrue(options["unwrap_singleton"] and options["require_array"])
+                return copy.deepcopy(self.details[argv[2]])
+            return copy.deepcopy(self.formula)
+        with patch.object(cooked, "_native_list", return_value=list(self.rows)), \
+             patch.object(cooked, "native_json", side_effect=native):
+            return cooked.read_cooked_writer_map(self.store, workflow_root_id=self.root,
+                claimed_step_id=claim or self.claim, read_only=read_only)
+
+    def test_complete_native_graph_reconstructs_scoped_attempts_and_generated_checks(self):
+        writer_map, rows = self.read()
+        self.assertEqual((len(rows), len(self.formula["steps"])), (72, 61))
+        controls = json.loads(writer_map.lineage_bytes)["controls"]
+        self.assertEqual({d["step_id"]: len(d["attempts"]) for d in controls}, {"decompose": 3, "plan-review": 2})
+        steps = {item["bead_id"]: item for item in writer_map.declaration["steps"]}
+        checks = ["build-basic.decompose.iteration.2-scope-check", "build-basic.decompose.iteration.3-scope-check",
+                  "build-basic.plan-review.iteration.2.author-repair-scope-check",
+                  "build-basic.plan-review.iteration.2.plan-review-verdict-scope-check"]
+        for ref in checks:
+            row = self.by_ref(ref)
+            self.assertEqual(steps[row["id"]]["record_kinds"], [])
+            self.read(row["id"], read_only=True)
+            with self.assertRaises(RecordError):
+                self.read(row["id"])
+        self.assertEqual(steps[self.claim]["record_kinds"], ["source-plan"])
+        control = next(item for item in controls if item["step_id"] == "decompose")
+        self.assertEqual({item["root_id"] for item in control["attempts"]},
+            {edge["id"] for edge in self.details[control["control_id"]]["dependencies"] if edge["dependency_type"] == "blocks"}
+            - {self.by_ref("build-basic.plan-review-scope-check")["id"]})
+
+    def test_inherited_scope_and_generated_control_metadata_remain_exact(self):
+        changes = [
+            ("build-basic.decompose.iteration.3", "gc.scope_ref", None),
+            ("build-basic.decompose.iteration.2", "gc.scope_role", "setup"),
+            ("build-basic.plan-review.iteration.2", "gc.scope_ref", "foreign"),
+            ("build-basic.plan-review.iteration.2", "gc.on_fail", None),
+            ("build-basic.decompose.iteration.3", "gc.run_target", "gc.publisher"),
+            ("build-basic.decompose.iteration.3", "gc.build.artifact_schema", "gc.build.implementation-summary.v1"),
+        ]
+        for ref in ("build-basic.decompose.iteration.3-scope-check",
+                    "build-basic.plan-review.iteration.2.author-repair-scope-check",
+                    "build-basic.plan-review.iteration.2.plan-review-verdict-scope-check"):
+            changes.extend((ref, key, value) for key, value in (
+                ("gc.control_for", "foreign"), ("gc.scope_ref", "foreign"), ("gc.scope_role", "member"),
+                ("gc.run_target", "gc.task-decomposer"), ("gc.iteration", "2"),
+                ("gc.attach_root_id", "foreign"), ("gc.root_store_ref", "rig:other"),
+                ("gc.native_step_dependencies.v1", '["foreign"]')))
+        for ref, key, value in changes:
+            with self.subTest(ref=ref, key=key):
+                self.configure()
+                writer_map, rows = self.read()
+                bead_id = self.by_ref(ref)["id"]
+                for metadata in (self.rows[bead_id]["metadata"], rows[bead_id]["metadata"]):
+                    if value is None: metadata.pop(key, None)
+                    else: metadata[key] = value
+                with self.assertRaises(RecordError):
+                    self.read()
+                with self.assertRaises(RecordError):
+                    validate_cooked_writer_map(writer_map, rows, store_ref=self.store.store_ref,
+                        workflow_root_id=self.root, record_kind="source-plan", claimed_step_id=self.claim)
+
+    def test_native_physical_blocks_cannot_omit_history_or_bypass_minted_controls(self):
+        cases = [("build-basic.decompose", action) for action in ("first", "middle", "duplicate", "extra")]
+        cases += [("build-basic.plan-review.iteration.2", "child-check"),
+                  ("build-basic.plan-review.iteration.2.plan-review-verdict", "raw-author"),
+                  ("build-basic.decompose.iteration.3-scope-check", "missing"),
+                  ("build-basic.plan-review.iteration.2.author-repair-scope-check", "foreign-subject")]
+        for ref, action in cases:
+            with self.subTest(ref=ref, action=action):
+                self.configure()
+                row = self.by_ref(ref)
+                edges = self.details[row["id"]]["dependencies"]
+                if action in ("first", "middle"):
+                    suffix = "decompose.iteration.1" if action == "first" else "build-basic.decompose.iteration.2"
+                    removed = self.by_ref(suffix)["id"]
+                    self.assertTrue(any(edge["id"] == removed and edge["dependency_type"] == "blocks" for edge in edges))
+                    edges[:] = [edge for edge in edges if edge["id"] != removed]
+                elif action == "duplicate": edges.append(copy.deepcopy(next(edge for edge in edges if edge["dependency_type"] == "blocks")))
+                elif action == "extra": edges.append(dict(id=self.root, dependency_type="blocks"))
+                elif action == "child-check":
+                    child = self.by_ref("build-basic.plan-review.iteration.2.author-repair")["id"]
+                    next(edge for edge in edges if edge["id"] == child)["id"] = self.by_ref(
+                        "build-basic.plan-review.iteration.2.author-repair-scope-check")["id"]
+                elif action == "raw-author": next(edge for edge in edges if edge["dependency_type"] == "blocks")["id"] = self.by_ref("build-basic.plan-review.iteration.2.author-repair")["id"]
+                elif action == "missing": edges.clear()
+                else: next(edge for edge in edges if edge["dependency_type"] == "blocks")["id"] = self.claim
+                with self.assertRaisesRegex(RecordError, "physical blocks"):
+                    self.read()
+
+    def test_missing_or_duplicate_runtime_check_cannot_enter_an_occurrence_map(self):
+        for action in ("missing", "duplicate"):
+            with self.subTest(action=action):
+                self.configure()
+                row = self.by_ref("build-basic.plan-review.iteration.2.author-repair-scope-check")
+                if action == "missing": del self.rows[row["id"]]
+                else:
+                    duplicate = copy.deepcopy(row)
+                    duplicate["id"] = "duplicate-check"
+                    self.rows[duplicate["id"]] = duplicate
+                with self.assertRaises(RecordError):
+                    self.read()
+
+    def test_retained_map_pins_physical_edge_revisions_even_with_a_fresh_snapshot(self):
+        for ref in ("build-basic.decompose", "decompose.iteration.1", "build-basic.decompose.iteration.3-scope-check",
+                    "build-basic.plan-review.iteration.2.plan-review-verdict"):
+            with self.subTest(ref=ref):
+                self.configure()
+                writer_map, rows = self.read()
+                rows[self.by_ref(ref)["id"]]["revision"] = "9007199254740994"
+                with self.assertRaisesRegex(RecordError, "physical dependency revision changed"):
+                    validate_cooked_writer_map(writer_map, rows, store_ref=self.store.store_ref,
+                        workflow_root_id=self.root, record_kind="source-plan", claimed_step_id=self.claim)
 
 
 if __name__ == "__main__":

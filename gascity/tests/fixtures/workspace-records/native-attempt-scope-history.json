@@ -1,0 +1,3595 @@
+{
+  "claimed_id": "node-031",
+  "formula": {
+    "deps": [
+      {
+        "depends_on_id": "build-basic.prepare.iteration.1",
+        "step_id": "build-basic.prepare",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.prepare",
+        "step_id": "build-basic.prepare-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.prepare-scope-check",
+        "step_id": "build-basic.requirements.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.prepare-scope-check",
+        "step_id": "build-basic.requirements",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.requirements.iteration.1",
+        "step_id": "build-basic.requirements",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.requirements",
+        "step_id": "build-basic.requirements-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.requirements-scope-check",
+        "step_id": "build-basic.plan.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.requirements-scope-check",
+        "step_id": "build-basic.plan",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan.iteration.1",
+        "step_id": "build-basic.plan",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan",
+        "step_id": "build-basic.plan-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-scope-check",
+        "step_id": "build-basic.plan-review.iteration.1.author-repair",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review.iteration.1.author-repair",
+        "step_id": "build-basic.plan-review.iteration.1.author-repair-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review.iteration.1.author-repair-scope-check",
+        "step_id": "build-basic.plan-review.iteration.1.plan-review-verdict",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-scope-check",
+        "step_id": "build-basic.plan-review.iteration.1.plan-review-verdict",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review.iteration.1.author-repair",
+        "step_id": "build-basic.plan-review.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review.iteration.1.plan-review-verdict",
+        "step_id": "build-basic.plan-review.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-scope-check",
+        "step_id": "build-basic.plan-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review.iteration.1",
+        "step_id": "build-basic.plan-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review",
+        "step_id": "build-basic.plan-review-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review-scope-check",
+        "step_id": "build-basic.decompose.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review-scope-check",
+        "step_id": "build-basic.decompose",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.decompose.iteration.1",
+        "step_id": "build-basic.decompose",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review.iteration.1.plan-review-verdict",
+        "step_id": "build-basic.plan-review.iteration.1.plan-review-verdict-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.decompose",
+        "step_id": "build-basic.decompose-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.decompose-scope-check",
+        "step_id": "build-basic.implement",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.implement",
+        "step_id": "build-basic.implement-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.implement-scope-check",
+        "step_id": "build-basic.summarize-implementation.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.implement-scope-check",
+        "step_id": "build-basic.summarize-implementation",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.summarize-implementation.iteration.1",
+        "step_id": "build-basic.summarize-implementation",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.summarize-implementation",
+        "step_id": "build-basic.summarize-implementation-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.summarize-implementation-scope-check",
+        "step_id": "build-basic.review.setup-build-basic-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.setup-build-basic-review",
+        "step_id": "build-basic.review.setup-build-basic-review-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.setup-build-basic-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.acceptance-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.setup-build-basic-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.test-evidence-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.setup-build-basic-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.simplicity-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.acceptance-review",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.acceptance-review-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.test-evidence-review",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.test-evidence-review-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.simplicity-review",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.simplicity-review-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.acceptance-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.test-evidence-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.simplicity-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.setup-build-basic-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.setup-build-basic-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.acceptance-review",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.test-evidence-review",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.simplicity-review",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.setup-build-basic-review-scope-check",
+        "step_id": "build-basic.review.build-basic-review-loop",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1",
+        "step_id": "build-basic.review.build-basic-review-loop",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop",
+        "step_id": "build-basic.review.build-basic-review-loop-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop-scope-check",
+        "step_id": "build-basic.review.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop-scope-check",
+        "step_id": "build-basic.review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.iteration.1",
+        "step_id": "build-basic.review",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings",
+        "step_id": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review",
+        "step_id": "build-basic.review-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review-scope-check",
+        "step_id": "build-basic.review-result",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review-result",
+        "step_id": "build-basic.review-result-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review-scope-check",
+        "step_id": "build-basic.finalize.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review-result-scope-check",
+        "step_id": "build-basic.finalize.iteration.1",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review-scope-check",
+        "step_id": "build-basic.finalize",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review-result-scope-check",
+        "step_id": "build-basic.finalize",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.finalize.iteration.1",
+        "step_id": "build-basic.finalize",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.finalize",
+        "step_id": "build-basic.finalize-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.finalize-scope-check",
+        "step_id": "build-basic.publish",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.prepare",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.requirements",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.decompose",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.implement",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.summarize-implementation",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review-result",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.finalize",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.publish",
+        "step_id": "build-basic.build-body",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.publish",
+        "step_id": "build-basic.publish-scope-check",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review",
+        "step_id": "build-basic.workflow-finalize",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop",
+        "step_id": "build-basic.workflow-finalize",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.build-body",
+        "step_id": "build-basic.workflow-finalize",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.plan-review.iteration.1.plan-review-verdict-scope-check",
+        "step_id": "build-basic.workflow-finalize",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings-scope-check",
+        "step_id": "build-basic.workflow-finalize",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.publish-scope-check",
+        "step_id": "build-basic.workflow-finalize",
+        "type": "blocks"
+      },
+      {
+        "depends_on_id": "build-basic.workflow-finalize",
+        "step_id": "build-basic",
+        "type": "tracks"
+      }
+    ],
+    "name": "build-basic",
+    "ok": true,
+    "steps": [
+      {
+        "id": "build-basic",
+        "metadata": {
+          "gc.kind": "workflow",
+          "gc.step_id": "build-basic",
+          "gc.step_ref": "build-basic"
+        }
+      },
+      {
+        "description": "{\"id\":\"prepare\",\"metadata\":{\"gc.lifecycle\":\"new\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"setup\"},\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"1m\"},\"max_attempts\":1},\"title\":\"Native scoped writer\"}",
+        "id": "build-basic.prepare.spec",
+        "metadata": {
+          "gc.kind": "spec",
+          "gc.spec_for": "prepare",
+          "gc.spec_for_ref": "build-basic.prepare",
+          "gc.step_id": "build-basic.prepare.spec",
+          "gc.step_ref": "build-basic.prepare.spec"
+        }
+      },
+      {
+        "id": "build-basic.prepare.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "prepare",
+          "gc.iteration": "1",
+          "gc.lifecycle": "new",
+          "gc.ralph_step_id": "prepare",
+          "gc.run_target": "gc.run-operator",
+          "gc.step_id": "prepare",
+          "gc.step_ref": "prepare.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.prepare",
+        "metadata": {
+          "gc.check_mode": "exec",
+          "gc.check_path": "/fixture/check.sh",
+          "gc.check_timeout": "1m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.lifecycle": "new",
+          "gc.max_attempts": "1",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.run-operator",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "setup",
+          "gc.step_id": "prepare",
+          "gc.step_ref": "build-basic.prepare"
+        }
+      },
+      {
+        "description": "{\"id\":\"requirements\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.requirements.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.requirements-planner\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"prepare\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+        "id": "build-basic.requirements.spec",
+        "metadata": {
+          "gc.kind": "spec",
+          "gc.spec_for": "requirements",
+          "gc.spec_for_ref": "requirements",
+          "gc.step_id": "build-basic.requirements.spec",
+          "gc.step_ref": "build-basic.requirements.spec"
+        }
+      },
+      {
+        "description": "{\"id\":\"plan\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.plan.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.design-author\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"requirements\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+        "id": "build-basic.plan.spec",
+        "metadata": {
+          "gc.kind": "spec",
+          "gc.spec_for": "plan",
+          "gc.spec_for_ref": "plan",
+          "gc.step_id": "build-basic.plan.spec",
+          "gc.step_ref": "build-basic.plan.spec"
+        }
+      },
+      {
+        "description": "{\"children\":[{\"id\":\"author-repair\",\"metadata\":{\"gc.run_target\":\"gc.design-author\"},\"title\":\"Native scoped writer\"},{\"id\":\"plan-review-verdict\",\"metadata\":{\"gc.run_target\":\"gc.review-synthesizer\"},\"needs\":[\"author-repair\"],\"title\":\"Native scoped writer\"}],\"id\":\"plan-review\",\"metadata\":{\"gc.build.plan_review_required\":\"true\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.review-synthesizer\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"plan\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+        "id": "build-basic.plan-review.spec",
+        "metadata": {
+          "gc.kind": "spec",
+          "gc.spec_for": "plan-review",
+          "gc.spec_for_ref": "plan-review",
+          "gc.step_id": "build-basic.plan-review.spec",
+          "gc.step_ref": "build-basic.plan-review.spec"
+        }
+      },
+      {
+        "description": "{\"id\":\"decompose\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.decomposition.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.task-decomposer\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"plan-review\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+        "id": "build-basic.decompose.spec",
+        "metadata": {
+          "gc.kind": "spec",
+          "gc.spec_for": "decompose",
+          "gc.spec_for_ref": "decompose",
+          "gc.step_id": "build-basic.decompose.spec",
+          "gc.step_ref": "build-basic.decompose.spec"
+        }
+      },
+      {
+        "description": "{\"id\":\"summarize-implementation\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.implementation-summary.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"implement\",\"implement-same-session\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+        "id": "build-basic.summarize-implementation.spec",
+        "metadata": {
+          "gc.kind": "spec",
+          "gc.spec_for": "summarize-implementation",
+          "gc.spec_for_ref": "summarize-implementation",
+          "gc.step_id": "build-basic.summarize-implementation.spec",
+          "gc.step_ref": "build-basic.summarize-implementation.spec"
+        }
+      },
+      {
+        "description": "{\"children\":[{\"id\":\"review.acceptance-review\",\"metadata\":{\"gc.run_target\":\"gc.implementation-reviewer\"},\"title\":\"Native scoped writer\"},{\"id\":\"review.test-evidence-review\",\"metadata\":{\"gc.run_target\":\"gc.gap-analyst\"},\"title\":\"Native scoped writer\"},{\"id\":\"review.simplicity-review\",\"metadata\":{\"gc.run_target\":\"gc.design-implementation-reviewer\"},\"title\":\"Native scoped writer\"},{\"id\":\"review.synthesize-review\",\"metadata\":{\"gc.run_target\":\"gc.review-synthesizer\"},\"needs\":[\"review.acceptance-review\",\"review.test-evidence-review\",\"review.simplicity-review\"],\"title\":\"Native scoped writer\"},{\"id\":\"review.apply-review-findings\",\"metadata\":{\"gc.run_target\":\"gc.implementation-worker\"},\"needs\":[\"review.synthesize-review\"],\"title\":\"Native scoped writer\"}],\"id\":\"review.build-basic-review-loop\",\"metadata\":{\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"review.setup-build-basic-review\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"10m\"},\"max_attempts\":6},\"title\":\"Native scoped writer\"}",
+        "id": "build-basic.review.build-basic-review-loop.spec",
+        "metadata": {
+          "gc.kind": "spec",
+          "gc.spec_for": "review.build-basic-review-loop",
+          "gc.spec_for_ref": "review.build-basic-review-loop",
+          "gc.step_id": "build-basic.review.build-basic-review-loop.spec",
+          "gc.step_ref": "build-basic.review.build-basic-review-loop.spec"
+        }
+      },
+      {
+        "description": "{\"id\":\"review\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.review.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"review.build-basic-review-loop\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+        "id": "build-basic.review.spec",
+        "metadata": {
+          "gc.kind": "spec",
+          "gc.spec_for": "review",
+          "gc.spec_for_ref": "review",
+          "gc.step_id": "build-basic.review.spec",
+          "gc.step_ref": "build-basic.review.spec"
+        }
+      },
+      {
+        "description": "{\"id\":\"finalize\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.final-report.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"review\",\"review-result\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+        "id": "build-basic.finalize.spec",
+        "metadata": {
+          "gc.kind": "spec",
+          "gc.spec_for": "finalize",
+          "gc.spec_for_ref": "finalize",
+          "gc.step_id": "build-basic.finalize.spec",
+          "gc.step_ref": "build-basic.finalize.spec"
+        }
+      },
+      {
+        "id": "build-basic.prepare-scope-check",
+        "metadata": {
+          "gc.control_for": "prepare",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "prepare",
+          "gc.step_ref": "build-basic.prepare-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.requirements.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.build.artifact_schema": "gc.build.requirements.v1",
+          "gc.control_for": "requirements",
+          "gc.iteration": "1",
+          "gc.ralph_step_id": "requirements",
+          "gc.run_target": "gc.requirements-planner",
+          "gc.step_id": "requirements",
+          "gc.step_ref": "requirements.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.requirements",
+        "metadata": {
+          "gc.build.artifact_schema": "gc.build.requirements.v1",
+          "gc.check_mode": "exec",
+          "gc.check_path": "/fixture/check.sh",
+          "gc.check_timeout": "5m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.max_attempts": "3",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.requirements-planner",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "requirements",
+          "gc.step_ref": "build-basic.requirements"
+        }
+      },
+      {
+        "id": "build-basic.requirements-scope-check",
+        "metadata": {
+          "gc.control_for": "requirements",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "requirements",
+          "gc.step_ref": "build-basic.requirements-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.plan.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.build.artifact_schema": "gc.build.plan.v1",
+          "gc.control_for": "plan",
+          "gc.iteration": "1",
+          "gc.ralph_step_id": "plan",
+          "gc.run_target": "gc.design-author",
+          "gc.step_id": "plan",
+          "gc.step_ref": "plan.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.plan",
+        "metadata": {
+          "gc.build.artifact_schema": "gc.build.plan.v1",
+          "gc.check_mode": "exec",
+          "gc.check_path": "/fixture/check.sh",
+          "gc.check_timeout": "5m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.max_attempts": "3",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.design-author",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "plan",
+          "gc.step_ref": "build-basic.plan"
+        }
+      },
+      {
+        "id": "build-basic.plan-scope-check",
+        "metadata": {
+          "gc.control_for": "plan",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "plan",
+          "gc.step_ref": "build-basic.plan-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.plan-review.iteration.1.author-repair",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.iteration": "1",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "plan-review",
+          "gc.run_target": "gc.design-author",
+          "gc.scope_ref": "plan-review.iteration.1",
+          "gc.scope_role": "member",
+          "gc.step_id": "author-repair",
+          "gc.step_ref": "plan-review.iteration.1.author-repair"
+        }
+      },
+      {
+        "id": "build-basic.plan-review.iteration.1.author-repair-scope-check",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "plan-review.iteration.1.author-repair",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "plan-review",
+          "gc.scope_ref": "plan-review.iteration.1",
+          "gc.scope_role": "control",
+          "gc.step_id": "author-repair",
+          "gc.step_ref": "build-basic.plan-review.iteration.1.author-repair-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.plan-review.iteration.1.plan-review-verdict",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.iteration": "1",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "plan-review",
+          "gc.run_target": "gc.review-synthesizer",
+          "gc.scope_ref": "plan-review.iteration.1",
+          "gc.scope_role": "member",
+          "gc.step_id": "plan-review-verdict",
+          "gc.step_ref": "plan-review.iteration.1.plan-review-verdict"
+        }
+      },
+      {
+        "id": "build-basic.plan-review.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.build.plan_review_required": "true",
+          "gc.control_for": "plan-review",
+          "gc.iteration": "1",
+          "gc.kind": "scope",
+          "gc.ralph_step_id": "plan-review",
+          "gc.run_target": "gc.review-synthesizer",
+          "gc.scope_name": "plan-review",
+          "gc.scope_role": "body",
+          "gc.step_id": "plan-review",
+          "gc.step_ref": "plan-review.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.plan-review",
+        "metadata": {
+          "gc.build.plan_review_required": "true",
+          "gc.check_mode": "exec",
+          "gc.check_path": "/fixture/check.sh",
+          "gc.check_timeout": "5m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.max_attempts": "3",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.review-synthesizer",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "plan-review",
+          "gc.step_ref": "build-basic.plan-review"
+        }
+      },
+      {
+        "id": "build-basic.plan-review-scope-check",
+        "metadata": {
+          "gc.control_for": "plan-review",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "plan-review",
+          "gc.step_ref": "build-basic.plan-review-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.decompose.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.build.artifact_schema": "gc.build.decomposition.v1",
+          "gc.control_for": "decompose",
+          "gc.iteration": "1",
+          "gc.ralph_step_id": "decompose",
+          "gc.run_target": "gc.task-decomposer",
+          "gc.step_id": "decompose",
+          "gc.step_ref": "decompose.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.decompose",
+        "metadata": {
+          "gc.build.artifact_schema": "gc.build.decomposition.v1",
+          "gc.check_mode": "exec",
+          "gc.check_path": "/fixture/check.sh",
+          "gc.check_timeout": "5m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.max_attempts": "3",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.task-decomposer",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "decompose",
+          "gc.step_ref": "build-basic.decompose"
+        }
+      },
+      {
+        "id": "build-basic.plan-review.iteration.1.plan-review-verdict-scope-check",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "plan-review.iteration.1.plan-review-verdict",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "plan-review",
+          "gc.scope_ref": "plan-review.iteration.1",
+          "gc.scope_role": "control",
+          "gc.step_id": "plan-review-verdict",
+          "gc.step_ref": "build-basic.plan-review.iteration.1.plan-review-verdict-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.decompose-scope-check",
+        "metadata": {
+          "gc.control_for": "decompose",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "decompose",
+          "gc.step_ref": "build-basic.decompose-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.implement",
+        "metadata": {
+          "gc.kind": "drain",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.implementation-worker",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "build-basic.implement",
+          "gc.step_ref": "build-basic.implement"
+        }
+      },
+      {
+        "id": "build-basic.implement-scope-check",
+        "metadata": {
+          "gc.control_for": "implement",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "build-basic.implement-scope-check",
+          "gc.step_ref": "build-basic.implement-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.summarize-implementation.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.build.artifact_schema": "gc.build.implementation-summary.v1",
+          "gc.control_for": "summarize-implementation",
+          "gc.iteration": "1",
+          "gc.ralph_step_id": "summarize-implementation",
+          "gc.run_target": "gc.run-operator",
+          "gc.step_id": "summarize-implementation",
+          "gc.step_ref": "summarize-implementation.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.summarize-implementation",
+        "metadata": {
+          "gc.build.artifact_schema": "gc.build.implementation-summary.v1",
+          "gc.check_mode": "exec",
+          "gc.check_path": "/fixture/check.sh",
+          "gc.check_timeout": "5m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.max_attempts": "3",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.run-operator",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "summarize-implementation",
+          "gc.step_ref": "build-basic.summarize-implementation"
+        }
+      },
+      {
+        "id": "build-basic.summarize-implementation-scope-check",
+        "metadata": {
+          "gc.control_for": "summarize-implementation",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "summarize-implementation",
+          "gc.step_ref": "build-basic.summarize-implementation-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.review.setup-build-basic-review",
+        "metadata": {
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.run-operator",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "build-basic.review.setup-build-basic-review",
+          "gc.step_ref": "build-basic.review.setup-build-basic-review"
+        }
+      },
+      {
+        "id": "build-basic.review.setup-build-basic-review-scope-check",
+        "metadata": {
+          "gc.control_for": "review.setup-build-basic-review",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "build-basic.review.setup-build-basic-review-scope-check",
+          "gc.step_ref": "build-basic.review.setup-build-basic-review-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.acceptance-review",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.iteration": "1",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.run_target": "gc.implementation-reviewer",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "member",
+          "gc.step_id": "review.acceptance-review",
+          "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.acceptance-review"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.test-evidence-review",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.iteration": "1",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.run_target": "gc.gap-analyst",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "member",
+          "gc.step_id": "review.test-evidence-review",
+          "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.test-evidence-review"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.simplicity-review",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.iteration": "1",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.run_target": "gc.design-implementation-reviewer",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "member",
+          "gc.step_id": "review.simplicity-review",
+          "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.simplicity-review"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.acceptance-review-scope-check",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "review.build-basic-review-loop.iteration.1.review.acceptance-review",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "control",
+          "gc.step_id": "review.acceptance-review",
+          "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.acceptance-review-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.test-evidence-review-scope-check",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "review.build-basic-review-loop.iteration.1.review.test-evidence-review",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "control",
+          "gc.step_id": "review.test-evidence-review",
+          "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.test-evidence-review-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.simplicity-review-scope-check",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "review.build-basic-review-loop.iteration.1.review.simplicity-review",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "control",
+          "gc.step_id": "review.simplicity-review",
+          "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.simplicity-review-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.iteration": "1",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.run_target": "gc.review-synthesizer",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "member",
+          "gc.step_id": "review.synthesize-review",
+          "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.synthesize-review"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review-scope-check",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "review.build-basic-review-loop.iteration.1.review.synthesize-review",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "control",
+          "gc.step_id": "review.synthesize-review",
+          "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.iteration": "1",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.run_target": "gc.implementation-worker",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "member",
+          "gc.step_id": "review.apply-review-findings",
+          "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.apply-review-findings"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "review.build-basic-review-loop",
+          "gc.iteration": "1",
+          "gc.kind": "scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.run_target": "gc.run-operator",
+          "gc.scope_name": "review.build-basic-review-loop",
+          "gc.scope_role": "body",
+          "gc.step_id": "review.build-basic-review-loop",
+          "gc.step_ref": "review.build-basic-review-loop.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop",
+        "metadata": {
+          "gc.check_mode": "exec",
+          "gc.check_path": "/fixture/check.sh",
+          "gc.check_timeout": "10m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.max_attempts": "6",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.run-operator",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "review.build-basic-review-loop",
+          "gc.step_ref": "build-basic.review.build-basic-review-loop"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop-scope-check",
+        "metadata": {
+          "gc.control_for": "review.build-basic-review-loop",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "review.build-basic-review-loop",
+          "gc.step_ref": "build-basic.review.build-basic-review-loop-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.review.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.build.artifact_schema": "gc.build.review.v1",
+          "gc.control_for": "review",
+          "gc.iteration": "1",
+          "gc.ralph_step_id": "review",
+          "gc.run_target": "gc.run-operator",
+          "gc.step_id": "review",
+          "gc.step_ref": "review.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.review",
+        "metadata": {
+          "gc.build.artifact_schema": "gc.build.review.v1",
+          "gc.check_mode": "exec",
+          "gc.check_path": "/fixture/check.sh",
+          "gc.check_timeout": "5m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.max_attempts": "3",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.run-operator",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "review",
+          "gc.step_ref": "build-basic.review"
+        }
+      },
+      {
+        "id": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings-scope-check",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.control_for": "review.build-basic-review-loop.iteration.1.review.apply-review-findings",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.ralph_step_id": "review.build-basic-review-loop",
+          "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+          "gc.scope_role": "control",
+          "gc.step_id": "review.apply-review-findings",
+          "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.review-scope-check",
+        "metadata": {
+          "gc.control_for": "review",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "review",
+          "gc.step_ref": "build-basic.review-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.review-result",
+        "metadata": {
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.implementation-reviewer",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "build-basic.review-result",
+          "gc.step_ref": "build-basic.review-result"
+        }
+      },
+      {
+        "id": "build-basic.review-result-scope-check",
+        "metadata": {
+          "gc.control_for": "review-result",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "build-basic.review-result-scope-check",
+          "gc.step_ref": "build-basic.review-result-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.finalize.iteration.1",
+        "metadata": {
+          "gc.attempt": "1",
+          "gc.build.artifact_schema": "gc.build.final-report.v1",
+          "gc.control_for": "finalize",
+          "gc.iteration": "1",
+          "gc.ralph_step_id": "finalize",
+          "gc.run_target": "gc.run-operator",
+          "gc.step_id": "finalize",
+          "gc.step_ref": "finalize.iteration.1"
+        }
+      },
+      {
+        "id": "build-basic.finalize",
+        "metadata": {
+          "gc.build.artifact_schema": "gc.build.final-report.v1",
+          "gc.check_mode": "exec",
+          "gc.check_path": "/fixture/check.sh",
+          "gc.check_timeout": "5m",
+          "gc.control_epoch": "1",
+          "gc.kind": "ralph",
+          "gc.max_attempts": "3",
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.run-operator",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "finalize",
+          "gc.step_ref": "build-basic.finalize"
+        }
+      },
+      {
+        "id": "build-basic.finalize-scope-check",
+        "metadata": {
+          "gc.control_for": "finalize",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "finalize",
+          "gc.step_ref": "build-basic.finalize-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.publish",
+        "metadata": {
+          "gc.on_fail": "abort_scope",
+          "gc.run_target": "gc.publisher",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "member",
+          "gc.step_id": "build-basic.publish",
+          "gc.step_ref": "build-basic.publish"
+        }
+      },
+      {
+        "id": "build-basic.build-body",
+        "metadata": {
+          "gc.kind": "scope",
+          "gc.scope_name": "build",
+          "gc.scope_role": "body",
+          "gc.step_id": "build-basic.build-body",
+          "gc.step_ref": "build-basic.build-body"
+        }
+      },
+      {
+        "id": "build-basic.publish-scope-check",
+        "metadata": {
+          "gc.control_for": "publish",
+          "gc.kind": "scope-check",
+          "gc.on_fail": "abort_scope",
+          "gc.scope_ref": "build-body",
+          "gc.scope_role": "control",
+          "gc.step_id": "build-basic.publish-scope-check",
+          "gc.step_ref": "build-basic.publish-scope-check"
+        }
+      },
+      {
+        "id": "build-basic.workflow-finalize",
+        "metadata": {
+          "gc.kind": "workflow-finalize",
+          "gc.step_id": "build-basic.workflow-finalize",
+          "gc.step_ref": "build-basic.workflow-finalize"
+        }
+      }
+    ],
+    "vars": []
+  },
+  "provenance": {
+    "attempt_builder": "dispatch.buildAttemptRecipe",
+    "compiler": "formula.Compile",
+    "core_commit": "f6dde94440d594b4075d520f8c4f1f626aa08296",
+    "materializer": "molecule.Attach",
+    "normalization": "Synthetic physical IDs, revisions, roles, dates and source prose; public contract fields and native graph structure retained."
+  },
+  "root_id": "node-047",
+  "rows": [
+    {
+      "assignee": "",
+      "dependencies": [],
+      "id": "node-031",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "3",
+        "gc.build.artifact_schema": "gc.build.decomposition.v1",
+        "gc.control_for": "node-001",
+        "gc.idempotency_key": "node-001:attempt:3",
+        "gc.iteration": "3",
+        "gc.kind": "task",
+        "gc.logical_bead_id": "node-001",
+        "gc.native_step_dependencies.v1": "[\"plan-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.task-decomposer",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "decompose",
+        "gc.step_ref": "build-basic.decompose.iteration.3"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-031"
+        }
+      ],
+      "id": "node-041",
+      "labels": [],
+      "metadata": {
+        "gc.attach_root_id": "node-031",
+        "gc.attempt": "3",
+        "gc.control_for": "build-basic.decompose.iteration.3",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "decompose",
+        "gc.step_ref": "build-basic.decompose.iteration.3-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-045"
+        }
+      ],
+      "id": "node-042",
+      "labels": [],
+      "metadata": {
+        "gc.attach_root_id": "node-045",
+        "gc.attempt": "2",
+        "gc.control_for": "build-basic.decompose.iteration.2",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "decompose",
+        "gc.step_ref": "build-basic.decompose.iteration.2-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [],
+      "id": "node-045",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "2",
+        "gc.build.artifact_schema": "gc.build.decomposition.v1",
+        "gc.control_for": "node-001",
+        "gc.idempotency_key": "node-001:attempt:2",
+        "gc.iteration": "2",
+        "gc.kind": "task",
+        "gc.logical_bead_id": "node-001",
+        "gc.native_step_dependencies.v1": "[\"plan-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.task-decomposer",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "decompose",
+        "gc.step_ref": "build-basic.decompose.iteration.2"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-056"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-058"
+        }
+      ],
+      "id": "node-039",
+      "labels": [],
+      "metadata": {
+        "gc.attach_root_id": "node-056",
+        "gc.attempt": "2",
+        "gc.iteration": "2",
+        "gc.kind": "task",
+        "gc.native_step_dependencies.v1": "[\"author-repair\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.review-synthesizer",
+        "gc.scope_ref": "build-basic.plan-review.iteration.2",
+        "gc.scope_role": "member",
+        "gc.step_id": "plan-review-verdict",
+        "gc.step_ref": "build-basic.plan-review.iteration.2.plan-review-verdict"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-056"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-039"
+        }
+      ],
+      "id": "node-051",
+      "labels": [],
+      "metadata": {
+        "gc.attach_root_id": "node-056",
+        "gc.attempt": "2",
+        "gc.control_for": "build-basic.plan-review.iteration.2.plan-review-verdict",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"author-repair\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-basic.plan-review.iteration.2",
+        "gc.scope_role": "control",
+        "gc.step_id": "plan-review-verdict",
+        "gc.step_ref": "build-basic.plan-review.iteration.2.plan-review-verdict-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-071"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-039"
+        }
+      ],
+      "id": "node-056",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "2",
+        "gc.build.plan_review_required": "true",
+        "gc.control_for": "node-032",
+        "gc.idempotency_key": "node-032:attempt:2",
+        "gc.iteration": "2",
+        "gc.kind": "scope",
+        "gc.logical_bead_id": "node-032",
+        "gc.native_step_dependencies.v1": "[\"author-repair\",\"plan\",\"plan-review-verdict\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.review-synthesizer",
+        "gc.scope_name": "plan-review",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "body",
+        "gc.step_id": "plan-review",
+        "gc.step_ref": "build-basic.plan-review.iteration.2"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-071"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-056"
+        }
+      ],
+      "id": "node-058",
+      "labels": [],
+      "metadata": {
+        "gc.attach_root_id": "node-056",
+        "gc.attempt": "2",
+        "gc.control_for": "build-basic.plan-review.iteration.2.author-repair",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-basic.plan-review.iteration.2",
+        "gc.scope_role": "control",
+        "gc.step_id": "author-repair",
+        "gc.step_ref": "build-basic.plan-review.iteration.2.author-repair-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-056"
+        }
+      ],
+      "id": "node-071",
+      "labels": [],
+      "metadata": {
+        "gc.attach_root_id": "node-056",
+        "gc.attempt": "2",
+        "gc.iteration": "2",
+        "gc.kind": "task",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.design-author",
+        "gc.scope_ref": "build-basic.plan-review.iteration.2",
+        "gc.scope_role": "member",
+        "gc.step_id": "author-repair",
+        "gc.step_ref": "build-basic.plan-review.iteration.2.author-repair"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-034"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-004",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "review.build-basic-review-loop.iteration.1.review.synthesize-review",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\",\"review.acceptance-review\",\"review.simplicity-review\",\"review.test-evidence-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "control",
+        "gc.step_id": "review.synthesize-review",
+        "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.synthesize-review-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-038"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-006",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "review.build-basic-review-loop.iteration.1.review.apply-review-findings",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\",\"review.synthesize-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "control",
+        "gc.step_id": "review.apply-review-findings",
+        "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.apply-review-findings-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-030"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-011",
+      "labels": [],
+      "metadata": {
+        "gc.native_step_dependencies.v1": "[\"finalize\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.publisher",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "build-basic.publish",
+        "gc.step_ref": "build-basic.publish"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-028"
+        }
+      ],
+      "id": "node-021",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.build.artifact_schema": "gc.build.review.v1",
+        "gc.control_for": "review",
+        "gc.iteration": "1",
+        "gc.logical_bead_id": "node-061",
+        "gc.native_step_dependencies.v1": "[\"review.build-basic-review-loop\"]",
+        "gc.ralph_step_id": "review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.step_id": "review",
+        "gc.step_ref": "review.iteration.1"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-011"
+        }
+      ],
+      "id": "node-022",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "publish",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.publish\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "build-basic.publish-scope-check",
+        "gc.step_ref": "build-basic.publish-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-022"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-036"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-032"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-006"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-057"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-023"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-024",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "workflow-finalize",
+        "gc.native_step_dependencies.v1": "[\"build-basic.build-body\",\"build-basic.publish-scope-check\",\"plan-review\",\"plan-review-verdict\",\"review.apply-review-findings\",\"review.build-basic-review-loop\"]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.step_id": "build-basic.workflow-finalize",
+        "gc.step_ref": "build-basic.workflow-finalize"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-036"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-028",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "review.build-basic-review-loop",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\",\"review.acceptance-review\",\"review.apply-review-findings\",\"review.simplicity-review\",\"review.synthesize-review\",\"review.test-evidence-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "review.build-basic-review-loop",
+        "gc.step_ref": "build-basic.review.build-basic-review-loop-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-065"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-030",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "finalize",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review-result-scope-check\",\"review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "finalize",
+        "gc.step_ref": "build-basic.finalize-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-072"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-033",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "review-result",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review-result\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "build-basic.review-result-scope-check",
+        "gc.step_ref": "build-basic.review-result-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-050"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-005"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-036",
+      "labels": [],
+      "metadata": {
+        "gc.check_mode": "exec",
+        "gc.check_path": "/fixture/check.sh",
+        "gc.check_timeout": "10m",
+        "gc.control_epoch": "1",
+        "gc.kind": "ralph",
+        "gc.max_attempts": "6",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\",\"review.acceptance-review\",\"review.apply-review-findings\",\"review.simplicity-review\",\"review.synthesize-review\",\"review.test-evidence-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "review.build-basic-review-loop",
+        "gc.step_ref": "build-basic.review.build-basic-review-loop"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-005"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-004"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-038",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.iteration": "1",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\",\"review.synthesize-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.implementation-worker",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "member",
+        "gc.step_id": "review.apply-review-findings",
+        "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.apply-review-findings"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-061"
+        }
+      ],
+      "id": "node-048",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "review",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"review.build-basic-review-loop\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "review",
+        "gc.step_ref": "build-basic.review-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-034"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-018"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-025"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-038"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-067"
+        }
+      ],
+      "id": "node-050",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "review.build-basic-review-loop",
+        "gc.iteration": "1",
+        "gc.kind": "scope",
+        "gc.logical_bead_id": "node-036",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\",\"review.acceptance-review\",\"review.apply-review-findings\",\"review.simplicity-review\",\"review.synthesize-review\",\"review.test-evidence-review\"]",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.scope_name": "review.build-basic-review-loop",
+        "gc.scope_role": "body",
+        "gc.step_id": "review.build-basic-review-loop",
+        "gc.step_ref": "review.build-basic-review-loop.iteration.1"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-019"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-032"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-062"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-017"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-065"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-072"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-001"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-061"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-002"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-011"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-069"
+        }
+      ],
+      "id": "node-057",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "scope",
+        "gc.native_step_dependencies.v1": "[\"build-basic.implement\",\"build-basic.publish\",\"build-basic.review-result\",\"decompose\",\"finalize\",\"plan\",\"plan-review\",\"prepare\",\"requirements\",\"review\",\"summarize-implementation\"]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_name": "build",
+        "gc.scope_role": "body",
+        "gc.step_id": "build-basic.build-body",
+        "gc.step_ref": "build-basic.build-body"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-028"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-021"
+        }
+      ],
+      "id": "node-061",
+      "labels": [],
+      "metadata": {
+        "gc.build.artifact_schema": "gc.build.review.v1",
+        "gc.check_mode": "exec",
+        "gc.check_path": "/fixture/check.sh",
+        "gc.check_timeout": "5m",
+        "gc.control_epoch": "1",
+        "gc.kind": "ralph",
+        "gc.max_attempts": "3",
+        "gc.native_step_dependencies.v1": "[\"review.build-basic-review-loop\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "review",
+        "gc.step_ref": "build-basic.review"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-033"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-048"
+        }
+      ],
+      "id": "node-064",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.build.artifact_schema": "gc.build.final-report.v1",
+        "gc.control_for": "finalize",
+        "gc.iteration": "1",
+        "gc.logical_bead_id": "node-065",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review-result-scope-check\",\"review\"]",
+        "gc.ralph_step_id": "finalize",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.step_id": "finalize",
+        "gc.step_ref": "finalize.iteration.1"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-048"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-064"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-033"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-065",
+      "labels": [],
+      "metadata": {
+        "gc.build.artifact_schema": "gc.build.final-report.v1",
+        "gc.check_mode": "exec",
+        "gc.check_path": "/fixture/check.sh",
+        "gc.check_timeout": "5m",
+        "gc.control_epoch": "1",
+        "gc.kind": "ralph",
+        "gc.max_attempts": "3",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review-result-scope-check\",\"review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "finalize",
+        "gc.step_ref": "build-basic.finalize"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-048"
+        }
+      ],
+      "id": "node-072",
+      "labels": [],
+      "metadata": {
+        "gc.native_step_dependencies.v1": "[\"review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.implementation-reviewer",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "build-basic.review-result",
+        "gc.step_ref": "build-basic.review-result"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-063"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-027"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-031"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-045"
+        }
+      ],
+      "id": "node-001",
+      "labels": [],
+      "metadata": {
+        "gc.build.artifact_schema": "gc.build.decomposition.v1",
+        "gc.check_mode": "exec",
+        "gc.check_path": "/fixture/check.sh",
+        "gc.check_timeout": "5m",
+        "gc.control_epoch": 3,
+        "gc.kind": "ralph",
+        "gc.max_attempts": "3",
+        "gc.native_step_dependencies.v1": "[\"plan-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.task-decomposer",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "decompose",
+        "gc.step_ref": "build-basic.decompose"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-007"
+        }
+      ],
+      "id": "node-005",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "review.setup-build-basic-review",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "build-basic.review.setup-build-basic-review-scope-check",
+        "gc.step_ref": "build-basic.review.setup-build-basic-review-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-054"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-007",
+      "labels": [],
+      "metadata": {
+        "gc.native_step_dependencies.v1": "[\"summarize-implementation\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "build-basic.review.setup-build-basic-review",
+        "gc.step_ref": "build-basic.review.setup-build-basic-review"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-001"
+        }
+      ],
+      "id": "node-012",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "decompose",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"plan-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "decompose",
+        "gc.step_ref": "build-basic.decompose-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-067"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-013",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "review.build-basic-review-loop.iteration.1.review.test-evidence-review",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "control",
+        "gc.step_id": "review.test-evidence-review",
+        "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.test-evidence-review-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-005"
+        }
+      ],
+      "id": "node-018",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.iteration": "1",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.implementation-reviewer",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "member",
+        "gc.step_id": "review.acceptance-review",
+        "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.acceptance-review"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-044"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-046"
+        }
+      ],
+      "id": "node-019",
+      "labels": [],
+      "metadata": {
+        "gc.build.artifact_schema": "gc.build.implementation-summary.v1",
+        "gc.check_mode": "exec",
+        "gc.check_path": "/fixture/check.sh",
+        "gc.check_timeout": "5m",
+        "gc.control_epoch": "1",
+        "gc.kind": "ralph",
+        "gc.max_attempts": "3",
+        "gc.native_step_dependencies.v1": "[\"build-basic.implement-scope-check\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "summarize-implementation",
+        "gc.step_ref": "build-basic.summarize-implementation"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-029"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-023",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "plan-review.iteration.1.plan-review-verdict",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"author-repair\",\"plan\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "plan-review.iteration.1",
+        "gc.scope_role": "control",
+        "gc.step_id": "plan-review-verdict",
+        "gc.step_ref": "build-basic.plan-review.iteration.1.plan-review-verdict-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-005"
+        }
+      ],
+      "id": "node-025",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.iteration": "1",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.design-implementation-reviewer",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "member",
+        "gc.step_id": "review.simplicity-review",
+        "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.simplicity-review"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-032"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-027",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "plan-review",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"author-repair\",\"plan\",\"plan-review-verdict\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "plan-review",
+        "gc.step_ref": "build-basic.plan-review-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-005"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-013"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-043"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-053"
+        }
+      ],
+      "id": "node-034",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.iteration": "1",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\",\"review.acceptance-review\",\"review.simplicity-review\",\"review.test-evidence-review\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.review-synthesizer",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "member",
+        "gc.step_id": "review.synthesize-review",
+        "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.synthesize-review"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-018"
+        }
+      ],
+      "id": "node-043",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "review.build-basic-review-loop.iteration.1.review.acceptance-review",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "control",
+        "gc.step_id": "review.acceptance-review",
+        "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.acceptance-review-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-046"
+        }
+      ],
+      "id": "node-044",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.build.artifact_schema": "gc.build.implementation-summary.v1",
+        "gc.control_for": "summarize-implementation",
+        "gc.iteration": "1",
+        "gc.logical_bead_id": "node-019",
+        "gc.native_step_dependencies.v1": "[\"build-basic.implement-scope-check\"]",
+        "gc.ralph_step_id": "summarize-implementation",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.step_id": "summarize-implementation",
+        "gc.step_ref": "summarize-implementation.iteration.1"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-069"
+        }
+      ],
+      "id": "node-046",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "implement",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.implement\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "build-basic.implement-scope-check",
+        "gc.step_ref": "build-basic.implement-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-025"
+        }
+      ],
+      "id": "node-053",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "review.build-basic-review-loop.iteration.1.review.simplicity-review",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "control",
+        "gc.step_id": "review.simplicity-review",
+        "gc.step_ref": "build-basic.review.build-basic-review-loop.iteration.1.review.simplicity-review-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-019"
+        }
+      ],
+      "id": "node-054",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "summarize-implementation",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"build-basic.implement-scope-check\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "summarize-implementation",
+        "gc.step_ref": "build-basic.summarize-implementation-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-027"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-063",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.build.artifact_schema": "gc.build.decomposition.v1",
+        "gc.control_for": "decompose",
+        "gc.iteration": "1",
+        "gc.logical_bead_id": "node-001",
+        "gc.native_step_dependencies.v1": "[\"plan-review\"]",
+        "gc.ralph_step_id": "decompose",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.task-decomposer",
+        "gc.step_id": "decompose",
+        "gc.step_ref": "decompose.iteration.1"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-005"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-067",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.iteration": "1",
+        "gc.native_step_dependencies.v1": "[\"build-basic.review.setup-build-basic-review-scope-check\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "review.build-basic-review-loop",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.gap-analyst",
+        "gc.scope_ref": "review.build-basic-review-loop.iteration.1",
+        "gc.scope_role": "member",
+        "gc.step_id": "review.test-evidence-review",
+        "gc.step_ref": "review.build-basic-review-loop.iteration.1.review.test-evidence-review"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-012"
+        }
+      ],
+      "id": "node-069",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "drain",
+        "gc.native_step_dependencies.v1": "[\"decompose\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.implementation-worker",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "build-basic.implement",
+        "gc.step_ref": "build-basic.implement"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-040"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-026"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-002",
+      "labels": [],
+      "metadata": {
+        "gc.build.artifact_schema": "gc.build.requirements.v1",
+        "gc.check_mode": "exec",
+        "gc.check_path": "/fixture/check.sh",
+        "gc.check_timeout": "5m",
+        "gc.control_epoch": "1",
+        "gc.kind": "ralph",
+        "gc.max_attempts": "3",
+        "gc.native_step_dependencies.v1": "[\"prepare\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.requirements-planner",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "requirements",
+        "gc.step_ref": "build-basic.requirements"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-070"
+        }
+      ],
+      "id": "node-008",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.build.artifact_schema": "gc.build.plan.v1",
+        "gc.control_for": "plan",
+        "gc.iteration": "1",
+        "gc.logical_bead_id": "node-017",
+        "gc.native_step_dependencies.v1": "[\"requirements\"]",
+        "gc.ralph_step_id": "plan",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.design-author",
+        "gc.step_id": "plan",
+        "gc.step_ref": "plan.iteration.1"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-010",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "prepare",
+        "gc.iteration": "1",
+        "gc.lifecycle": "new",
+        "gc.logical_bead_id": "node-062",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.ralph_step_id": "prepare",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.step_id": "prepare",
+        "gc.step_ref": "prepare.iteration.1"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "description": "{\"id\":\"decompose\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.decomposition.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.task-decomposer\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"plan-review\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+      "id": "node-014",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "spec",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.spec_for": "decompose",
+        "gc.spec_for_ref": "decompose",
+        "gc.step_id": "build-basic.decompose.spec",
+        "gc.step_ref": "build-basic.decompose.spec"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "description": "{\"id\":\"prepare\",\"metadata\":{\"gc.lifecycle\":\"new\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"setup\"},\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"1m\"},\"max_attempts\":1},\"title\":\"Native scoped writer\"}",
+      "id": "node-015",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "spec",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.spec_for": "prepare",
+        "gc.spec_for_ref": "build-basic.prepare",
+        "gc.step_id": "build-basic.prepare.spec",
+        "gc.step_ref": "build-basic.prepare.spec"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "description": "{\"id\":\"finalize\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.final-report.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"review\",\"review-result\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+      "id": "node-016",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "spec",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.spec_for": "finalize",
+        "gc.spec_for_ref": "finalize",
+        "gc.step_id": "build-basic.finalize.spec",
+        "gc.step_ref": "build-basic.finalize.spec"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-008"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-070"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-017",
+      "labels": [],
+      "metadata": {
+        "gc.build.artifact_schema": "gc.build.plan.v1",
+        "gc.check_mode": "exec",
+        "gc.check_path": "/fixture/check.sh",
+        "gc.check_timeout": "5m",
+        "gc.control_epoch": "1",
+        "gc.kind": "ralph",
+        "gc.max_attempts": "3",
+        "gc.native_step_dependencies.v1": "[\"requirements\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.design-author",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "plan",
+        "gc.step_ref": "build-basic.plan"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "description": "{\"children\":[{\"id\":\"review.acceptance-review\",\"metadata\":{\"gc.run_target\":\"gc.implementation-reviewer\"},\"title\":\"Native scoped writer\"},{\"id\":\"review.test-evidence-review\",\"metadata\":{\"gc.run_target\":\"gc.gap-analyst\"},\"title\":\"Native scoped writer\"},{\"id\":\"review.simplicity-review\",\"metadata\":{\"gc.run_target\":\"gc.design-implementation-reviewer\"},\"title\":\"Native scoped writer\"},{\"id\":\"review.synthesize-review\",\"metadata\":{\"gc.run_target\":\"gc.review-synthesizer\"},\"needs\":[\"review.acceptance-review\",\"review.test-evidence-review\",\"review.simplicity-review\"],\"title\":\"Native scoped writer\"},{\"id\":\"review.apply-review-findings\",\"metadata\":{\"gc.run_target\":\"gc.implementation-worker\"},\"needs\":[\"review.synthesize-review\"],\"title\":\"Native scoped writer\"}],\"id\":\"review.build-basic-review-loop\",\"metadata\":{\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"review.setup-build-basic-review\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"10m\"},\"max_attempts\":6},\"title\":\"Native scoped writer\"}",
+      "id": "node-020",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "spec",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.spec_for": "review.build-basic-review-loop",
+        "gc.spec_for_ref": "review.build-basic-review-loop",
+        "gc.step_id": "build-basic.review.build-basic-review-loop.spec",
+        "gc.step_ref": "build-basic.review.build-basic-review-loop.spec"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-040"
+        }
+      ],
+      "id": "node-026",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.build.artifact_schema": "gc.build.requirements.v1",
+        "gc.control_for": "requirements",
+        "gc.iteration": "1",
+        "gc.logical_bead_id": "node-002",
+        "gc.native_step_dependencies.v1": "[\"prepare\"]",
+        "gc.ralph_step_id": "requirements",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.requirements-planner",
+        "gc.step_id": "requirements",
+        "gc.step_ref": "requirements.iteration.1"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-066"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-035"
+        }
+      ],
+      "id": "node-029",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.iteration": "1",
+        "gc.native_step_dependencies.v1": "[\"author-repair\",\"plan\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.review-synthesizer",
+        "gc.scope_ref": "plan-review.iteration.1",
+        "gc.scope_role": "member",
+        "gc.step_id": "plan-review-verdict",
+        "gc.step_ref": "plan-review.iteration.1.plan-review-verdict"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-066"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-056"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-037"
+        }
+      ],
+      "id": "node-032",
+      "labels": [],
+      "metadata": {
+        "gc.build.plan_review_required": "true",
+        "gc.check_mode": "exec",
+        "gc.check_path": "/fixture/check.sh",
+        "gc.check_timeout": "5m",
+        "gc.control_epoch": 2,
+        "gc.kind": "ralph",
+        "gc.max_attempts": "3",
+        "gc.native_step_dependencies.v1": "[\"author-repair\",\"plan\",\"plan-review-verdict\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.review-synthesizer",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "member",
+        "gc.step_id": "plan-review",
+        "gc.step_ref": "build-basic.plan-review"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-059"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-035",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.control_for": "plan-review.iteration.1.author-repair",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"plan\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "plan-review.iteration.1",
+        "gc.scope_role": "control",
+        "gc.step_id": "author-repair",
+        "gc.step_ref": "build-basic.plan-review.iteration.1.author-repair-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-029"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-059"
+        }
+      ],
+      "id": "node-037",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.build.plan_review_required": "true",
+        "gc.control_for": "plan-review",
+        "gc.iteration": "1",
+        "gc.kind": "scope",
+        "gc.logical_bead_id": "node-032",
+        "gc.native_step_dependencies.v1": "[\"author-repair\",\"plan\",\"plan-review-verdict\"]",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.review-synthesizer",
+        "gc.scope_name": "plan-review",
+        "gc.scope_role": "body",
+        "gc.step_id": "plan-review",
+        "gc.step_ref": "plan-review.iteration.1"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-062"
+        }
+      ],
+      "id": "node-040",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "prepare",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "prepare",
+        "gc.step_ref": "build-basic.prepare-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "description": "{\"id\":\"review\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.review.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"review.build-basic-review-loop\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+      "id": "node-049",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "spec",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.spec_for": "review",
+        "gc.spec_for_ref": "review",
+        "gc.step_id": "build-basic.review.spec",
+        "gc.step_ref": "build-basic.review.spec"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "description": "{\"id\":\"summarize-implementation\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.implementation-summary.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.run-operator\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"implement\",\"implement-same-session\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+      "id": "node-052",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "spec",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.spec_for": "summarize-implementation",
+        "gc.spec_for_ref": "summarize-implementation",
+        "gc.step_id": "build-basic.summarize-implementation.spec",
+        "gc.step_ref": "build-basic.summarize-implementation.spec"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "description": "{\"id\":\"requirements\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.requirements.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.requirements-planner\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"prepare\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+      "id": "node-055",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "spec",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.spec_for": "requirements",
+        "gc.spec_for_ref": "requirements",
+        "gc.step_id": "build-basic.requirements.spec",
+        "gc.step_ref": "build-basic.requirements.spec"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "blocks",
+          "id": "node-066"
+        },
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "id": "node-059",
+      "labels": [],
+      "metadata": {
+        "gc.attempt": "1",
+        "gc.iteration": "1",
+        "gc.native_step_dependencies.v1": "[\"plan\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.ralph_step_id": "plan-review",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.design-author",
+        "gc.scope_ref": "plan-review.iteration.1",
+        "gc.scope_role": "member",
+        "gc.step_id": "author-repair",
+        "gc.step_ref": "plan-review.iteration.1.author-repair"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "description": "{\"id\":\"plan\",\"metadata\":{\"gc.build.artifact_schema\":\"gc.build.plan.v1\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.design-author\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"requirements\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+      "id": "node-060",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "spec",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.spec_for": "plan",
+        "gc.spec_for_ref": "plan",
+        "gc.step_id": "build-basic.plan.spec",
+        "gc.step_ref": "build-basic.plan.spec"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-010"
+        }
+      ],
+      "id": "node-062",
+      "labels": [],
+      "metadata": {
+        "gc.check_mode": "exec",
+        "gc.check_path": "/fixture/check.sh",
+        "gc.check_timeout": "1m",
+        "gc.control_epoch": "1",
+        "gc.kind": "ralph",
+        "gc.lifecycle": "new",
+        "gc.max_attempts": "1",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.run_target": "gc.run-operator",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "setup",
+        "gc.step_id": "prepare",
+        "gc.step_ref": "build-basic.prepare"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-017"
+        }
+      ],
+      "id": "node-066",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "plan",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"requirements\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "plan",
+        "gc.step_ref": "build-basic.plan-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        }
+      ],
+      "description": "{\"children\":[{\"id\":\"author-repair\",\"metadata\":{\"gc.run_target\":\"gc.design-author\"},\"title\":\"Native scoped writer\"},{\"id\":\"plan-review-verdict\",\"metadata\":{\"gc.run_target\":\"gc.review-synthesizer\"},\"needs\":[\"author-repair\"],\"title\":\"Native scoped writer\"}],\"id\":\"plan-review\",\"metadata\":{\"gc.build.plan_review_required\":\"true\",\"gc.on_fail\":\"abort_scope\",\"gc.run_target\":\"gc.review-synthesizer\",\"gc.scope_ref\":\"build-body\",\"gc.scope_role\":\"member\"},\"needs\":[\"plan\"],\"ralph\":{\"check\":{\"mode\":\"exec\",\"path\":\"/fixture/check.sh\",\"timeout\":\"5m\"},\"max_attempts\":3},\"title\":\"Native scoped writer\"}",
+      "id": "node-068",
+      "labels": [],
+      "metadata": {
+        "gc.kind": "spec",
+        "gc.native_step_dependencies.v1": "[]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.spec_for": "plan-review",
+        "gc.spec_for_ref": "plan-review",
+        "gc.step_id": "build-basic.plan-review.spec",
+        "gc.step_ref": "build-basic.plan-review.spec"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task",
+      "updated_at": "2000-01-01T00:00:00Z"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-047"
+        },
+        {
+          "dependency_type": "blocks",
+          "id": "node-002"
+        }
+      ],
+      "id": "node-070",
+      "labels": [],
+      "metadata": {
+        "gc.control_for": "requirements",
+        "gc.kind": "scope-check",
+        "gc.native_step_dependencies.v1": "[\"prepare\"]",
+        "gc.on_fail": "abort_scope",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.scope_ref": "build-body",
+        "gc.scope_role": "control",
+        "gc.step_id": "requirements",
+        "gc.step_ref": "build-basic.requirements-scope-check"
+      },
+      "revision": "9007199254740993",
+      "status": "closed",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-024"
+        }
+      ],
+      "id": "node-047",
+      "labels": [],
+      "metadata": {
+        "gc.formula_name": "build-basic",
+        "gc.kind": "workflow",
+        "gc.native_step_dependencies.v1": "[\"build-basic.workflow-finalize\"]",
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture",
+        "gc.step_id": "build-basic"
+      },
+      "revision": "9007199254740993",
+      "status": "in_progress",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [
+        {
+          "dependency_type": "tracks",
+          "id": "node-003"
+        }
+      ],
+      "id": "node-009",
+      "labels": [],
+      "metadata": {
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    },
+    {
+      "assignee": "",
+      "dependencies": [],
+      "id": "node-003",
+      "labels": [],
+      "metadata": {
+        "gc.root_bead_id": "node-047",
+        "gc.root_store_ref": "rig:fixture"
+      },
+      "revision": "9007199254740993",
+      "status": "open",
+      "type": "task"
+    }
+  ]
+}

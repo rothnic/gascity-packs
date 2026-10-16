@@ -131,6 +131,7 @@ class CookedWriterMap:
     lineage_bytes: bytes | None = None
     _spec_revisions: dict = field(default_factory=dict, init=False, repr=False, compare=False)
     _scope_revisions: dict = field(default_factory=dict, init=False, repr=False, compare=False)
+    _attempt_revisions: dict = field(default_factory=dict, init=False, repr=False, compare=False)
 
     @property
     def declaration(self) -> dict:
@@ -150,7 +151,7 @@ class CookedWriterMap:
             from workspace_attempts import decode_lineage
             return hashlib.sha256(canonical_bytes(dict(declaration=declaration,
                 continuation=self.continuation.binding if self.continuation is not None else None,
-                native_attempts=[{key: value for key, value in descriptor.items() if key != "spec_revision"}
+                native_attempts=[{key: value for key, value in descriptor.items() if key not in ("spec_revision", "physical_revisions")}
                                  for descriptor in decode_lineage(self)]))).hexdigest()
         if self.continuation is None:
             return hashlib.sha256(canonical_bytes(declaration)).hexdigest()
@@ -163,6 +164,8 @@ class CookedWriterMap:
         from workspace_attempts import decode_lineage
         controls = decode_lineage(self)
         observations = [(self._spec_revisions, item["spec_id"], item["spec_revision"]) for item in controls]
+        observations += [(self._attempt_revisions, bead_id, revision)
+                         for item in controls for bead_id, revision in item["physical_revisions"].items()]
         observations += [(self._scope_revisions, item[key + "_id"], item[key + "_revision"])
                          for item in self.declaration.get("scope_checks", []) for key in ("check", "subject")]
         if not observations:
@@ -487,7 +490,8 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
         if len(occurrences) == 1:
             continue
         scope_checks = [item for item in occurrences
-                        if snapshots[item["bead_id"]]["metadata"].get("gc.kind") == "scope-check"]
+                        if snapshots[item["bead_id"]]["metadata"].get("gc.kind") == "scope-check"
+                        and item["bead_id"] not in attempt_owners]
         controls = [item for item in occurrences if snapshots[item["bead_id"]]["metadata"].get("gc.kind") in ("retry", "ralph")]
         if scope_checks and controls:
             require(len(scope_checks) == len(controls) == 1, "semantic scope check has ambiguous native subjects")
@@ -503,7 +507,8 @@ def validate_cooked_writer_map(writer_map, snapshots, *, store_ref, workflow_roo
                     and not check["record_kinds"] and not subject["record_kinds"]
                     and check["dependencies"] == subject["dependencies"],
                     "semantic scope check lacks its exact native control subject")
-            candidates = [item for item in occurrences if item not in (check, subject)]
+            candidates = [item for item in occurrences if item not in (check, subject)
+                          and snapshots[item["bead_id"]]["metadata"].get("gc.kind") != "scope-check"]
             proven_current = [item for item in candidates if item["bead_id"] in attempt_owners
                               and attempt_owners[item["bead_id"]][0] == subject["bead_id"]]
             current = max(proven_current, key=lambda item: attempt_owners[item["bead_id"]][1]) if proven_current else (

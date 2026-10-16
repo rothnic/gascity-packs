@@ -15,36 +15,29 @@ attempts either; the independent reviewer must retain real findings.
 On attempts two and three in agent mode, read the preceding actual blocked
 report and this request's explicit repair authority. Interactive mode also
 requires its existing permission; missing headless permission remains blocked.
-Before any edit, compare the blocked report with the current subject using the
-existing pack modules. Resolve PACK_SCRIPTS from this real description's pinned
-pack, and PLAN_PATH, REPORT_PATH, ROOT_ID, DURABLE_RIG_ROOT and REQUIREMENTS_PATH
-from the native root; the last value is empty only when no native requirements
-path is recorded.
+Before any edit, validate the preceding blocked report's repair identity. Resolve
+PACK_SCRIPTS from this real description's pinned pack and REPORT_PATH from the
+current native root. Read that exact report, including its real findings, then
+capture its SHA-256. Keep the actual claimed author child in GC_BEAD_ID. The
+helper reads the native plan, requirements and current report paths itself.
 
 ```sh
-python3 -B - "$PACK_SCRIPTS" "$PLAN_PATH" "$REPORT_PATH" "$ROOT_ID" \
-  "$DURABLE_RIG_ROOT" "$REQUIREMENTS_PATH" <<'PY'
-import json
-from pathlib import Path
-import sys
-sys.path.insert(0, sys.argv[1])
-import validate_plan_review as review
-root = Path(sys.argv[5])
-report_path = review.artifact_path(sys.argv[3], root)
-text = report_path.read_text(encoding="utf-8")
-report = review.verdict.validate_report_text(text, expected_kind="review")
-_, data, _ = review.build.parse_front_matter(text)
-subject = review.current_subject(Path(sys.argv[2]), workflow_root_id=sys.argv[4],
-    artifact_root=root, required_upstream=(sys.argv[6],) if sys.argv[6] else ())
-review.require(data.get("subject") == subject, "repair report subject is stale or foreign")
-review.require(report.verdict == "fail" and bool(report.findings), "repair needs real blocked findings")
-print(json.dumps({"subject": subject, "report_sha256": review.digest(text.encode("utf-8"))}, sort_keys=True))
-PY
+REPORT_SHA256=$(sha256sum -- "$REPORT_PATH")
+REPORT_SHA256=${REPORT_SHA256%% *}
+python3 -B "$PACK_SCRIPTS/validate_plan_review.py" \
+  native-repair-check --report-sha256 "$REPORT_SHA256"
 ```
 
-A failed/missing subject, missing authority or required change outside the
-approved requirements blocks this child before edits. Preserve its actual
-diagnostic and the report. Do not manufacture approval or a different request.
+A malformed plan trace may prevent a complete approval subject. Its blocked
+report must still bind the exact current plan and native requirements bytes in
+`repair_subject`, captured by the preceding actual reviewer. The helper requires
+that same workflow's closed failing review from the preceding attempt. It refuses
+changed plan, requirements or report bytes, a foreign claim, and an old report
+replayed into a later attempt. A repair identity is not an approval subject.
+
+A failed/missing repair identity, missing request authority or required change
+outside the approved requirements blocks this child before edits. Preserve the
+actual diagnostic and report. Do not manufacture approval or a different request.
 
 Apply only the explicitly permitted fixes to the native-recorded plan, using
 the original requirements and actual read-only source/context. Do not edit
@@ -54,9 +47,10 @@ tasks here. Keep the plan artifact valid and its upstream hashes current without
 changing those upstream files.
 
 Under `{{artifact_root}}`, record a plan-review repair summary for this actual
-native attempt: before/after plan hashes, addressed finding IDs, remaining
-findings and the request authority used. Do not replace a retained attempt's
-summary. Never set a verdict or an approval stamp from this author child.
+native attempt: the check's author bead/attempt and exact report path/hash,
+before/after plan hashes, addressed finding IDs, remaining findings and the
+request authority used. Do not replace a retained attempt's summary. Never set
+a verdict or an approval stamp from this author child.
 
 Close only this claimed author child with its honest execution outcome. A
 completed permitted repair or no-op may pass this child; blocked/unknown work

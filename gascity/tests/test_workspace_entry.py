@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -212,6 +213,91 @@ class EntryTests(unittest.TestCase):
                 self.rows[bead]["metadata"][key] = value
                 with self.assertRaises(entry.EntryError):
                     self.read(workflow_root_id="child-1", require_plan=True)
+
+    def test_continuation_drift_retains_exact_private_operands_and_still_refuses(self):
+        self.drain_child()
+        (self.root / ".gc").mkdir()
+        self.rows["step-1"]["revision"] = "-9007199254740993"
+        initial = copy.deepcopy({key: self.rows[key] for key in ("child-1", "step-1")})
+        native_read = entry.read_native_continuation
+
+        def changed(*args, **kwargs):
+            self.rows["step-1"]["revision"] = "9007199254740995"
+            self.rows["step-1"]["assignee"] = "replacement-worker"
+            self.rows["step-1"]["metadata"].update({"gc.session_name": "replacement-session",
+                                                   "gc.attempt_id": "replacement-attempt"})
+            self.rows["child-1"]["metadata"]["note/~"] = "native stamp"
+            return native_read(*args, **kwargs)
+
+        with patch.object(entry, "read_native_continuation", side_effect=changed), \
+             patch.object(entry, "allocate_placeholder") as allocate, \
+             self.assertRaisesRegex(entry.EntryError, "native continuation changed after its original entry snapshot") as failure:
+            self.read(workflow_root_id="child-1", require_plan=True)
+        allocate.assert_not_called()
+        directory = self.root / ".gc" / "workspace-entry-diagnostics"
+        files = list(directory.iterdir())
+        self.assertEqual(len(files), 1)
+        proof = files[0]
+        self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(proof.stat().st_mode & 0o777, 0o600)
+        diagnostic = json.loads(proof.read_text())
+        self.assertEqual(diagnostic["city_root"], str(self.root))
+        self.assertEqual(diagnostic["store_ref"], self.store.store_ref)
+        self.assertEqual(set(diagnostic["overlapping_rows"]), set(initial))
+        for bead_id, pair in diagnostic["overlapping_rows"].items():
+            self.assertEqual(pair["initial"], initial[bead_id])
+            self.assertEqual(pair["continuation"], self.rows[bead_id])
+            for key in ("initial", "continuation"):
+                self.assertEqual(pair[key + "_sha256"], record_sha256(pair[key]))
+                self.assertEqual(pair[key + "_revision"], pair[key]["revision"])
+        self.assertEqual(diagnostic["overlapping_rows"]["step-1"]["changed_paths"],
+                         ["/assignee", "/metadata/gc.attempt_id", "/metadata/gc.session_name", "/revision"])
+        self.assertEqual(diagnostic["overlapping_rows"]["child-1"]["changed_paths"], ["/metadata/note~1~0"])
+        self.assertIn(str(proof), str(failure.exception))
+        self.assertIn(hashlib.sha256(proof.read_bytes()).hexdigest(), str(failure.exception))
+        self.assertNotIn("replacement-session", str(failure.exception))
+        self.assertNotIn(entry.RUN_REF, self.rows["child-1"]["metadata"])
+
+    def test_unchanged_continuation_creates_no_diagnostic(self):
+        self.drain_child()
+        before = copy.deepcopy(self.rows)
+        self.read(workflow_root_id="child-1", require_plan=True)
+        self.assertEqual(self.rows, before)
+        self.assertFalse((self.root / ".gc").exists())
+
+    def test_continuation_diagnostic_failure_never_allows_changed_authority(self):
+        self.drain_child()
+        native_read = entry.read_native_continuation
+
+        def changed(*args, **kwargs):
+            self.rows["step-1"]["assignee"] = "replacement-worker"
+            return native_read(*args, **kwargs)
+
+        for unsafe in ("missing-parent", "symlink-parent", "public-directory", "oversize", "write-error"):
+            with self.subTest(unsafe=unsafe):
+                self.rows["step-1"]["assignee"] = "worker"
+                parent = self.root / ".gc"
+                if unsafe == "symlink-parent":
+                    parent.symlink_to(self.repo, target_is_directory=True)
+                elif unsafe != "missing-parent":
+                    parent.mkdir()
+                if unsafe == "public-directory":
+                    (parent / "workspace-entry-diagnostics").mkdir(mode=0o755)
+                if unsafe == "oversize":
+                    self.rows["step-1"]["metadata"]["large"] = "x" * (1024 * 1024)
+                with patch.object(entry, "read_native_continuation", side_effect=changed), \
+                     patch("workspace_checkout.save_diagnostic", side_effect=OSError("private write failed")), \
+                     self.assertRaisesRegex(entry.EntryError, "native continuation changed.*private diagnostic unavailable"):
+                    self.read(workflow_root_id="child-1", require_plan=True)
+                self.assertFalse((self.repo / "workspace-entry-diagnostics").exists())
+                if parent.is_symlink():
+                    parent.unlink()
+                elif parent.exists():
+                    for directory in parent.iterdir():
+                        self.assertFalse(list(directory.iterdir()))
+                        directory.rmdir()
+                    parent.rmdir()
+                self.rows["step-1"]["metadata"].pop("large", None)
 
     def test_child_gate_uses_retained_mode_before_legacy_and_never_allocates_a_run(self):
         from workspace_store import Attempt

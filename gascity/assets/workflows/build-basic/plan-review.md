@@ -16,9 +16,13 @@ An earlier report is prior feedback. After an author repair, independently
 review the current plan and upstream bytes again. Preserve genuine findings
 and earlier reports. Complete this report handoff in order:
 
-1. Obtain the exact current `subject` with the acceptance helper. Write a new
-   `gc.verdict-report.v1` report for this claimed review with that subject and
-   your actual verdict and findings.
+1. Obtain the exact current `subject` with the acceptance helper. If a malformed
+   plan trace prevents it, retain that diagnostic as a blocking finding and
+   capture `repair_subject` with `native-repair-subject` as the contract directs.
+   Every blocked report needs that repair identity for the next author attempt.
+   Write a new `gc.verdict-report.v1` report for this claimed review with the
+   captured identity and your actual verdict and findings. Never invent a
+   complete approval subject for an unreadable upstream file.
 2. Read back the new report from its absolute path before validation.
 3. Run `validate_plan_review.py check` with the current native plan, workflow
    root and artifact root, and `--report` set to that same absolute path.

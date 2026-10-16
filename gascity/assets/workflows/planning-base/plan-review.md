@@ -28,3 +28,9 @@ plan, passing report, and no findings. A blocked report must retain
 `gc.outcome=fail`; it must not close pass merely because findings are recorded.
 For an authorized repair, read the control's `gc.attempt_log` and review the
 changed subject again. Preserve report-only and headless authority limits.
+
+For every blocked review, capture `repair_subject` with `native-repair-subject`
+while this reviewer is claimed. A malformed trace may prevent a complete
+`subject`; retain the actual diagnostic and use the repair identity only in a
+failing report. Follow the contract's repair preflight and new-report handoff.
+Only a newly validated complete subject can authorize decomposition.

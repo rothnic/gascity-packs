@@ -100,6 +100,71 @@ def validate_review(plan_path: Path, report_path: Path, *, workflow_root_id: str
     return subject
 
 
+def review_claim(row: dict[str, Any], *, workflow_root_id: str, step: str) -> int:
+    metadata = row.get("metadata", {})
+    require(isinstance(row.get("id"), str) and bool(row["id"])
+            and native_root(row) == workflow_root_id
+            and row.get("issue_type") == "task"
+            and metadata.get("gc.kind", "task") == "task"
+            and metadata.get("gc.ralph_step_id") == "plan-review"
+            and metadata.get("gc.step_id") == step,
+            "repair claim is not this workflow's native plan-review child")
+    attempt = metadata.get("gc.attempt")
+    require(attempt in ("1", "2", "3"), "native plan-review attempt is malformed")
+    return int(attempt)
+
+
+def repair_subject(plan_path: Path, *, workflow_root_id: str, artifact_root: Path,
+                   reviewer: dict[str, Any], required_upstream: tuple[str, ...] = ()) -> dict[str, Any]:
+    """Identify repair inputs without asserting that the plan's trace is valid."""
+    attempt = review_claim(reviewer, workflow_root_id=workflow_root_id, step="plan-review-verdict")
+    plan_path = artifact_path(str(plan_path), artifact_root)
+    raw = plan_path.read_bytes()
+    schema, data, _ = build.parse_front_matter(raw.decode("utf-8"))
+    require(schema == "gc.build.plan.v1" and isinstance(data.get("workflow"), dict)
+            and data["workflow"].get("id") == workflow_root_id,
+            "repair plan belongs to another schema or workflow")
+    upstream = [artifact_path(value, artifact_root) for value in required_upstream]
+    return {"workflow_root_id": workflow_root_id,
+            "plan": {"path": str(plan_path), "sha256": digest(raw)},
+            "required_upstream": [{"path": str(path), "sha256": digest(path.read_bytes())}
+                                  for path in upstream],
+            "reviewer": {"bead_id": reviewer["id"], "attempt": attempt}}
+
+
+def validate_recorded_repair(root: dict[str, Any], author: dict[str, Any], *,
+                             artifact_root: Path, report_sha256: str) -> dict[str, Any]:
+    """Check current blocked feedback before a permitted author edit, not approval."""
+    attempt = review_claim(author, workflow_root_id=root["id"], step="author-repair")
+    require(author.get("status") == "in_progress" and attempt > 1,
+            "repair requires a current claimed author on attempt two or three")
+    report_path = artifact_path(recorded_path(root["metadata"], REPORT_KEYS), artifact_root)
+    raw = report_path.read_bytes()
+    require(re.fullmatch("[0-9a-f]{64}", report_sha256) is not None
+            and digest(raw) == report_sha256, "current native repair report changed since it was read")
+    text = raw.decode("utf-8")
+    report = verdict.validate_report_text(text, expected_kind="review")
+    require(report.verdict == "fail" and bool(report.findings), "repair needs real blocked findings")
+    _, data, _ = build.parse_front_matter(text)
+    subject = data.get("repair_subject")
+    require(isinstance(subject, dict) and isinstance(subject.get("reviewer"), dict)
+            and isinstance(subject["reviewer"].get("bead_id"), str)
+            and bool(subject["reviewer"]["bead_id"])
+            and type(subject["reviewer"].get("attempt")) is int,
+            "blocked report has no native repair subject")
+    reviewer = show(subject["reviewer"]["bead_id"])
+    previous = review_claim(reviewer, workflow_root_id=root["id"], step="plan-review-verdict")
+    require(reviewer.get("status") == "closed" and reviewer["metadata"].get("gc.outcome") == "fail"
+            and previous == attempt - 1, "repair report is not the preceding closed failing native review")
+    requirements = recorded_path(root["metadata"], REQUIREMENTS_KEYS, optional=True)
+    current = repair_subject(Path(recorded_path(root["metadata"], PLAN_KEYS)),
+        workflow_root_id=root["id"], artifact_root=artifact_root, reviewer=reviewer,
+        required_upstream=(requirements,) if requirements else ())
+    require(subject == current, "repair report subject is stale or foreign")
+    return {"repair_subject": current, "report": {"path": str(report_path), "sha256": digest(raw)},
+            "author_bead_id": author["id"], "author_attempt": attempt}
+
+
 def recorded_path(metadata: dict[str, Any], keys: tuple[str, ...], *, optional: bool = False) -> str:
     value = next((metadata[key] for key in keys if metadata.get(key)), "")
     require(isinstance(value, str) and (bool(value) or optional),
@@ -199,18 +264,34 @@ ERRORS = (ValueError, build.ValidationError, verdict.ValidationError, OSError, U
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("subject", "check", "native-check"))
+    parser.add_argument("mode", choices=("subject", "check", "native-check",
+                                        "native-repair-subject", "native-repair-check"))
     parser.add_argument("--plan", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--workflow-root")
     parser.add_argument("--artifact-root", type=Path)
+    parser.add_argument("--report-sha256")
     args = parser.parse_args(argv)
     try:
-        if args.mode == "native-check":
+        if args.mode.startswith("native-"):
             bead_id = os.environ.get("GC_BEAD_ID", "")
             require(bool(bead_id), "GC_BEAD_ID is required")
-            root = show(native_root(show(bead_id)))
-            subject = validate_recorded_review(root, artifact_root=durable_root(os.environ))
+            claim = show(bead_id)
+            root = show(native_root(claim))
+            require(isinstance(root.get("metadata"), dict), "native workflow metadata is missing")
+            artifact_root = durable_root(os.environ)
+            if args.mode == "native-repair-subject":
+                require(claim.get("status") == "in_progress", "repair subject requires a claimed native reviewer")
+                requirements = recorded_path(root["metadata"], REQUIREMENTS_KEYS, optional=True)
+                subject = repair_subject(Path(recorded_path(root["metadata"], PLAN_KEYS)),
+                    workflow_root_id=root["id"], artifact_root=artifact_root, reviewer=claim,
+                    required_upstream=(requirements,) if requirements else ())
+            elif args.mode == "native-repair-check":
+                require(args.report_sha256 is not None, "--report-sha256 is required")
+                subject = validate_recorded_repair(root, claim, artifact_root=artifact_root,
+                                                   report_sha256=args.report_sha256)
+            else:
+                subject = validate_recorded_review(root, artifact_root=artifact_root)
         else:
             require(args.plan is not None and args.workflow_root and args.artifact_root is not None,
                     "--plan, --workflow-root and --artifact-root are required")

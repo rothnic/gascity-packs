@@ -258,6 +258,55 @@ def _continuation_candidate(store, root, requested_root_id=None, recorded_root_i
     return False
 
 
+def _changed_json_paths(before, after, path=""):
+    if before == after:
+        return []
+    if isinstance(before, dict) and isinstance(after, dict):
+        paths = []
+        for key in sorted(before.keys() | after.keys()):
+            child = path + "/" + key.replace("~", "~0").replace("/", "~1")
+            paths.extend(_changed_json_paths(before[key], after[key], child)
+                         if key in before and key in after else [child])
+        return paths
+    if isinstance(before, list) and isinstance(after, list):
+        return [changed for index in range(max(len(before), len(after)))
+                for changed in (_changed_json_paths(before[index], after[index], path + "/" + str(index))
+                                if index < min(len(before), len(after)) else [path + "/" + str(index)])]
+    return [path]
+
+
+def _continuation_refusal(store, initial, continuation):
+    """Retain bounded private operands without changing the failed comparison."""
+    message = "native continuation changed after its original entry snapshot"
+    try:
+        from workspace_checkout import save_diagnostic
+        from workspace_requests import _private_directory
+
+        overlap = sorted(initial.keys() & continuation.keys())
+        require(len(overlap) <= 2, "entry diagnostic exceeds its overlapping row bound")
+        operands = {bead_id: {"initial": initial[bead_id], "continuation": continuation[bead_id]}
+                    for bead_id in overlap}
+        require(len(canonical_bytes(operands)) <= 1024 * 1024, "entry diagnostic exceeds its byte bound")
+        for pair in operands.values():
+            pair.update(initial_revision=pair["initial"]["revision"],
+                        continuation_revision=pair["continuation"]["revision"],
+                        initial_sha256=record_sha256(pair["initial"]),
+                        continuation_sha256=record_sha256(pair["continuation"]),
+                        changed_paths=_changed_json_paths(pair["initial"], pair["continuation"]))
+        packet = {"schema": "gc.workspace.entry-continuation-refusal.v1", "city_root": store.cwd,
+                  "store_ref": store.store_ref, "overlapping_rows": operands}
+        require(len(canonical_bytes(packet)) <= 2 * 1024 * 1024, "entry diagnostic exceeds its byte bound")
+        parent = Path(store.cwd) / ".gc"
+        require(parent.resolve(strict=True) == parent and parent.is_dir()
+                and parent.stat().st_uid == os.geteuid(), "entry diagnostic parent is not owned and canonical")
+        directory = _private_directory(parent / "workspace-entry-diagnostics")
+        path = save_diagnostic(directory, packet)
+        message += f"; private diagnostic: {path} (sha256:{hashlib.sha256(Path(path).read_bytes()).hexdigest()})"
+    except (RecordError, OSError, KeyError, TypeError, ValueError, RecursionError):
+        message += "; private diagnostic unavailable"
+    return message
+
+
 def read_entry(store, *, gc: str, city_root: str, rig_name: str,
                workflow_root_id: str, claimed_step_id: str, worktree_lifecycle: str,
                generation: int, input_convoy_id: str | None = None,
@@ -282,8 +331,8 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
         if _continuation_candidate(store, physical_root, workflow_root_id, recorded_root_id):
             continuation, continuation_rows = read_native_continuation(store, claimed_step_id=claimed_step_id,
                 requested_root_id=workflow_root_id, recorded_root_id=recorded_root_id)
-            require(all(bead_id not in rows or rows[bead_id] == row for bead_id, row in continuation_rows.items()),
-                    "native continuation changed after its original entry snapshot")
+            if not all(bead_id not in rows or rows[bead_id] == row for bead_id, row in continuation_rows.items()):
+                raise EntryError(_continuation_refusal(store, rows, continuation_rows))
             rows.update(continuation_rows)
             workflow_root_id = continuation.binding["workflow_root_id"]
             next_plan = (continuation.binding["version"] == 2 and not require_plan

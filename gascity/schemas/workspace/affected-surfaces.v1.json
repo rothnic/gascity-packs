@@ -202,7 +202,7 @@
     "gascity/assets/workflows/build-base/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "db99e9ecd48ffcfa60b91371d0198aa05f2fa0bf71f1c5c865f8b883738856c0"
+      "sha256": "6b5917fb050386f289af84d766b2535232e5180879d278a445e73cab8e6d6a50"
     },
     "gascity/assets/workflows/build-base/plan.md": {
       "classification": "reference",
@@ -257,7 +257,7 @@
     "gascity/assets/workflows/build-basic/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "e46685b23a3db7147682072245c035390bb2579c9d533eca6fd775352e3ad176"
+      "sha256": "53add5171ed28e1f907eea821990f2baec79edfd515b4465e67923e9aab040b1"
     },
     "gascity/assets/workflows/build-basic/plan.md": {
       "classification": "reference",
@@ -357,7 +357,7 @@
     "gascity/assets/workflows/build-from-plan-base/plan-review.md": {
       "classification": "legacy",
       "responsibility": "continuation",
-      "sha256": "451c6222b0946759dd420b0f3ecdb88034334d191a74e4e24239a3ada1b13c6d"
+      "sha256": "d059d942b738c152b68a05a1e59189a1b52eda180e4f404e41a4c25158389553"
     },
     "gascity/assets/workflows/build-from-plan-base/plan.md": {
       "classification": "legacy",
@@ -722,7 +722,7 @@
     "gascity/assets/workflows/planning-base/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "e605b620b06445b4fc1f20da5f3d3b83541b7e55c14f18a5b3fb99a14590e71b"
+      "sha256": "fe3fb2c86eaeb964ca1e8f2919c858a84d84385f5cbfe7b6ff6e9524fbb32cab"
     },
     "gascity/assets/workflows/planning-base/plan.md": {
       "classification": "reference",
@@ -2072,7 +2072,7 @@
     "gascity/assets/workflows/planning-base/repair-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "c86a3d50f87b40c0e92d220dd6702378336185f7e431429b3fe6910accf24928"
+      "sha256": "360a7c20c0b41ae59c5a08faef11ad1e5baaf7e3f989bd5a0f8c3d1f6cc58880"
     }
   },
   "source_helpers": {
@@ -2144,7 +2144,7 @@
     "gascity/assets/scripts/workspace_entry.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "e08cfae1bffce328ca5adf16f5b6c2eaa89fb34b537d96c11c1eaf2c03f7f44e"
+      "sha256": "41b36460365f4ab2f6c65f11854e816819436e5104f7150cff8dde5564d478ca"
     },
     "gascity/assets/scripts/workspace_flow.py": {
       "classification": "new",
@@ -2234,7 +2234,7 @@
     "gascity/assets/scripts/validate_plan_review.py": {
       "classification": "new",
       "responsibility": "read-only current native plan and upstream approval gate before task allocation",
-      "sha256": "65b0f90d8f93c565a1e799f543da61a10a7615a3185d0a2b8443afe3940184be"
+      "sha256": "a2733f3cd27e672b4906887109a854380aefd45420023baad87784502e351849"
     },
     "gascity/assets/scripts/checks/plan-review-approved.py": {
       "classification": "new",

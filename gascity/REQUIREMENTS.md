@@ -872,6 +872,7 @@ Proof expectation: validation requires `workflow.formula`, `producer.formula`,
 | GC-METH-BR-051 | GC-METH-US-001 | WHEN prerequisite inputs already exist for a build stage, THE base pack SHALL provide reusable `build-from-*-base` continuation suffixes that validate those prerequisites, perform only their owned stage or handoff, and delegate to the next suffix without silently rerunning skipped upstream stages. |
 | GC-METH-BR-052 | GC-METH-US-002 | WHEN a methodology pack needs a continuation entrypoint, THE pack SHOULD extend the matching `build-from-*-base` suffix and override selectors, routes, drain formulas, or review expansions instead of copying the suffix graph. |
 | GC-METH-BR-053 | GC-METH-US-001 | WHEN a user wants the built-in Gas City continuation behavior, THE base pack SHALL provide cataloged `build-from-*` wrappers that extend the matching suffix bases. |
+| GC-METH-BR-054 | GC-METH-US-004 | WHEN a malformed plan trace prevents a complete review subject, THE default native review SHALL retain real findings and a repair identity bound to current plan/requirements bytes and its actual reviewer claim/attempt. A permitted author repair SHALL require the current report path/hash and the preceding closed failing review. Changed, foreign or replayed inputs SHALL refuse repair. Approval and first task allocation SHALL still require a newly reviewed complete subject. |
 
 ## Scenario Ledger
 
@@ -897,6 +898,7 @@ Proof expectation: validation requires `workflow.formula`, `producer.formula`,
 
 | GC-METH-018 | Qualified source handoff | New-mode members publish executed project checks, actual independent native review and an exact output commit before checkpoint, source close or dependent integration. Canonical review and publication consume that same accepted terminal generation. Legacy retains direct producer dependencies when managed stages skip. | `assets/scripts/workspace_flow.py`; `assets/scripts/workspace_runtime.py`; `tests/test_workspace_composition.py`; `tests/test_workspace_results.py` |
 | GC-METH-019 | Native source authority | Writer kinds are fixed by actual cooked physical occurrences. Read-only occurrence admission cannot install, write or replace a grant. Original row revisions, source selection, run policy and scope remain guarded through each native batch. | `assets/scripts/workspace_store.py`; `assets/scripts/workspace_cooked.py`; `tests/test_workspace_store.py`; `tests/test_workspace_cooked.py` |
+| GC-METH-020 | Malformed plan repair | A current blocked report can authorize a permitted plan-only repair through its native repair identity. It cannot approve the plan or allocate tasks. The next independent review must validate the complete repaired subject. | `assets/scripts/validate_plan_review.py`; `docs/plan-review-acceptance.md`; `tests/test_plan_review_repair.py`; `tests/test_workspace_expansion.py` |
 
 ## Deferred Follow-Up Requirements
 

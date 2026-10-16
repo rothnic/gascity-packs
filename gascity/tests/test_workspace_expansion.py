@@ -199,6 +199,36 @@ class ExpansionCompositionTests(unittest.TestCase):
         self.assertEqual(self.port.rows, before)
         self.assertNotIn("native_allocation_pending", self.path.read_text())
 
+    def test_malformed_plan_repair_identity_needs_new_approval_before_allocation(self):
+        import validate_plan_review as review
+        plan, report, requirements = self.authored_plan_review(blocked=True)
+        valid_plan = plan.read_text()
+        plan.write_text(valid_plan.replace(str(requirements), "requirements.md at captured source base"))
+        reviewer = {"id": "review-1", "issue_type": "task", "metadata": {"gc.root_bead_id": "root-1",
+            "gc.ralph_step_id": "plan-review", "gc.step_id": "plan-review-verdict",
+            "gc.attempt": "1"}}
+        _, data, _ = review.build.parse_front_matter(report.read_text())
+        del data["subject"]
+        data["repair_subject"] = review.repair_subject(plan, workflow_root_id="root-1",
+            artifact_root=self.repo, reviewer=reviewer, required_upstream=(str(requirements),))
+
+        def write_report():
+            report.write_text("---\n" + tasks.yaml.safe_dump(data, sort_keys=False) + "---\n# Plan review\n")
+
+        write_report()
+        for text in (plan.read_text(), valid_plan):
+            plan.write_text(text)
+            before = copy.deepcopy(self.port.rows)
+            with self.assertRaisesRegex(tasks.PlanError, "current plan review is not accepted.*unresolved findings"):
+                self.expand()
+            self.assertEqual((self.commands, self.port.requests), ([], []))
+            self.assertEqual(self.port.rows, before)
+        data.update(verdict="pass", severity="none", findings=[], subject=review.current_subject(
+            plan, workflow_root_id="root-1", artifact_root=self.repo))
+        write_report()
+        self.assertEqual(self.expand(), 0)
+        self.assertEqual(len(self.port.requests), 1)
+
     def test_current_plan_approval_allows_the_unchanged_guarded_source_expansion(self):
         self.authored_plan_review()
         self.assertEqual(self.expand(), 0)

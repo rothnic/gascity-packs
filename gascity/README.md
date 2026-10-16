@@ -250,6 +250,12 @@ runs `workspace_entry.py read --require-plan` to discover the original run and
 the plan's producer through the native drain relationship. A source-plan
 reference need not be stored on the item root or original workflow root.
 
+If the initial and continuation reads disagree, entry still refuses. A bounded
+private diagnostic under the city's `.gc/workspace-entry-diagnostics` retains
+the overlapping rows, revisions, hashes and changed JSON paths; the error names
+the file and its hash. Keep those row contents private. A diagnostic write
+failure also refuses entry and does not authorize a retry or a metadata edit.
+
 Default formula routes use these qualified targets: `gc.run-operator`,
 `gc.requirements-planner`, `gc.design-author`, `gc.task-decomposer`,
 `gc.issue-triager`, `gc.design-implementation-reviewer`,
@@ -318,6 +324,15 @@ Builds and continuations use one native `build-body` scope for required stages:
 The scope body is a native control, with no worker route. Functional stages
 such as `finalize` and `publish` are required members, rather than teardown.
 Cleanup may run after failure only when explicitly authored as native teardown.
+
+Plan-review repair distinguishes current repair inputs from approval. A blocked
+default reviewer records the exact plan/requirements bytes and its native
+claim/attempt as `repair_subject`, including when a malformed trace prevents a
+complete approval subject. The next authorized author verifies the current
+native report path/hash and preceding failed reviewer before editing the plan.
+Changed inputs or a report replayed into a later attempt refuse repair. A new
+independent review must still validate every upstream file before approval or
+task creation. See [Plan-review acceptance](docs/plan-review-acceptance.md).
 
 Third-party methodology packs can extend `build-base` and override only the
 stages they need. For implementation, packs should keep the Gas City drain

@@ -54,7 +54,45 @@ Describe the review and why the current plan is ready for decomposition.
 A blocked report instead uses `verdict: fail`, a non-`none` severity, and
 structured findings with `id`, `severity`, `title`, `evidence`, and
 `required_fix`. Retain the actual findings. Never turn a blocked report into a
-passing report just to make a stage close. Respect `review_mode`: report-only
+passing report just to make a stage close.
+
+**Repair identity.** A malformed upstream path or hash can prevent the helper
+from constructing a complete approval `subject`. The independent native
+`plan-review-verdict` child must record that diagnostic as a real finding. While
+that reviewer is claimed in `GC_BEAD_ID`, capture a separate identity:
+
+```sh
+python3 <pack-scripts>/validate_plan_review.py native-repair-subject
+```
+
+Copy this JSON object as `repair_subject` in the new failing report, even when
+the complete `subject` could not be obtained. Do this for every blocked default
+review that may need author repair. The identity binds the native workflow,
+exact current plan path/hash, current native-recorded requirements path/hash,
+and actual reviewer bead/attempt. It does not resolve the plan's malformed
+trace or claim those upstream files are valid. Unreadable plan front matter,
+another schema/workflow, or unavailable native requirements still blocks it.
+Keep earlier report files and record the new report's absolute path on the
+root before closing this reviewer with its real failing outcome.
+
+**Author preflight.** On the next native author attempt, read that current
+native-recorded report and capture its SHA-256. Run this command with the actual
+claimed author child in `GC_BEAD_ID` before any permitted plan edit:
+
+```sh
+python3 <pack-scripts>/validate_plan_review.py native-repair-check \
+  --report-sha256 <sha256-of-the-report-just-read>
+```
+
+The helper reads current native paths. It requires a failing report with real
+findings, unchanged repair inputs, and the preceding closed failing reviewer
+from the same workflow. Missing identities, changed report bytes, foreign
+claims, and reports replayed into a later attempt refuse repair. Its output
+binds the current author bead/attempt and exact report path/hash for the repair
+summary. It reads artifacts and claims only. It neither edits the plan nor
+grants request permission, locks files, or approves decomposition.
+
+Respect `review_mode`: report-only
 review does not edit the plan. Default checks contain native `author-repair`
 (`gc.design-author`) then independent `plan-review-verdict` (`gc.review-synthesizer`)
 children inside each of the same three attempts. The author does nothing on
@@ -63,7 +101,8 @@ authorized by the current request and consistent with approved requirements;
 interactive mode additionally needs its existing permission. A missing,
 foreign or stale report cannot authorize an edit. The reviewer never edits
 the plan or grants authority. It reviews changed bytes and writes a new exact
-subject; only the unchanged logical check can approve that result. Missing
+subject; the old failing report remains ineligible after the plan changes.
+Only the unchanged logical check can approve that result. Missing
 headless approval remains blocked. Methodology-specific loops retain their
 own authored repair roles and the same final exact-subject boundary.
 

@@ -227,6 +227,30 @@ class OutputTests(ResultFixture):
         self.assertEqual(evidence["status"], "setup_failure")
         self.assertIsNone(evidence["exit_code"])
 
+    def test_terminal_output_requires_a_completed_member_result(self):
+        with self.assertRaisesRegex(RecordError, "requires completed member results"):
+            self.outputs.make_owner_output(self.plan, [], artifact_root=self.artifacts, qualifications={})
+
+    def test_fix_canonical_cannot_replace_a_later_accepted_generation(self):
+        _, current = self.canonical(self.qualified())
+        stale_arguments = None
+        for generation in (2, 3):
+            self.plan.update(generation=generation, base_oid=self.oid,
+                             parent_canonical_generation=current["generation"], parent_canonical_oid=self.oid)
+            self.binding.update(generation=generation, input_oid=self.oid)
+            result = self.qualified(label=f"generation-{generation}")
+            output = self.outputs.make_owner_output(self.plan, [result], artifact_root=self.artifacts,
+                    qualifications={"task": {"binding": self.binding, "required_checks": self.requirements}})
+            arguments = dict(run=self.run, plan=copy.deepcopy(self.plan), output=output, result=result,
+                             summary=self.summary_ref, writer_step_id="canonical",
+                             binding=copy.deepcopy(self.binding), required_checks=self.requirements,
+                             artifact_root=self.artifacts, work_dir=self.repo)
+            current = self.outputs.canonical_payload(**arguments, current=current)
+            if generation == 2:
+                stale_arguments = arguments
+        with self.assertRaisesRegex(RecordError, "fix canonical parent is stale or no longer current"):
+            self.outputs.canonical_payload(**stale_arguments, current=current)
+
     def test_terminal_selection_exact_replay_and_stale_parent(self):
         result = self.qualified()
         output, canonical = self.canonical(result)

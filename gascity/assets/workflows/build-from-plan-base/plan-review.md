@@ -22,6 +22,12 @@ workflow's current approved plan and current upstream bytes. Only a validated
 `gc.outcome=pass`. A blocked/changes_required verdict is `gc.outcome=fail`,
 even after its concrete reason is recorded. Do not allocate tasks in that state.
 
+For every blocked review, capture `repair_subject` with `native-repair-subject`
+while this reviewer is claimed. If a malformed trace prevents a complete
+`subject`, record that diagnostic and the repair identity in a failing report
+as the contract directs. The next author may repair only after the native
+repair preflight; approval still requires a new complete subject and review.
+
 The native `plan-review-approved.py` check allows three attempts. Use
 `gc.attempt_log` from its control for an official repair, preserve the original
 findings, and review every authorized plan change again. Set the exact outcome

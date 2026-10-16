@@ -20,6 +20,11 @@ bytes. Record its absolute path on the workflow root as
 `gc.build.plan_review_report_path`. The pack-owned `plan-review-approved.py`
 gate validates that subject and the approved plan; it allows three attempts.
 
+For every blocked review, capture `repair_subject` with `native-repair-subject`
+while this reviewer is claimed. If a malformed trace prevents a complete
+`subject`, record that diagnostic and the repair identity in a failing report
+as the contract directs. A repair identity cannot approve decomposition.
+
 Set `gc.outcome=pass` only for `verdict: pass`, `severity: none`, and empty
 findings after the exact subject validates. Otherwise preserve a failing report,
 set `gc.outcome=fail` with the concrete blocking reason, and close the claimed

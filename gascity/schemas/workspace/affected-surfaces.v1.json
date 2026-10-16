@@ -2124,7 +2124,7 @@
     "gascity/assets/scripts/workspace_cooked.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "6fa66ca7f241af44fe84975a9190580cd784d146476a00f73ba87273579cacd7"
+      "sha256": "56cec278214d5a140c47a06bea6fd8b9d4175b3674dba3a876f6db4a29a0c469"
     },
     "gascity/assets/scripts/workspace_source_plan.py": {
       "classification": "new",

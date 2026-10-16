@@ -508,6 +508,118 @@ class NativeScopedAttemptTests(unittest.TestCase):
             workflow_root_id=self.root, record_kind=kind, claimed_step_id=claimed or self.claim,
             read_only=kind is None)
 
+    def observe_dependency_readbacks(self, events, *, change_row=None, change_show=None):
+        snapshot, shows = self.store.snapshot, {}
+        def observed_snapshot(ids):
+            events.append(("snapshot", tuple(ids)))
+            rows = snapshot(ids)
+            if ids == [self.check] and shows.get(self.check) == 1 and change_row:
+                change_row(rows[self.check])
+            return rows
+        def native(gc, cwd, argv, rig, **options):
+            if argv[:2] != ["bd", "show"]:
+                return copy.deepcopy(self.formula)
+            self.assertTrue(options["unwrap_singleton"] and options["require_array"])
+            bead_id = argv[2]
+            events.append(("show", (bead_id,)))
+            shows[bead_id] = shows.get(bead_id, 0) + 1
+            detail = copy.deepcopy(self.details[bead_id])
+            if bead_id == self.check and shows[bead_id] == 2 and change_show:
+                change_show(detail)
+            return detail
+        with patch.object(self.store, "snapshot", side_effect=observed_snapshot), \
+             patch.object(cooked, "_native_list", return_value=list(self.rows)), \
+             patch.object(cooked, "native_json", side_effect=native):
+            return cooked.read_cooked_writer_map(self.store, workflow_root_id=self.root,
+                claimed_step_id=self.claim)
+
+    def readback_diagnostic(self, error, operand, expected, observed):
+        prefix = "cooked writer admission: native scope check changed during dependency readback; diagnostic="
+        message = str(error)
+        self.assertTrue(message.startswith(prefix), message)
+        diagnostic = json.loads(message[len(prefix):])
+        self.assertEqual(diagnostic["operand"], operand)
+        self.assertEqual(diagnostic["bead_id"], self.check)
+        self.assertEqual(diagnostic["store_ref"], self.store.store_ref)
+        self.assertEqual(diagnostic["workflow_root_id"], self.root)
+        self.assertEqual(diagnostic["expected_sha256"], hashlib.sha256(canonical_bytes(expected)).hexdigest())
+        self.assertEqual(diagnostic["observed_sha256"], hashlib.sha256(canonical_bytes(observed)).hexdigest())
+        return diagnostic
+
+    def test_stable_dependency_readback_keeps_admission_and_native_read_order(self):
+        expected_map, expected_rows = self.read()
+        events = []
+        writer_map, rows = self.observe_dependency_readbacks(events)
+        self.assertEqual(writer_map.declaration, expected_map.declaration)
+        self.assertEqual(rows, expected_rows)
+        for bead_id in (self.check, self.control):
+            self.assertEqual([event for event in events if event[1] == (bead_id,)],
+                [("show", (bead_id,)), ("snapshot", (bead_id,)), ("show", (bead_id,))])
+
+    def test_changed_repeat_cooked_row_refuses_before_second_show(self):
+        for field, value in (("revision", "2"), ("status", "closed"), ("assignee", "other"),
+                             ("type", "bug"), ("labels", ["changed"]),
+                             ("metadata", {"gc.root_store_ref": "rig:foreign"})):
+            with self.subTest(field=field):
+                expected = copy.deepcopy(self.rows[self.check])
+                observed = dict(copy.deepcopy(expected), **{field: value})
+                events = []
+                with self.assertRaises(RecordError) as failure:
+                    self.observe_dependency_readbacks(events, change_row=lambda row: row.update({field: value}))
+                diagnostic = self.readback_diagnostic(failure.exception, "cooked_row", expected, observed)
+                self.assertTrue(any(path == "/" + field or path.startswith("/" + field + "/")
+                                    for path in diagnostic["changed_paths"]))
+                self.assertEqual([event for event in events if event[1] == (self.check,)],
+                    [("show", (self.check,)), ("snapshot", (self.check,))])
+
+    def test_changed_repeat_show_refuses_and_names_the_changed_operand(self):
+        for nested in (False, True):
+            with self.subTest(nested=nested):
+                expected = copy.deepcopy(self.details[self.check])
+                observed = copy.deepcopy(expected)
+                def change(detail):
+                    target = detail["dependencies"][0] if nested else detail
+                    target["updated_at"] = "private-display-value"
+                change(observed)
+                events = []
+                with self.assertRaises(RecordError) as failure:
+                    self.observe_dependency_readbacks(events, change_show=change)
+                diagnostic = self.readback_diagnostic(failure.exception, "native_show", expected, observed)
+                self.assertEqual(diagnostic["changed_paths"],
+                    ["/dependencies/0/updated_at" if nested else "/updated_at"])
+                self.assertNotIn("private-display-value", str(failure.exception))
+                self.assertEqual([event for event in events if event[1] == (self.check,)],
+                    [("show", (self.check,)), ("snapshot", (self.check,)), ("show", (self.check,))])
+
+    def test_changed_repeat_show_array_order_still_refuses(self):
+        self.details[self.check]["labels"] = ["private-first", "private-second"]
+        expected = copy.deepcopy(self.details[self.check])
+        observed = copy.deepcopy(expected)
+        observed["labels"].reverse()
+        with self.assertRaises(RecordError) as failure:
+            self.observe_dependency_readbacks([], change_show=lambda detail: detail["labels"].reverse())
+        diagnostic = self.readback_diagnostic(failure.exception, "native_show", expected, observed)
+        self.assertEqual(diagnostic["changed_paths"], ["/labels/0", "/labels/1"])
+        self.assertNotIn("private-first", str(failure.exception))
+        self.assertNotIn("private-second", str(failure.exception))
+
+    def test_readback_diagnostic_bounds_paths_and_hashes_arbitrary_keys_and_values(self):
+        secret = "private-secret-never-emit"
+        expected = copy.deepcopy(self.details[self.check])
+        observed = copy.deepcopy(expected)
+        def change(detail):
+            detail["metadata"].update({secret + str(number): secret * 100 for number in range(100)})
+        change(observed)
+        with self.assertRaises(RecordError) as failure:
+            self.observe_dependency_readbacks([], change_show=change)
+        diagnostic = self.readback_diagnostic(failure.exception, "native_show", expected, observed)
+        self.assertEqual(len(diagnostic["changed_paths"]), 16)
+        self.assertTrue(diagnostic["changed_paths_truncated"])
+        self.assertEqual(diagnostic["path_depth_limit"], 3)
+        self.assertTrue(all(path.startswith("/metadata/key-sha256:") for path in diagnostic["changed_paths"]))
+        self.assertNotIn(secret, str(failure.exception))
+        self.assertLess(len(str(failure.exception)), 6000)
+
     def test_retained_native_setup_ralph_and_scope_check_admit_only_the_attempt(self):
         writer_map, rows = self.read()
         self.assertEqual(rows, self.rows)

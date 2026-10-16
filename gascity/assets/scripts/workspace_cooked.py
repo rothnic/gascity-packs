@@ -20,6 +20,44 @@ from workspace_store import (CookedWriterMap, MAX_COOKED_CONTEXT_ROWS, TOPOLOGY,
 _VARIABLE = re.compile(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)\}\}")
 
 
+def _readback_change(bead_id, operand, expected, observed, *, store_ref, workflow_root_id):
+    # Only public schema field names may appear; arbitrary keys and all values stay hashed.
+    fields = {"id", "revision", "status", "assignee", "type", "labels", "metadata",
+              "dependencies", "dependency_type", "title", "description", "parent",
+              "created_at", "updated_at", "closed_at", "dependency_count", "dependent_count"}
+    paths = []
+    def changed(before, after, path="", depth=0):
+        if before == after or len(paths) > 16:
+            return
+        if depth < 3 and isinstance(before, dict) and isinstance(after, dict):
+            for key in sorted(before.keys() | after.keys()):
+                field = key if key in fields else "key-sha256:" + hashlib.sha256(key.encode("utf-8")).hexdigest()
+                child = path + "/" + field
+                if key not in before or key not in after:
+                    paths.append(child)
+                else:
+                    changed(before[key], after[key], child, depth + 1)
+                if len(paths) > 16:
+                    break
+        elif depth < 3 and isinstance(before, list) and isinstance(after, list):
+            for index in range(max(len(before), len(after))):
+                child = path + "/" + str(index)
+                if index >= len(before) or index >= len(after):
+                    paths.append(child)
+                else:
+                    changed(before[index], after[index], child, depth + 1)
+                if len(paths) > 16:
+                    break
+        else:
+            paths.append(path)
+    changed(expected, observed)
+    diagnostic = dict(bead_id=bead_id, store_ref=store_ref, workflow_root_id=workflow_root_id,
+        operand=operand, expected_sha256=hashlib.sha256(canonical_bytes(expected)).hexdigest(),
+        observed_sha256=hashlib.sha256(canonical_bytes(observed)).hexdigest(),
+        changed_paths=paths[:16], changed_paths_truncated=len(paths) > 16, path_depth_limit=3)
+    return "native scope check changed during dependency readback; diagnostic=" + canonical_bytes(diagnostic).decode("utf-8")
+
+
 def _metadata(step, variables):
     # Native formula show substitutes prose, but leaves metadata templates raw.
     metadata = step.get("metadata")
@@ -237,10 +275,15 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
                 "native scope check dependency readback is malformed")
         actual = [edge["id"] for edge in dependencies if edge["dependency_type"] == "blocks"]
         require(sorted(actual) == sorted(expected), "native scope check physical blocks dependencies differ from compiled lineage")
-        require(read_cooked_context(store, [bead_id])[bead_id] == rows[bead_id]
-                and native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
-                                unwrap_singleton=True, require_array=True) == detail,
-                "native scope check changed during dependency readback")
+        repeated_row = read_cooked_context(store, [bead_id])[bead_id]
+        if not repeated_row == rows[bead_id]:
+            require(False, _readback_change(bead_id, "cooked_row", rows[bead_id], repeated_row,
+                store_ref=store.store_ref, workflow_root_id=workflow_root_id))
+        repeated_detail = native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
+                                     unwrap_singleton=True, require_array=True)
+        if not repeated_detail == detail:
+            require(False, _readback_change(bead_id, "native_show", detail, repeated_detail,
+                store_ref=store.store_ref, workflow_root_id=workflow_root_id))
         observed_blocks[bead_id] = sorted(expected)
         return detail["revision"]
     for descriptor in descriptors:

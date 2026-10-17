@@ -259,7 +259,7 @@ def _continuation_candidate(store, root, requested_root_id=None, recorded_root_i
 
 
 def _changed_json_paths(before, after, path=""):
-    if before == after:
+    if canonical_bytes(before) == canonical_bytes(after):
         return []
     if isinstance(before, dict) and isinstance(after, dict):
         paths = []
@@ -275,9 +275,9 @@ def _changed_json_paths(before, after, path=""):
     return [path]
 
 
-def _continuation_refusal(store, initial, continuation):
+def _continuation_refusal(store, initial, continuation, *, phase="entry-continuation", message=None):
     """Retain bounded private operands without changing the failed comparison."""
-    message = "native continuation changed after its original entry snapshot"
+    message = message or "native continuation changed after its original entry snapshot"
     try:
         from workspace_checkout import save_diagnostic
         from workspace_requests import _private_directory
@@ -294,7 +294,7 @@ def _continuation_refusal(store, initial, continuation):
                         continuation_sha256=record_sha256(pair["continuation"]),
                         changed_paths=_changed_json_paths(pair["initial"], pair["continuation"]))
         packet = {"schema": "gc.workspace.entry-continuation-refusal.v1", "city_root": store.cwd,
-                  "store_ref": store.store_ref, "overlapping_rows": operands}
+                  "store_ref": store.store_ref, "phase": phase, "overlapping_rows": operands}
         require(len(canonical_bytes(packet)) <= 2 * 1024 * 1024, "entry diagnostic exceeds its byte bound")
         parent = Path(store.cwd) / ".gc"
         require(parent.resolve(strict=True) == parent and parent.is_dir()
@@ -302,7 +302,7 @@ def _continuation_refusal(store, initial, continuation):
         directory = _private_directory(parent / "workspace-entry-diagnostics")
         path = save_diagnostic(directory, packet)
         message += f"; private diagnostic: {path} (sha256:{hashlib.sha256(Path(path).read_bytes()).hexdigest()})"
-    except (RecordError, OSError, KeyError, TypeError, ValueError, RecursionError):
+    except (RecordError, OSError, AttributeError, KeyError, TypeError, ValueError, RecursionError):
         message += "; private diagnostic unavailable"
     return message
 

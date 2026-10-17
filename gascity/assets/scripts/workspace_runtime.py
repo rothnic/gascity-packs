@@ -16,7 +16,7 @@ from workspace_run import (CHECKS_CONFIG_KEY, CHECKS_POLICY_KEY, capture_check_p
                            native_json, read_check_policy)
 from workspace_store import (Attempt, CONTINUATION_KEY, ROOT_KEYS, GuardRead, NativeRunContinuation,
                              PreparedWrite, WorkspaceStore, merge_cooked_context, validate_native_continuation)
-from workspace_entry import healthy, native_root, read_entry, read_native_continuation, reference
+from workspace_entry import _continuation_refusal, healthy, native_root, read_entry, read_native_continuation, reference
 from workspace_cooked import read_cooked_writer_map
 from workspace_checkout import WorkspaceCheckout, load_workspace_context
 import workspace_outputs as outputs
@@ -47,7 +47,16 @@ class _ReadFence:
     def retain(self, rows):
         require(isinstance(rows, dict) and all(isinstance(row, dict) and row.get("id") == key
                                              for key, row in rows.items()), "incomplete original native rows")
-        merge_cooked_context(self.original_rows, rows)
+        original = self.original_rows
+        try:
+            merge_cooked_context(original, rows)
+        except RecordError as exc:
+            for bead_id, row in rows.items():
+                if bead_id in original and canonical_bytes(original[bead_id]) != canonical_bytes(row):
+                    raise RecordError(_continuation_refusal(self.store,
+                        {bead_id: original[bead_id]}, {bead_id: row},
+                        phase="read-fence.retain", message=str(exc))) from exc
+            raise
         require(len(set(self.rows) | set(rows)) <= 100, "complete native evidence exceeds the guarded row bound")
         self.rows.update(copy.deepcopy(rows))
         return copy.deepcopy(rows)

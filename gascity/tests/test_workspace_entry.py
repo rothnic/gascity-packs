@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "assets" / "scripts
 
 import create_beads_from_tasks as tasks
 import workspace_entry as entry
+import workspace_runtime as runtime
 from workspace_records import canonical_bytes, contracts, record_identity, record_sha256
 import workspace_run as run
 
@@ -264,6 +265,103 @@ class EntryTests(unittest.TestCase):
         self.read(workflow_root_id="child-1", require_plan=True)
         self.assertEqual(self.rows, before)
         self.assertFalse((self.root / ".gc").exists())
+
+    def test_read_fence_identical_rereads_pass_without_diagnostic_or_write(self):
+        self.drain_child()
+        before = copy.deepcopy(self.rows)
+        with patch.object(self, "store", runtime._ReadFence(self.store)), \
+             patch.object(entry, "allocate_placeholder") as allocate:
+            result = self.read(workflow_root_id="child-1", require_plan=True)
+        self.assertEqual(result["run"], self.record)
+        self.assertEqual(self.rows, before)
+        self.assertFalse((self.root / ".gc").exists())
+        allocate.assert_not_called()
+
+    def test_read_fence_refusal_retains_the_conflicting_row_before_entry_comparison(self):
+        self.drain_child()
+        (self.root / ".gc").mkdir()
+        initial = copy.deepcopy(self.rows["step-1"])
+        initial["metadata"]["typed"] = True
+        snapshot = self.store.snapshot
+        for key, value, paths in (
+            ("revision", "-9007199254740993", ["/revision"]),
+            ("metadata", {**initial["metadata"], "note/~": "native stamp"}, ["/metadata/note~1~0"]),
+            ("metadata", {**initial["metadata"], "typed": 1}, ["/metadata/typed"]),
+            ("status", "closed", ["/status"]),
+            ("assignee", "replacement-worker", ["/assignee"]),
+        ):
+            with self.subTest(changed=key):
+                self.rows["step-1"] = copy.deepcopy(initial)
+                calls = []
+
+                def changed(ids):
+                    calls.append(list(ids))
+                    if len(calls) == 2:
+                        self.rows["step-1"][key] = value
+                    return snapshot(ids)
+
+                fence = runtime._ReadFence(self.store)
+                with patch.object(self.store, "snapshot", side_effect=changed), \
+                     patch.object(self, "store", fence), \
+                     patch.object(entry, "allocate_placeholder") as allocate, \
+                     patch.object(entry, "native_json") as native, \
+                     self.assertRaisesRegex(entry.EntryError, "cooked context changed after its original snapshot") as failure:
+                    self.read(workflow_root_id="child-1", require_plan=True)
+                self.assertEqual(len(calls), 2)  # Diagnostic adds no store read.
+                self.assertEqual(fence.original_rows["step-1"], initial)
+                allocate.assert_not_called()
+                native.assert_not_called()
+                proof, = (self.root / ".gc" / "workspace-entry-diagnostics").iterdir()
+                packet = json.loads(proof.read_text())
+                self.assertEqual(packet["phase"], "read-fence.retain")
+                self.assertEqual(set(packet["overlapping_rows"]), {"step-1"})
+                pair = packet["overlapping_rows"]["step-1"]
+                self.assertEqual(pair["initial"], initial)
+                self.assertEqual(pair["continuation"], self.rows["step-1"])
+                self.assertEqual(pair["changed_paths"], paths)
+                for name in ("initial", "continuation"):
+                    self.assertEqual(pair[name + "_revision"], pair[name]["revision"])
+                    self.assertEqual(pair[name + "_sha256"], record_sha256(pair[name]))
+                self.assertIn(str(proof), str(failure.exception))
+                self.assertNotIn("native stamp", str(failure.exception))
+                self.assertEqual(proof.stat().st_mode & 0o777, 0o600)
+                proof.unlink()
+
+    def test_read_fence_diagnostic_failure_or_oversize_still_refuses_without_write(self):
+        self.drain_child()
+        (self.root / ".gc").mkdir()
+        initial = copy.deepcopy(self.rows["step-1"])
+        snapshot = self.store.snapshot
+        for failure in ("write-error", "oversize"):
+            with self.subTest(failure=failure):
+                self.rows["step-1"] = copy.deepcopy(initial)
+                calls = []
+
+                def changed(ids):
+                    calls.append(list(ids))
+                    if len(calls) == 2:
+                        self.rows["step-1"]["assignee"] = "replacement-worker"
+                        if failure == "oversize":
+                            self.rows["step-1"]["metadata"]["large"] = "x" * (1024 * 1024)
+                    return snapshot(ids)
+
+                fence = runtime._ReadFence(self.store)
+                with patch.object(self.store, "snapshot", side_effect=changed), \
+                     patch.object(self, "store", fence), \
+                     patch("workspace_checkout.save_diagnostic", side_effect=OSError("private write failed")) as save, \
+                     patch.object(entry, "allocate_placeholder") as allocate, \
+                     patch.object(entry, "native_json") as native, \
+                     self.assertRaisesRegex(entry.EntryError, "cooked context changed.*private diagnostic unavailable"):
+                    self.read(workflow_root_id="child-1", require_plan=True)
+                self.assertEqual(len(calls), 2)
+                self.assertEqual(fence.original_rows["step-1"], initial)
+                if failure == "oversize":
+                    save.assert_not_called()
+                else:
+                    save.assert_called_once()
+                allocate.assert_not_called()
+                native.assert_not_called()
+                self.assertFalse(list((self.root / ".gc").rglob("*.json")))
 
     def test_continuation_diagnostic_failure_never_allows_changed_authority(self):
         self.drain_child()

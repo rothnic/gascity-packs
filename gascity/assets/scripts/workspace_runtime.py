@@ -273,8 +273,14 @@ class NativeSourceRuntime:
         row = self._session_store.snapshot([session_id])[session_id]
         meta = row["metadata"]
         keys = ("instance_token", "template", "session_name", "alias", "configured_named_identity", "pool_managed", "pool_slot", "session_origin")
-        require(all(isinstance(meta[key], str) for key in (*keys, "state", "current_claim_bead_id") if key in meta),
-                "native session identity metadata is malformed")
+        for key in (*keys, "state", "current_claim_bead_id"):
+            if key not in meta:
+                continue
+            value = meta[key]
+            valid = (isinstance(value, str)
+                     or key == "pool_managed" and type(value) is bool
+                     or key == "pool_slot" and type(value) is int and value > 0)
+            require(valid, f"native session identity metadata is malformed: {key} ({type(value).__name__})")
         require(row["type"] == "session" and isinstance(meta.get("instance_token"), str)
                 and meta["instance_token"].strip(), "native session instance is absent")
         target = metadata.get("gc.run_target")
@@ -288,7 +294,8 @@ class NativeSourceRuntime:
                     and meta.get("current_claim_bead_id") == step["id"], "retained session no longer claims this physical step")
             assignee = meta.get("alias", "").strip() or meta.get("configured_named_identity", "").strip()
             if not assignee:
-                pool = meta.get("pool_managed") == "true" or meta.get("pool_slot") or meta.get("session_origin") == "ephemeral"
+                pool = (meta.get("pool_managed") is True or meta.get("pool_managed") == "true"
+                        or meta.get("pool_slot") or meta.get("session_origin") == "ephemeral")
                 assignee = session_id if pool else meta.get("session_name") or session_id
             require(step["status"] == "in_progress" and step["assignee"] == assignee,
                     "native claimed step status or assignee changed")

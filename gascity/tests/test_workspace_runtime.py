@@ -550,6 +550,69 @@ class NativeRuntimeTests(unittest.TestCase):
                 self.save()
                 with self.assertRaises(RecordError): self.adapter().qualify_native(self.result)
 
+    def test_session_metadata_accepts_native_pool_types_without_changing_rows(self):
+        for managed, slot in ((True, 1), (False, 2), (True, ""), (False, ""),
+                              ("true", "1"), ("false", ""), ("", "")):
+            with self.subTest(managed=managed, slot=slot):
+                for session in self.sessions.values():
+                    session["metadata"].update(pool_managed=managed, pool_slot=slot, session_origin="")
+                pooled = managed is True or managed == "true" or bool(slot)
+                self.rows["recorder"]["assignee"] = "recorder-session" if pooled else "recorder-runtime"
+                self.save()
+                before = (self.root / "port.json").read_bytes()
+                adapter = self.adapter()
+                self.assertTrue(adapter.qualify_native(self.result)["verified"])
+                for session in adapter._sessions.values():
+                    self.assertIs(type(session["metadata"]["pool_managed"]), type(managed))
+                    self.assertIs(type(session["metadata"]["pool_slot"]), type(slot))
+                self.assertEqual((self.root / "port.json").read_bytes(), before)
+
+    def test_session_metadata_malformed_types_refuse_without_values_or_writes(self):
+        original = copy.deepcopy(self.sessions)
+        fields = {
+            "pool_managed": (None, 1, 1.0, {}, []),
+            "pool_slot": (None, True, False, 0, -1, 1.0, {}, []),
+            "instance_token": (None, True, 1, {}),
+            "template": (None, True, 1, {}),
+            "session_name": (None, True, 1, {}),
+            "alias": (None, True, 1, {}),
+            "configured_named_identity": (None, True, 1, {}),
+            "session_origin": (None, True, 1, {}),
+            "state": (None, True, 1, {}),
+            "current_claim_bead_id": (None, True, 1, {}),
+        }
+        for key, values in fields.items():
+            for value in values:
+                with self.subTest(key=key, value=value):
+                    self.sessions = copy.deepcopy(original)
+                    self.sessions["recorder-session"]["metadata"][key] = value
+                    self.save()
+                    before = (self.root / "port.json").read_bytes()
+                    with self.assertRaisesRegex(RecordError, r"metadata is malformed: " + key + r" \(" + type(value).__name__ + r"\)"):
+                        self.adapter()
+                    self.assertEqual((self.root / "port.json").read_bytes(), before)
+
+    def test_session_metadata_typed_pool_fields_keep_identity_and_claim_fences(self):
+        for session in self.sessions.values():
+            session["metadata"].update(pool_managed=True, pool_slot=1)
+        self.save()
+        adapter = self.adapter()
+        adapter.qualify_native(self.result)
+        self.sessions["producer-session"]["metadata"]["pool_managed"] = "true"
+        self.save()
+        before = (self.root / "port.json").read_bytes()
+        with self.assertRaisesRegex(RecordError, "session instance or native identity changed"):
+            adapter._session(self.rows["producer"])
+        self.assertEqual((self.root / "port.json").read_bytes(), before)
+        for key, value in (("current_claim_bead_id", "foreign"), ("instance_token", "foreign")):
+            with self.subTest(key=key):
+                self.sessions["recorder-session"]["metadata"][key] = value
+                self.save()
+                before = (self.root / "port.json").read_bytes()
+                with self.assertRaises(RecordError): self.adapter()
+                self.assertEqual((self.root / "port.json").read_bytes(), before)
+                self.sessions["recorder-session"]["metadata"][key] = "recorder" if key == "current_claim_bead_id" else self.attempts["recorder"].instance_token
+
     def test_retained_native_attempt_stamp_survives_closed_pool_token_rotation(self):
         for role in ("producer", "reviewer"):
             self.rows[role]["metadata"]["gc.session_attempt_id"] = self.attempts[role].writer_attempt_id

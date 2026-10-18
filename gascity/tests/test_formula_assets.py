@@ -862,17 +862,32 @@ class FormulaAssetTests(unittest.TestCase):
         formula = resolve_formula(root, "do-work")
         step = next(item for item in formula["steps"] if item["id"] == "prepare-worktree")
         recipe = node_description(root, step)
-        commands = [shlex.split(code.replace("\\\n", " "))
-                    for code in re.findall(r"```sh\n(.*?)```", recipe, re.DOTALL)]
-        read = next(command for command in commands if command[1].endswith("/workspace_entry.py"))
-        prepare = next(command for command in commands if command[1].endswith("/workspace_dependency.py"))
+        commands = [
+            shlex.split(command.removesuffix(') || exit "$?"').replace("\\\n", " "))
+            for code in re.findall(r"```sh\n(.*?)```", recipe, re.DOTALL)
+            for command in re.findall(
+                r'python3 "\$PACK_ROOT/assets/scripts/workspace_(?:entry|dependency)\.py"(?:[^\n]*\\\n)*[^\n]*',
+                code,
+            )
+        ]
+        reads = [command for command in commands if command[1].endswith("/workspace_entry.py")]
+        preparations = [command for command in commands if command[1].endswith("/workspace_dependency.py")]
+        self.assertEqual(len(reads), 1)
+        self.assertEqual(len(preparations), 1)
+        read, prepare = reads[0], preparations[0]
         self.assertLess(commands.index(read), commands.index(prepare))
         self.assertEqual(read[2], "read")
         self.assertIn("--require-plan", read)
+        self.assertIn('--require-plan) || exit "$?"', recipe)
         self.assertEqual(read[read.index("--workflow-root") + 1], "$CLAIMED_ROOT_BEAD_ID")
         self.assertEqual(read[read.index("--claimed-step") + 1], "$CLAIMED_BEAD_ID")
         self.assertNotIn("--input-convoy-id", read)
-        self.assertEqual(prepare[prepare.index("--input-convoy-id") + 1], "<native-input-convoy-from-entry>")
+        self.assertIn("WORKSPACE_ENTRY_JSON", prepare[prepare.index("--input-convoy-id") + 1])
+        self.assertIn("native_input_convoy_id", prepare[prepare.index("--input-convoy-id") + 1])
+        self.assertIn("input_convoy_id", prepare[prepare.index("--input-convoy-id") + 1])
+        self.assertIn(
+            'print(e.get("native_input_convoy_id", e["input_convoy_id"]))', recipe
+        )
         for key in ("native_input_convoy_id", "native_continuation.member_id", "source_plan.source_plan_owner_id"):
             self.assertIn(key, recipe)
         item = resolve_formula(root, "do-work-item")

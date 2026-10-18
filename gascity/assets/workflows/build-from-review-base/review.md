@@ -44,3 +44,13 @@ from the original native root's `gc.var.worktree_base_ref` and
 An omitted initial base uses `@default`; an explicitly empty base refuses.
 Keep `gc.restart.worktree_base_ref` and `gc.restart.worktree_checks` in any restart
 handoff. A child consumes its proven inherited run rather than capturing another base.
+
+Also read the original root's layout and pass it on explicit child launches:
+
+- `WORKTREE_PARENT` from `gc.var.worktree_parent`: `--var worktree_parent="$WORKTREE_PARENT"`.
+- `WORKTREE_NAME_PREFIX` from `gc.var.worktree_name_prefix`: `--var worktree_name_prefix="$WORKTREE_NAME_PREFIX"`.
+- `WORKTREE_ALLOW_EXTERNAL_PARENT` from `gc.var.worktree_allow_external_parent`: `--var worktree_allow_external_parent="$WORKTREE_ALLOW_EXTERNAL_PARENT"`.
+
+Default only absent parent/prefix keys to empty strings and an absent external
+permission key to `false`. Do not substitute rig settings or the child formula's
+defaults.

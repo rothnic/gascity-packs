@@ -176,22 +176,28 @@ def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: 
     """
     from workspace_store import NativeRunContinuation, validate_native_continuation
     from workspace_suffix import read as read_suffix
+    rows = {}
     suffix = read_suffix(store, claimed_step_id=claimed_step_id, requested_root_id=requested_root_id,
-                         recorded_root_id=recorded_root_id)
+                         recorded_root_id=recorded_root_id, observed_rows=rows)
     if suffix is not None:
         return suffix
-    rows = {}
 
-    def read(bead_id):
-        require(isinstance(bead_id, str) and bool(bead_id.strip()) and bead_id == bead_id.strip(),
-                "native continuation has no exact physical relationship ID")
-        if bead_id not in rows:
-            require(len(rows) < 100, "native continuation exceeds the guarded row bound")
-            snapshot = store.snapshot([bead_id])
-            require(set(snapshot) == {bead_id} and snapshot[bead_id]["id"] == bead_id,
+    def read(bead_id, *related_ids):
+        requested = (bead_id, *related_ids)
+        require(all(isinstance(value, str) and bool(value.strip()) and value == value.strip()
+                    for value in requested), "native continuation has no exact physical relationship ID")
+        ids = list(dict.fromkeys(requested))
+        missing = [value for value in ids if value not in rows]
+        require(len(rows) + len(missing) <= 100, "native continuation exceeds the guarded row bound")
+        if missing:
+            snapshot = store.snapshot(missing)
+            require(set(snapshot) == set(missing) and all(snapshot[value]["id"] == value for value in missing),
                     "native continuation readback has a different physical ID")
             rows.update(snapshot)
-        healthy(rows[bead_id])
+        require(all(rows[value]["id"] == value for value in ids),
+                "native continuation readback has a different physical ID")
+        for value in ids:
+            healthy(rows[value])
         return rows[bead_id]
 
     def payload(kind, ref):
@@ -218,12 +224,11 @@ def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: 
     unit_id = child["metadata"].get("gc.input_convoy_id")
     unit = read(unit_id)
     implementation_id = unit["metadata"].get("gc.parent_convoy_id")
-    implementation = read(implementation_id)
     member_id = child["metadata"].get("gc.drain_member_id")
-    read(member_id)
+    run_ref = reference(root["metadata"].get(RUN_REF), "run")
+    implementation = read(implementation_id, member_id, run_ref["bead_id"])
     owner_id = implementation["metadata"].get("gc.source_plan_owner_id")
     owner = read(owner_id)
-    run_ref = reference(root["metadata"].get(RUN_REF), "run")
     plan_ref = reference(owner["metadata"].get(PLAN_REF), "source-plan")
     run_payload = payload("run", run_ref)
     plan = payload("source-plan", plan_ref)

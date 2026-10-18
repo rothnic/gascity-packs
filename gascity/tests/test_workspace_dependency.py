@@ -408,7 +408,8 @@ class DependencyNativeCompositionTests(unittest.TestCase):
     def prepare(self, **options):
         f=self.fixture
         member = options.pop('member_id', 'C')
-        return self.helper.prepare_dependency_workspace(f.store,f.attempts['prepare-'+member],gc=str(f.port),city_root=str(f.city),
+        attempt = options.pop('attempt', f.attempts['prepare-'+member])
+        return self.helper.prepare_dependency_workspace(f.store,attempt,gc=str(f.port),city_root=str(f.city),
             rig_name='fixture',workflow_root_id=options.pop('workflow_root_id', 'root'),
             input_convoy_id=options.pop('input_convoy_id', 'convoy'),generation=1,
             workspace_owner_id=options.pop('workspace_owner_id', 'C'),member_id=member,artifact_root=f.artifacts,evidence_dir=f.diagnostics,
@@ -768,6 +769,202 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         self.assertEqual(head,receipt['output_oid'])
         self.assertEqual(2,len(receipt['merge_oids']))
         self.assertFalse(Path(f.git(work,'rev-parse','--git-path','MERGE_HEAD')).exists())
+
+    def test_conflict_replacement_recovers_exact_checkpoint_and_accepts_only_fresh_output(self):
+        from workspace_flow import WorkspaceFlow
+        from workspace_records import canonical_bytes, RecordError, record_sha256
+        from workspace_store import Attempt, GRANT_KEY
+        import workspace_outputs as outputs
+
+        self.prepare_fixture(integration=True, conflict=True); f = self.fixture
+
+        # Each preparation/resume enters the shipped CLI in a new interpreter.
+        def prepare(**options):
+            attempt = options.pop('attempt', f.attempts['prepare-C'])
+            command = [sys.executable, '-B', str(SCRIPTS / 'workspace_dependency.py'),
+                '--gc', str(f.port), '--worktree-lifecycle', 'new', '--city-root', str(f.city),
+                '--rig-name', 'fixture', '--store-ref', 'rig:fixture', '--workflow-root-id', 'root',
+                '--input-convoy-id', 'convoy', '--generation', '1', '--workspace-owner-id', 'C',
+                '--member-id', 'C', '--claimed-step-id', attempt.claimed_bead_id,
+                '--artifact-root', str(f.artifacts), '--evidence-dir', str(f.diagnostics),
+                '--parent', str(f.work.parent), '--allow-external-parent']
+            if 'resume_decision' in options:
+                command += ['--resume-decision', options.pop('resume_decision')]
+            self.assertEqual({}, options)
+            environment = dict(os.environ, GC_SESSION_ID=attempt.session_id,
+                               GC_INSTANCE_TOKEN=attempt.instance_token)
+            completed = subprocess.run(command, text=True, capture_output=True, env=environment, timeout=120)
+            if completed.returncode:
+                self.assertEqual(1, completed.returncode, completed.stderr)
+                failure = json.loads(completed.stderr)
+                self.assertEqual('blocked', failure['state'])
+                raise self.helper.DependencyError(failure['reason'])
+            return json.loads(completed.stdout)
+        with self.assertRaisesRegex(self.helper.DependencyError, 'blocked'):
+            prepare()
+        blocked = self.state()
+        rows = blocked['stores']['rig:fixture']
+        workspace_ref = json.loads(rows['C']['metadata']['gc.workspace_ref'])
+        workspace = json.loads(rows[workspace_ref['bead_id']]['metadata']['gc.workspace'])
+        blocker_ref = json.loads(rows['C']['metadata']['gc.workspace_blocker_ref'])
+        blocker = json.loads(rows[blocker_ref['bead_id']]['metadata']['gc.workspace_blocker'])
+        work = Path(workspace['work_dir'])
+        conflict = (work / 'feature.py').read_bytes()
+        self.assertIn(b'<<<<<<<', conflict)
+        self.assertIsNone(blocker['resolution'])
+        self.assertNotIn('gc.workspace_output_ref', rows['C']['metadata'])
+
+        # Move to the distinct declared successor writer, retaining the old
+        # native claim/session as history. Recovery must transfer its grant.
+        roles = ('prepare-C', 'producer-C', 'reviewer-C', 'recorder-C')
+        for role in roles[1:]:
+            attempt = Attempt(role+'-session', role+'-private-instance', role)
+            f.attempts[role] = attempt
+            rows[role]['metadata'].update({'gc.session_id': attempt.session_id,
+                                          'gc.session_name': role+'-runtime'})
+            session = copy.deepcopy(blocked['stores']['city:fixture'][role.replace('-C', '-B')+'-session'])
+            session['id'] = attempt.session_id
+            session['metadata'].update(instance_token=attempt.instance_token, session_name=role+'-runtime')
+            blocked['stores']['city:fixture'][attempt.session_id] = session
+        state_path = f.root / 'port.json'
+        state_path.write_text(json.dumps(blocked))
+
+        def activate(role):
+            state = self.state()
+            for position, key in enumerate(roles):
+                row = state['stores']['rig:fixture'][key]
+                active = key == role
+                closed = position < roles.index(role)
+                row.update(status='in_progress' if active else 'closed' if closed else 'open',
+                           assignee=f.attempts[key].session_id if active else '')
+                row['metadata'].pop('gc.outcome', None)
+                if closed: row['metadata']['gc.outcome'] = 'pass'
+                state['stores']['city:fixture'][f.attempts[key].session_id]['metadata'].update(
+                    state='active' if active else 'asleep', current_claim_bead_id=key if active else '')
+            os.environ.update(GC_SESSION_ID=f.attempts[role].session_id,
+                              GC_INSTANCE_TOKEN=f.attempts[role].instance_token)
+            state_path.write_text(json.dumps(state))
+
+        activate('producer-C')
+        self.assertEqual(conflict, (work / 'feature.py').read_bytes())
+        self.assertEqual(workspace, json.loads(self.state()['stores']['rig:fixture'][workspace_ref['bead_id']]['metadata']['gc.workspace']))
+        (work / 'feature.py').write_text('VALUE = 42 # recovered conflict\n')
+        f.git(work, 'add', 'feature.py'); f.git(work, 'commit', '-qm', 'resolve accepted source conflict')
+        head = f.git(work, 'rev-parse', 'HEAD')
+        decision = dict(workflow_root_id='root', generation=1, source_plan_owner_id='plan-owner',
+            workspace_owner_id='C', store_ref='rig:fixture', blocker_id=blocker['blocker_id'], expected_head_oid=head)
+        path = f.artifacts / 'replacement-recovery.json'
+        path.write_text(json.dumps(decision))
+        decision_ref = outputs.artifact(path, f.artifacts)
+        before = self.state()
+        for fault in ('snapshot', 'decision'):
+            with self.subTest(fault=fault):
+                stale = copy.deepcopy(before)
+                if fault == 'snapshot':
+                    changed = copy.deepcopy(workspace)
+                    changed['integration_inputs'][0]['workspace_output_sha256'] = '0'*64
+                    stale['stores']['rig:fixture'][workspace_ref['bead_id']]['metadata']['gc.workspace'] = canonical_bytes(changed).decode()
+                else:
+                    path.write_text(json.dumps(dict(decision, expected_head_oid=f.base)))
+                state_path.write_text(json.dumps(stale))
+                with self.assertRaises(RecordError):
+                    prepare(attempt=f.attempts['producer-C'], resume_decision=str(path))
+                self.assertEqual(stale, self.state())
+                self.assertEqual(head, f.git(work, 'rev-parse', 'HEAD'))
+                self.assertEqual('VALUE = 42 # recovered conflict\n', (work / 'feature.py').read_text())
+                path.write_text(json.dumps(decision))
+        state_path.write_text(json.dumps(before))
+        recovery_pending = copy.deepcopy(before)
+        resumed = prepare(attempt=f.attempts['producer-C'], resume_decision=str(path))
+        self.assertFalse(resumed['accepted'])
+        self.assertEqual(head, resumed['input_oid'])
+        self.assertEqual(workspace['native_provenance'], resumed['workspace']['native_provenance'])
+        self.assertEqual(workspace['integration_inputs'], resumed['workspace']['integration_inputs'])
+        recovered = self.state()['stores']['rig:fixture']
+        resolution = json.loads(recovered[blocker_ref['bead_id']]['metadata']['gc.workspace_blocker'])['resolution']
+        self.assertEqual(dict(decision_path=decision_ref['path'], decision_sha256=decision_ref['sha256'], expected_head_oid=head), resolution)
+        self.assertEqual(f.attempts['producer-C'].admission,
+            json.loads(recovered[resumed['authority_id']]['metadata'][GRANT_KEY])['attempt'])
+        self.assertNotEqual(workspace['writer_attempt_id'], resumed['workspace']['writer_attempt_id'])
+        self.assertNotIn('gc.workspace_result_ref', recovered['C']['metadata'])
+        self.assertNotIn('gc.workspace_output_ref', recovered['C']['metadata'])
+        receipt = outputs.read_artifact(resumed['integration_evidence'], f.artifacts)
+        self.assertEqual(head, receipt['output_oid'])
+        self.assertEqual(2, len(receipt['merge_oids']))
+        self.assertEqual('FLAG = 7\n', (work / 'other.py').read_text())
+        for source in workspace['integration_inputs']:
+            f.git(work, 'merge-base', '--is-ancestor', source['output_oid'], head)
+
+        producer = f.adapter('producer-C')
+        checks = producer.execute_checks('C', 'C', head)
+        proof = outputs.read_artifact(dict(path=checks[0]['evidence_path'], sha256=checks[0]['evidence_sha256']), f.artifacts)
+        self.assertEqual('passed', proof['status'])
+        self.assertEqual(head, proof['binding']['output_oid'])
+        self.assertEqual('producer-C', proof['producer']['step_id'])
+        summary = f.artifacts / 'recovered-summary.md'; summary.write_text('Recovered both exact accepted inputs.\n')
+        report = f.artifacts / 'recovered-review.md'; report.write_text('Reviewed resolved source and fresh required check.\n')
+        artifacts = [outputs.artifact(summary, f.artifacts)]
+        activate('reviewer-C')
+        reviewer = f.adapter('reviewer-C')
+        with self.assertRaises(RecordError):
+            reviewer.begin_review('C', 'C', head, f.result['acceptance']['project_checks'], artifacts)
+        context = reviewer.begin_review('C', 'C', head, checks, artifacts)
+        review = reviewer.complete_review(context, report, 'passed', f.artifacts / 'recovered-review.json')
+        activate('recorder-C')
+        flow = WorkspaceFlow(f.adapter('recorder-C'))
+        before = self.state()
+        with self.assertRaises(RecordError):
+            flow.record_result('C', 'C', head, checks, f.result['acceptance']['independent_review'], artifacts)
+        self.assertEqual(before, self.state())
+        recorded = flow.record_result('C', 'C', head, checks, review, artifacts)
+        result = recorded['result']
+        self.assertEqual('accepted', result['acceptance']['status'])
+        self.assertEqual(head, result['input_oid'])
+        self.assertEqual(head, result['output_oid'])
+        published = flow.owner_output('C', resumed['integration_evidence']['path'])
+        self.assertEqual('committed', published['receipt']['outcome'])
+        accepted = published['output']
+        self.assertEqual(record_sha256(result), accepted['final_member_result_sha256'])
+        self.assertEqual(workspace['integration_inputs'], accepted['integration_inputs'])
+        self.assertEqual(head, accepted['output_oid'])
+        installed = self.state()
+        checkpoint = json.loads(installed['stores']['rig:fixture'][workspace_ref['bead_id']]['metadata']['gc.workspace'])
+        self.assertEqual('result', checkpoint['phase'])
+        self.assertEqual(head, checkpoint['output_oid'])
+        output_ref = json.loads(installed['stores']['rig:fixture']['C']['metadata']['gc.workspace_output_ref'])
+        competing = copy.deepcopy(installed)
+        changed = dict(accepted, output_oid=f.base)
+        competing['stores']['rig:fixture'][output_ref['bead_id']]['metadata']['gc.workspace_output'] = canonical_bytes(changed).decode()
+        state_path.write_text(json.dumps(competing))
+        with self.assertRaises(RecordError):
+            WorkspaceFlow(f.adapter('recorder-C')).owner_output('C', resumed['integration_evidence']['path'])
+        self.assertEqual(competing, self.state())
+        state_path.write_text(json.dumps(installed))
+
+        # Reuse the real output just accepted above, rather than inventing an
+        # accepted record. Its presence conflicts with the retained blocked
+        # checkpoint and must refuse recovery before any store or Git mutation.
+        with self.subTest(fault='existing-output-before-resume'):
+            competing = copy.deepcopy(recovery_pending)
+            competing_rows = competing['stores']['rig:fixture']
+            competing_rows[output_ref['bead_id']] = copy.deepcopy(installed['stores']['rig:fixture'][output_ref['bead_id']])
+            competing_rows['C']['metadata']['gc.workspace_output_ref'] = installed['stores']['rig:fixture']['C']['metadata']['gc.workspace_output_ref']
+            state_path.write_text(json.dumps(competing))
+            os.environ.update(GC_SESSION_ID=f.attempts['producer-C'].session_id,
+                              GC_INSTANCE_TOKEN=f.attempts['producer-C'].instance_token)
+            git_state = f.git(work, 'status', '--porcelain=v1', '--untracked-files=all')
+            contents = (work / 'feature.py').read_bytes()
+            try:
+                with self.assertRaisesRegex(RecordError, 'existing.*output|output.*existing'):
+                    prepare(attempt=f.attempts['producer-C'], resume_decision=str(path))
+                self.assertEqual(competing, self.state())
+                self.assertEqual(head, f.git(work, 'rev-parse', 'HEAD'))
+                self.assertEqual(git_state, f.git(work, 'status', '--porcelain=v1', '--untracked-files=all'))
+                self.assertEqual(contents, (work / 'feature.py').read_bytes())
+            finally:
+                state_path.write_text(json.dumps(installed))
+                os.environ.update(GC_SESSION_ID=f.attempts['recorder-C'].session_id,
+                                  GC_INSTANCE_TOKEN=f.attempts['recorder-C'].instance_token)
 
     def block_initial_prepare(self, *, shared=False, integration=False, child=False):
         self.prepare_fixture(shared=shared, integration=integration)

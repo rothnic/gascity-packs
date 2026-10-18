@@ -259,6 +259,222 @@ print(json.dumps(WorkspaceFlow(runtime)._allocation('member-result','member','me
         path.write_text(json.dumps(original))
 
 
+    def test_canonical_review_and_fix_resume_exact_source_in_fresh_cli_processes(self):
+        from test_workspace_dependency import WORKTREE_PORT
+        from workspace_dependency import FrozenRecords
+        from workspace_entry import allocate_placeholder
+        from workspace_records import contracts, record_sha256
+        from workspace_store import (NativeWorktreeReference, RecordWrite, ReferenceWrite,
+                                     TOPOLOGY, merge_cooked_context, record_reference)
+        import workspace_outputs as outputs
+
+        f = self.fixture
+        scripts = Path(flow_module.__file__).parent
+        # These are initial cooked occurrences, not repairs to an accepted record.
+        previous = 'do-work.record-result'
+        for role, stage, target in (('canonical', 'record-canonical', 'gc.run-operator'),
+                ('canonical-reviewer', 'review-result', 'gc.implementation-reviewer'),
+                ('fixer', 'plan-fixes', 'gc.review-synthesizer')):
+            ref = 'do-work.' + stage
+            f.attempts[role] = Attempt(role + '-session', role + '-private-instance', role)
+            metadata = {'gc.run_target': target}
+            f.formula['steps'].append(dict(id=ref, metadata=metadata))
+            f.formula['deps'].append(dict(step_id=ref, depends_on_id=previous, type='blocks'))
+            f.rows[role] = f.row(role, dict(metadata, **{'gc.step_id': ref, 'gc.step_ref': ref,
+                'gc.attach_root_id': 'expansion', 'gc.source_anchor_id': 'member',
+                'gc.drain_member_id': 'member', 'gc.session_id': role + '-session',
+                'gc.session_name': role + '-runtime', TOPOLOGY: canonical_bytes([previous]).decode()}))
+            f.sessions[role + '-session'] = f.row(role + '-session', {
+                'template': 'fixture/' + target, 'session_name': role + '-runtime',
+                'instance_token': f.attempts[role].instance_token, 'session_origin': 'ephemeral',
+                'state': 'asleep', 'current_claim_bead_id': ''}, scoped=False)
+            f.sessions[role + '-session']['type'] = 'session'
+            previous = ref
+        scope = {'gc.source_root_id': 'root', 'gc.source_generation': '2'}
+        f.rows['fix-member'] = f.row('fix-member', scope)
+        f.rows['fix-convoy'] = f.row('fix-convoy', scope)
+        f.rows['fix-convoy']['type'] = 'convoy'
+        f.rows['fix-expansion'] = f.row('fix-expansion', copy.deepcopy(f.rows['expansion']['metadata']))
+        role = 'fix-prepare'
+        f.attempts[role] = Attempt(role + '-session', role + '-private-instance', role)
+        metadata = {'gc.run_target': 'gc.run-operator'}
+        f.formula['steps'].append(dict(id='do-work.prepare-worktree', metadata=metadata))
+        f.rows[role] = f.row(role, dict(metadata, **{'gc.step_id': 'do-work.prepare-worktree',
+            'gc.step_ref': 'do-work.prepare-worktree', 'gc.attach_root_id': 'fix-expansion',
+            'gc.source_anchor_id': 'fix-member', 'gc.drain_member_id': 'fix-member',
+            'gc.session_id': role + '-session', 'gc.session_name': role + '-runtime', TOPOLOGY: '[]'}))
+        f.sessions[role + '-session'] = f.row(role + '-session', {
+            'template': 'fixture/gc.run-operator', 'session_name': role + '-runtime',
+            'instance_token': f.attempts[role].instance_token, 'session_origin': 'ephemeral',
+            'state': 'asleep', 'current_claim_bead_id': ''}, scoped=False)
+        f.sessions[role + '-session']['type'] = 'session'
+        f.rows['root']['metadata'].update({'gc.var.worktree_parent': str(f.work.parent),
+                                         'gc.var.worktree_allow_external_parent': 'true'})
+        port = f.port.read_text()
+        f.port.write_text(port[:port.index("if 'worktree' in args:")] + WORKTREE_PORT +
+                          "\nsys.exit('unsupported command ' + repr(args))\n")
+        f.workspace.update(phase='active', current_oid=f.base, output_oid=None)
+        f.rows['workspace-record']['metadata'].pop(contracts()['workspace']['metadata_key'])
+        f.select_role('producer')
+        runtime = f.adapter('producer')
+        authority = allocate_placeholder(f.store, title='Workspace writer')
+        selected = runtime.guard_rows
+        selected.update(f.store.snapshot([authority, 'workspace-record', 'member']))
+        launch = json.loads(f.rows['producer']['metadata']['gc.worktree_ref'])
+        prepared = f.store.install_grant(f.attempts['producer'],
+            dict(workflow_root_id='root', generation=1, writer_scope_id='member', record_kind='workspace'),
+            authority, [RecordWrite('workspace', 'workspace-record', f.workspace)],
+            [ReferenceWrite('member', 'gc.workspace_ref', record_reference('workspace', 'workspace-record', f.workspace))],
+            writer_map=runtime.writer_map, expected_rows=merge_cooked_context(runtime.original_rows, selected),
+            guards=FrozenRecords(f.store, selected).guards,
+            projections=[NativeWorktreeReference(role, 'workspace-record', dict(launch, binding_step_id=role))
+                         for role in ('producer', 'reviewer', 'recorder', 'canonical', 'canonical-reviewer', 'fixer')])
+        self.assertEqual('committed', f.store.execute(prepared)['outcome'])
+        self.assertEqual('committed', f.store.resolve(prepared)['outcome'])
+        state_path = f.root / 'port.json'
+        state = json.loads(state_path.read_text())
+        f.rows, f.sessions = state['stores']['rig:fixture'], state['stores']['city:fixture']
+        recorded, published = self.original.accepted_flow()
+        result, owner_output = recorded['result'], published['output']
+        self.assertEqual('accepted', result['acceptance']['status'])
+        self.assertEqual(record_sha256(result), owner_output['final_member_result_sha256'])
+        before_workspace = json.loads(f.rows['workspace-record']['metadata']['gc.workspace'])
+        before_run = f.rows['run-record']['metadata']['gc.implementation_run']
+        before_checks = copy.deepcopy(result['acceptance']['project_checks'])
+
+        def select(role):
+            state = json.loads(state_path.read_text())
+            f.rows, f.sessions = state['stores']['rig:fixture'], state['stores']['city:fixture']
+            f.select_role(role)
+
+        def cli(role, action, *arguments, code=0):
+            command = [sys.executable, '-B', str(scripts / 'workspace_flow.py'), action,
+                '--gc', str(f.port), '--city-root', str(f.city), '--store-ref', 'rig:fixture',
+                '--rig-name', 'fixture', '--workflow-root-id', 'root', '--claimed-step-id', role,
+                '--artifact-root', str(f.artifacts), '--evidence-dir', str(f.diagnostics),
+                '--generation', '1', *arguments]
+            completed = subprocess.run(command, text=True, capture_output=True, timeout=120)
+            self.assertEqual(code, completed.returncode, completed.stdout + completed.stderr)
+            return json.loads(completed.stdout) if completed.stdout else None
+
+        select('canonical')
+        canonical = cli('canonical', 'canonical', '--summary', str(f.summary))['canonical']
+        self.assertEqual(f.oid, canonical['output_oid'])
+        self.assertEqual(f.base, result['input_oid'])
+        (f.repo / 'feature.py').write_text('VALUE = -1 # later controller default\n')
+        f.git(f.repo, 'add', 'feature.py')
+        f.git(f.repo, 'commit', '-qm', 'move controller default after accepted canonical')
+        controller_head = f.git(f.repo, 'rev-parse', 'HEAD')
+        self.assertNotEqual(f.oid, controller_head)
+        select('canonical-reviewer')
+        baseline = json.loads(state_path.read_text())
+        for fault in ('store', 'owner', 'generation', 'malformed'):
+            with self.subTest(replacement_refusal=fault):
+                changed = copy.deepcopy(baseline)
+                rows = changed['stores']['rig:fixture']
+                if fault == 'store':
+                    rows['root']['metadata']['gc.root_store_ref'] = 'rig:foreign'
+                else:
+                    result_ref = json.loads(rows['member']['metadata']['gc.workspace_result_ref'])
+                    if fault == 'malformed':
+                        value = '{'
+                    else:
+                        value = canonical_bytes(dict(result, **({'workspace_owner_id': 'foreign'}
+                            if fault == 'owner' else {'generation': 2}))).decode()
+                    rows[result_ref['bead_id']]['metadata']['gc.workspace_result'] = value
+                state_path.write_text(json.dumps(changed))
+                try:
+                    self.assertIsNone(cli('canonical-reviewer', 'begin-canonical-review', code=1))
+                    self.assertEqual(changed, json.loads(state_path.read_text()))
+                    self.assertEqual(f.oid, f.git(f.work, 'rev-parse', 'HEAD'))
+                    self.assertEqual(controller_head, f.git(f.repo, 'rev-parse', 'HEAD'))
+                finally:
+                    state_path.write_text(json.dumps(baseline))
+        context = cli('canonical-reviewer', 'begin-canonical-review')
+        self.assertEqual(record_sha256(result), context['result_sha256'])
+        self.assertEqual(record_sha256(canonical), context['canonical_sha256'])
+        self.assertEqual(before_checks, context['context']['checks'])
+        context_path = f.artifacts / 'replacement-canonical-context.json'
+        outputs.immutable_json(context_path, context)
+        report = f.artifacts / 'replacement-canonical-findings.md'
+        report.write_text('The exact accepted source needs the bounded follow-up in generation two.\n')
+        complete = ('--context', str(context_path), '--report', str(report), '--status', 'failed',
+                    '--review-evidence', str(f.artifacts / 'replacement-canonical-review.json'))
+        state = json.loads(state_path.read_text())
+        stale_path = f.artifacts / 'stale-canonical-context.json'
+        stale_path.write_bytes(canonical_bytes(dict(context, result_sha256='0' * 64)))
+        stale = list(complete); stale[1] = str(stale_path)
+        self.assertIsNone(cli('canonical-reviewer', 'complete-canonical-review', *stale, code=1))
+        self.assertEqual(state, json.loads(state_path.read_text()))
+        summary = f.summary.read_bytes()
+        try:
+            f.summary.write_bytes(summary + b'artifact drift\n')
+            self.assertIsNone(cli('canonical-reviewer', 'complete-canonical-review', *complete, code=1))
+            self.assertEqual(state, json.loads(state_path.read_text()))
+        finally:
+            f.summary.write_bytes(summary)
+        # A failed review is a recorded finding, so its native CLI exits one.
+        reviewed = cli('canonical-reviewer', 'complete-canonical-review', *complete, code=1)
+        findings = reviewed['review']
+        self.assertEqual('changes_required', findings['verdict'])
+        self.assertEqual(record_sha256(canonical), findings['canonical_record_sha256'])
+        self.assertEqual(f.oid, findings['reviewed_oid'])
+        state = json.loads(state_path.read_text())
+        review_ref = json.loads(state['stores']['rig:fixture']['root']['metadata']['gc.review_ref'])
+        self.assertEqual(findings, json.loads(state['stores']['rig:fixture'][review_ref['bead_id']]['metadata']['gc.review']))
+
+        select('fixer')
+        nodes = [dict(owner_id='fix-member', strategy='isolated', member_ids=['fix-member'],
+                      source_predecessor_owner_ids=[], single_lane=False)]
+        nodes_path = f.artifacts / 'replacement-fix-nodes.json'
+        nodes_path.write_bytes(canonical_bytes(nodes))
+        fixed = cli('fixer', 'fix-plan', '--nodes', str(nodes_path), '--plan-owner-id', 'fixer',
+                    '--terminal-owner-id', 'fix-member', '--implementation-convoy-id', 'fix-convoy',
+                    '--max-iterations', '2')['source_plan']
+        self.assertEqual(2, fixed['generation'])
+        self.assertEqual(f.oid, fixed['base_oid'])
+        self.assertEqual(f.oid, fixed['parent_canonical_oid'])
+        self.assertEqual(1, fixed['parent_canonical_generation'])
+        state = json.loads(state_path.read_text())
+        rows = state['stores']['rig:fixture']
+        self.assertEqual(before_run, rows['run-record']['metadata']['gc.implementation_run'])
+        self.assertEqual(before_workspace, json.loads(rows['workspace-record']['metadata']['gc.workspace']))
+        result_ref = json.loads(rows['member']['metadata']['gc.workspace_result_ref'])
+        retained = json.loads(rows[result_ref['bead_id']]['metadata']['gc.workspace_result'])
+        self.assertEqual(result, retained)
+        self.assertEqual(before_checks, retained['acceptance']['project_checks'])
+        self.assertEqual(f.oid, f.git(f.work, 'rev-parse', 'HEAD'))
+
+        # Prepare and continue the published fix in two more fresh CLI processes.
+        select('fix-prepare')
+        command = [sys.executable, '-B', str(scripts / 'workspace_dependency.py'),
+            '--gc', str(f.port), '--worktree-lifecycle', 'new', '--city-root', str(f.city),
+            '--rig-name', 'fixture', '--store-ref', 'rig:fixture', '--workflow-root-id', 'root',
+            '--input-convoy-id', 'fix-convoy', '--generation', '2', '--workspace-owner-id', 'fix-member',
+            '--member-id', 'fix-member', '--claimed-step-id', 'fix-prepare',
+            '--artifact-root', str(f.artifacts), '--evidence-dir', str(f.diagnostics),
+            '--parent', str(f.work.parent), '--allow-external-parent']
+        prepared = subprocess.run(command, text=True, capture_output=True, timeout=120)
+        self.assertEqual(0, prepared.returncode, prepared.stderr)
+        initial = json.loads(prepared.stdout)
+        self.assertEqual(f.oid, initial['input_oid'])
+        self.assertEqual(f.oid, initial['workspace']['native_provenance']['base_sha'])
+        self.assertNotEqual(controller_head, initial['input_oid'])
+        self.assertEqual(f.run['common_git_dir'], initial['workspace']['native_provenance']['repo_identity'])
+        self.assertEqual('fix-member', initial['workspace']['native_provenance']['owner'])
+        self.assertEqual('2', initial['workspace']['native_provenance']['generation'])
+        native_ids = set(json.loads(state_path.read_text())['stores']['rig:fixture'])
+        continued = subprocess.run(command, text=True, capture_output=True, timeout=120)
+        self.assertEqual(0, continued.returncode, continued.stderr)
+        resumed = json.loads(continued.stdout)
+        self.assertEqual('continuation', resumed['state'])
+        for key in ('workspace_record_id', 'authority_id', 'path', 'input_oid'):
+            self.assertEqual(initial[key], resumed[key])
+        self.assertEqual(initial['workspace']['native_provenance'], resumed['workspace']['native_provenance'])
+        self.assertEqual(native_ids, set(json.loads(state_path.read_text())['stores']['rig:fixture']))
+        self.assertEqual(f.oid, f.git(Path(resumed['path']), 'rev-parse', 'HEAD'))
+
+
 
 class RunReplacementTests(unittest.TestCase):
     def setUp(self):

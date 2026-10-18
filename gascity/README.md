@@ -180,6 +180,8 @@ For recorded bases, source dependencies, shared workspaces, and recovery, see
 [Worktree dependencies](docs/worktree-dependencies.md).
 Custom parent and prefix settings are recorded per workspace. See
 [layout configuration](docs/worktree-dependencies.md#configure-layout).
+Explicit implementation, review, and fix launches must pass these three settings
+from the original native workflow root; child defaults do not replace them.
 
 When variables are not enough, every stage prompt can be replaced by dropping
 a Markdown file at the same relative path in a higher-priority layer, and
@@ -251,6 +253,13 @@ preparation, the [shared recipe](assets/workflows/do-work/prepare-worktree.md)
 runs `workspace_entry.py read --require-plan` to discover the original run and
 the plan's producer through the native drain relationship. A source-plan
 reference need not be stored on the item root or original workflow root.
+The recipe retains that entry JSON and reads the exact claimed native row, then
+runs the dependency helper with the returned logical root, physical unit convoy,
+generation, store and uniquely declared member/owner. Run its two shell blocks in
+one shell with the native claim context and existing external artifact/evidence
+directories. Do not substitute example IDs or the synthetic unit convoy for the
+source member. Preparation refuses missing or stale predecessor acceptance before
+record or checkout allocation; an independent member starts at the captured base.
 
 If the initial and continuation reads disagree, entry still refuses. A bounded
 private diagnostic under the city's `.gc/workspace-entry-diagnostics` retains

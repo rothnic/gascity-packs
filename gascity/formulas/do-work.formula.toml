@@ -2,6 +2,8 @@ description = """
 Full lifecycle implementation formula for one implementation convoy or a core
 drain-unit convoy of size one.
 
+New-mode preparation executes the shared entry read and dependency command using the exact native claim and accepted source input.
+
 Launch inputs:
 - input_convoy: {{convoy_id}}
 - context_path: {{context_path}} (empty means no extra context bundle)

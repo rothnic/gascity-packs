@@ -341,10 +341,23 @@ def python_argv_context(path: Path, text: str) -> tuple[list[str], list[tuple[in
 
 def gc_routes_bd(line: str, bd_start: int) -> bool:
     prefix = line[:bd_start]
-    gc_tokens = list(re.finditer(r"(?<![A-Za-z0-9_=/.-])gc\b", prefix))
+    gc_tokens = list(re.finditer(r'(?<![A-Za-z0-9_=/.-])(?:gc\b|"\$GC_BIN")', prefix))
     if not gc_tokens:
         return False
-    command_prefix = prefix[gc_tokens[-1].end() :].strip()
+    command_prefix = prefix[gc_tokens[-1].end() :]
+    quote, escaped = None, False
+    for character in command_prefix:
+        if escaped:
+            escaped = False
+        elif character == "\\" and quote != "'":
+            escaped = True
+        elif quote:
+            if character == quote:
+                quote = None
+        elif character in "\"'":
+            quote = character
+        elif character in ";&|\n\r":
+            return False
     try:
         tokens = shlex.split(command_prefix)
     except ValueError:
@@ -460,6 +473,25 @@ def test_detector_covers_shell_multiline_and_serialized_argv_forms() -> None:
     assert not bare_bd_violations(fixture, 'command = ["gc", "bd", "show"]')
     assert not bare_bd_violations(fixture, "gc --city /tmp/city bd list --json")
     assert not bare_bd_violations(fixture, "gc --rig demo bd show demo-1")
+    assert not bare_bd_violations(
+        fixture, 'row=$("$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" bd show "$CLAIMED_BEAD_ID" --json)'
+    )
+    for executable in ('gc', '"$GC_BIN"'):
+        assert not bare_bd_violations(
+            fixture, f'{executable} --city "/tmp/city;with&literal|punctuation" bd show item'
+        )
+        for separator in (";", "&&", "||", "|", "&", "\n"):
+            assert bare_bd_violations(
+                fixture, f'{executable} --city "$CITY_ROOT"{separator} bd show item'
+            )
+    for text in (
+        'row=$("$BD_BIN" --city "$CITY_ROOT" bd show item)',
+        'row=$("$OTHER_BIN" --city "$CITY_ROOT" bd show item)',
+        '"$GC_BIN"; bd show item',
+        '"$GC_BIN" --city bd show item',
+        '"$GC_BIN" --unknown value bd show item',
+    ):
+        assert bare_bd_violations(fixture, text), text
 
 
 def test_python_detector_distinguishes_routed_tails_from_executable_argv() -> None:

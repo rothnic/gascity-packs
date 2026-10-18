@@ -20,13 +20,18 @@ fall through to the legacy preparation below after a failure or missing input:
   deciding whether the run or source plan exists:
 
   ```sh
-  python3 "$PACK_ROOT/assets/scripts/workspace_entry.py" read \
+  WORKSPACE_ENTRY_JSON=$(python3 "$PACK_ROOT/assets/scripts/workspace_entry.py" read \
     --gc "$GC_BIN" --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" \
     --rig "$RIG_NAME" --workflow-root "$CLAIMED_ROOT_BEAD_ID" \
     --claimed-step "$CLAIMED_BEAD_ID" --worktree-lifecycle new \
-    --generation "$SOURCE_GENERATION" --require-plan
+    --generation "$SOURCE_GENERATION" --require-plan) || exit "$?"
+  export WORKSPACE_ENTRY_JSON
+  printf '%s\n' "$WORKSPACE_ENTRY_JSON"
   ```
 
+  Run both blocks in the same shell. Supply `ARTIFACT_ROOT` and
+  `WORKSPACE_EVIDENCE_DIR` as existing admitted directories outside the repository
+  and all worktrees. `CLAIMED_BEAD_ID` must be exported for the native-row check.
   Resolve `PACK_ROOT` from this installed prompt's pack. Keep the actual command,
   exit status and complete JSON output in the preparation evidence. A successful
   read returns `state=recorded`; it does not prepare a checkout. On refusal,
@@ -54,15 +59,37 @@ fall through to the legacy preparation below after a failure or missing input:
   required-check policy. Call the installed production helper:
 
   ```sh
+  CLAIMED_STEP_JSON=$("$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" bd show "$CLAIMED_BEAD_ID" --json) || exit "$?"
+  export CLAIMED_STEP_JSON
+  SOURCE_MEMBER_ID=$(python3 -c 'import json, os
+entry = json.loads(os.environ["WORKSPACE_ENTRY_JSON"])
+row = json.loads(os.environ["CLAIMED_STEP_JSON"])
+if isinstance(row, list):
+    assert len(row) == 1, "expected the one claimed preparation step"
+    row = row[0]
+assert row["id"] == os.environ["CLAIMED_BEAD_ID"], "claimed step changed"
+metadata = row["metadata"]
+member = entry.get("native_continuation", {}).get("member_id")
+cooked_member = metadata.get("gc.source_anchor_id", metadata.get("gc.drain_member_id", member or entry["workflow_root_id"]))
+assert member is None or member == cooked_member, "native source membership changed"
+print(cooked_member)') || exit "$?"
+  export SOURCE_MEMBER_ID
+  WORKSPACE_OWNER_ID=$(python3 -c 'import json, os
+entry = json.loads(os.environ["WORKSPACE_ENTRY_JSON"])
+owners = [node["owner_id"] for node in entry["source_plan"]["nodes"]
+          if os.environ["SOURCE_MEMBER_ID"] in node["member_ids"]]
+assert len(owners) == 1, "source member needs one declared workspace owner"
+print(owners[0])') || exit "$?"
   python3 "$PACK_ROOT/assets/scripts/workspace_dependency.py" \
-    --gc "$GC_BIN" --worktree-lifecycle new --city-root '<registered-city>' \
-    --rig-name '<registered-rig>' --store-ref '<exact-store-ref>' \
-    --workflow-root-id '<original-root-id>' \
-    --input-convoy-id '<native-input-convoy-from-entry>' --generation '<source-generation>' \
-    --workspace-owner-id '<declared-owner>' --member-id '<source-member>' \
-    --claimed-step-id '<current-preparation-step>' \
-    --artifact-root '<existing-artifact-directory-outside-worktrees>' \
-    --evidence-dir '<existing-evidence-directory-outside-worktrees>'
+    --gc "$GC_BIN" --worktree-lifecycle new --city-root "$CITY_ROOT" \
+    --rig-name "$(python3 -c 'import json, os; print(json.loads(os.environ["WORKSPACE_ENTRY_JSON"])["rig_name"])')" \
+    --store-ref "$(python3 -c 'import json, os; print(json.loads(os.environ["WORKSPACE_ENTRY_JSON"])["store_ref"])')" \
+    --workflow-root-id "$(python3 -c 'import json, os; print(json.loads(os.environ["WORKSPACE_ENTRY_JSON"])["workflow_root_id"])')" \
+    --input-convoy-id "$(python3 -c 'import json, os; e=json.loads(os.environ["WORKSPACE_ENTRY_JSON"]); print(e.get("native_input_convoy_id", e["input_convoy_id"]))')" \
+    --generation "$(python3 -c 'import json, os; print(json.loads(os.environ["WORKSPACE_ENTRY_JSON"])["generation"])')" \
+    --workspace-owner-id "$WORKSPACE_OWNER_ID" --member-id "$SOURCE_MEMBER_ID" \
+    --claimed-step-id "$CLAIMED_BEAD_ID" \
+    --artifact-root "$ARTIFACT_ROOT" --evidence-dir "$WORKSPACE_EVIDENCE_DIR"
   ```
 
   Run this command and retain its actual result before reporting preparation

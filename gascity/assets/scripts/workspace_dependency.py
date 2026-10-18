@@ -651,6 +651,8 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
     receipts = []
     if resume_decision is not None and workspace['native_provenance'] is None:
         with transition_locks(store.common_git_dir, scope, store.timeout):
+            require(frozen.metadata(workspace_owner_id, 'gc.workspace_output_ref') is MISSING,
+                    'workspace recovery conflicts with an existing owner output')
             workspace, receipt = _resume_preparation(frozen, attempt, workspace, bundle,
                 decision_path=resume_decision, artifact_root=artifacts, run=run, gc=gc, city_root=city_root,
                 evidence_dir=directory, parent=parent, allow_external_parent=allow_external_parent,
@@ -664,6 +666,8 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
         blocker_id = blocker_record_id
     elif resume_decision is not None:
         with transition_locks(store.common_git_dir, scope, store.timeout):
+            require(frozen.metadata(workspace_owner_id, 'gc.workspace_output_ref') is MISSING,
+                    'workspace recovery conflicts with an existing owner output')
             workspace, integration_evidence, receipts = _resume_integration(frozen, attempt, workspace, bundle,
                 decision_path=resume_decision, artifact_root=artifacts, run=run, gc=gc, city_root=city_root,
                 evidence_dir=directory, parent=parent, allow_external_parent=allow_external_parent,

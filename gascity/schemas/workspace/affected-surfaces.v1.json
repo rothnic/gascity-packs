@@ -92,12 +92,12 @@
     "gascity/formulas/do-work-item.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "df48e9601784ec0aa30c10bf9454b734e440723dc6240180e741c15cbfccc7d0"
+      "sha256": "d8566040963ec36f967f345edfdbfc53893b9cab2b25c771bc124b37a32a0530"
     },
     "gascity/formulas/do-work.formula.toml": {
       "classification": "new",
       "responsibility": "acceptance-review,accepted-result,checkpoint,implementation-flow,path-reader,source-close,source-writer,workspace-prepare",
-      "sha256": "4a5d186d1bb51085d06dc8134185a6c59dcf99ee0bffbb7839bb50b68ea77d45"
+      "sha256": "ae7d629bcc1b84d92b3964b5837c2923871eebc4a4827c7a2bb47d6565d301e7"
     },
     "gascity/formulas/fix-convoy.formula.toml": {
       "classification": "legacy",
@@ -407,12 +407,12 @@
     "gascity/assets/workflows/build-from-review-base/repair-review.md": {
       "classification": "new",
       "responsibility": "continuation,review",
-      "sha256": "7ee133e4b2f89961c28cbc88ce180b9d59e5baa56f09fd362a90d936b8a7a501"
+      "sha256": "cda20428cc90ceebbd6c63b3eba40586a6ccfc3299ac6ed2759a9b72fdc98590"
     },
     "gascity/assets/workflows/build-from-review-base/review.md": {
       "classification": "new",
       "responsibility": "continuation,review",
-      "sha256": "4e745a2d18442d4e3007ff4e957935386a7be24886176685325dcb6a5c87dbf8"
+      "sha256": "cffae0b415d2aa896c775f87fbd4ea87cdf19477ff6aaee0b63da130b7b01621"
     },
     "gascity/assets/workflows/code-review-base/validate-context.md": {
       "classification": "new",
@@ -457,7 +457,7 @@
     "gascity/assets/workflows/do-work/prepare-worktree.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,workspace-prepare",
-      "sha256": "1d61a2dd3af5550e2f3d891108ade1897b80d9ab66788d909376c82d2d539e6f"
+      "sha256": "72d317f0efe14e5c2a30c692a3b79d2b7b7887fcca1b21618726d5be6bdb6035"
     },
     "gascity/assets/workflows/do-work-item/implement-item.md": {
       "classification": "new",
@@ -507,7 +507,7 @@
     "gascity/assets/workflows/github-issue-fix-base/build.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "984a42212aab025543d61226c1fc57e8a427168c80b088805780ecb7e8b698a9"
+      "sha256": "6a9e0ee1deca5069da0c980489f9f413af557d8f0c1fece1784ed3c6003e8a53"
     },
     "gascity/assets/workflows/github-issue-fix-base/create-beads.md": {
       "classification": "reference",
@@ -2144,7 +2144,7 @@
     "gascity/assets/scripts/workspace_entry.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "5ea42263c0fc29fb8147e6799013aa94c888928fb471fb3db2721f27e4c89550"
+      "sha256": "284883262f7a9c8e15160d7f722741c1e4efadcb03afe1528bfe4aadcc078a44"
     },
     "gascity/assets/scripts/workspace_flow.py": {
       "classification": "new",
@@ -2209,7 +2209,7 @@
     "gascity/assets/scripts/workspace_dependency.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "1da4f74bc8430cf27001aae73f7ab063573b06d518c9ea32272877f93cd2984b"
+      "sha256": "754d4437625eb36964dd098d0ec3085ce7f00d8cdef4462c43f1c15a35c36fe9"
     },
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",
@@ -2229,7 +2229,7 @@
     "gascity/assets/scripts/workspace_suffix.py": {
       "classification": "new",
       "responsibility": "native standalone suffix source and original-run continuation admission",
-      "sha256": "ec37a1c662fb471a20ae7746e796b6d8c287aeef0b4e8def0c149fea3267cabe"
+      "sha256": "2658ab97521621911818b7108dd63f8f03f78c4056c18a5bd577ea0a81447613"
     },
     "gascity/assets/scripts/validate_plan_review.py": {
       "classification": "new",

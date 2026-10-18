@@ -174,6 +174,90 @@ class EntryTests(unittest.TestCase):
         })
         self.rows["step-1"]["metadata"].update({"gc.root_bead_id": "child-1", "gc.step_ref": "do-work.prepare-worktree"})
 
+    def native_snapshot_store(self):
+        """Cross the actual subprocess boundary with a synthetic native command port."""
+        from workspace_store import WorkspaceStore
+        source = self.root / "native-rows.json"
+        source.write_bytes(canonical_bytes(self.rows))
+        native = self.root / "native-gc"
+        native.write_text("#!" + sys.executable + "\n"
+            "import json,os,sys\nfrom pathlib import Path\n"
+            "root=Path(__file__).parent\nargs=sys.argv[1:]\n"
+            "assert args[:4]==['--city='+str(root),'beads','guarded-metadata-batch','--store-ref=rig:example']\n"
+            "assert len(args)==6 and args[4].startswith('--snapshot=') and args[5]=='--json'\n"
+            "ids=args[4].partition('=')[2].split(',')\n"
+            "assert 1<=len(ids)<=100 and len(set(ids))==len(ids)\n"
+            "rows=json.loads((root/'native-rows.json').read_text())\n"
+            "response=dict(schema_version='1',ok=True,store_ref='rig:example',rows=[rows[key] for key in ids])\n"
+            "with (root/'native-reads.jsonl').open('a') as log:\n"
+            " log.write(json.dumps(dict(pid=os.getpid(),argv=sys.argv,ids=ids,response=response))+'\\n')\n"
+            "print(json.dumps(response))\n")
+        native.chmod(0o700)
+        store = WorkspaceStore("rig:example", gc=str(native), cwd=self.root,
+            common_git_dir=self.repo / ".git")
+        return store, source, self.root / "native-reads.jsonl"
+
+    def test_native_continuation_batches_boundary_reads_without_changing_binding(self):
+        self.drain_child()
+        before = copy.deepcopy(self.rows)
+        store, source, log = self.native_snapshot_store()
+        continuation, observed = entry.read_native_continuation(store, claimed_step_id="step-1",
+            requested_root_id="child-1")
+        plan_ref = json.loads(self.rows["plan-owner"]["metadata"][entry.PLAN_REF])
+        policy = json.loads(self.rows["record-1"]["metadata"][run.CHECKS_POLICY_KEY])
+        self.assertEqual(continuation.binding, dict(version=1, workflow_root_id="root-1",
+            store_ref="rig:example", generation=1, child_root_id="child-1", unit_convoy_id="unit-1",
+            implementation_convoy_id="implementation-1", drain_control_id="control-1", member_id="member-1",
+            run_ref=self.reference, source_plan_ref=plan_ref, run_sha256=record_sha256(self.record),
+            source_plan_sha256=record_sha256(self.plan), check_policy_sha256=record_sha256(policy)))
+        expected = {key: before[key] for key in ("step-1", "child-1", "unit-1", "control-1", "root-1",
+            "implementation-1", "member-1", "plan-owner", "record-1", "plan-record")}
+        self.assertEqual(observed, expected)
+        calls = [json.loads(line) for line in log.read_text().splitlines()]
+        self.assertEqual({row["id"]: row for call in calls for row in call["response"]["rows"]}, expected)
+        self.assertEqual(self.rows, before)
+        self.assertEqual(json.loads(source.read_text()), before)
+        # Count actual process-boundary launches, without prescribing a batch partition.
+        self.assertLess(len(calls), len(expected))
+        self.assertEqual(sum(len(call["ids"]) for call in calls), len(expected))
+
+    def test_native_continuation_later_admission_rereads_and_rejects_changed_authority(self):
+        self.drain_child()
+        store, source, log = self.native_snapshot_store()
+        fence = runtime._ReadFence(store)
+        _, original = entry.read_native_continuation(fence, claimed_step_id="step-1", requested_root_id="child-1")
+        for bead_id, field, value in (("step-1", "revision", "2"), ("step-1", "status", "closed"),
+                ("step-1", "assignee", "replacement-worker"), ("member-1", "revision", "2"),
+                ("record-1", "revision", "2")):
+            with self.subTest(bead_id=bead_id, field=field):
+                changed = copy.deepcopy(self.rows)
+                changed[bead_id][field] = value
+                source.write_bytes(canonical_bytes(changed))
+                previous = len(log.read_text().splitlines())
+                with self.assertRaisesRegex(entry.RecordError, "cooked context changed after its original snapshot"):
+                    entry.read_native_continuation(fence, claimed_step_id="step-1", requested_root_id="child-1")
+                calls = [json.loads(line) for line in log.read_text().splitlines()[previous:]]
+                self.assertIn(bead_id, {key for call in calls for key in call["ids"]})
+                self.assertEqual(fence.original_rows, original)
+        source.write_bytes(canonical_bytes(self.rows))
+
+    def test_native_continuation_boundary_refuses_changed_relationship_health_and_policy(self):
+        self.drain_child()
+        store, source, _ = self.native_snapshot_store()
+        for bead_id, key, value in (("unit-1", "gc.drain_member_id", "wrong-member"),
+                ("control-1", "gc.root_store_ref", "rig:other"),
+                ("member-1", "gc.source_generation", "2"),
+                ("plan-owner", "gc.outcome", "fail"),
+                ("plan-owner", entry.PLAN_REF, "{}"),
+                ("record-1", run.CHECKS_POLICY_KEY, "{}")):
+            with self.subTest(bead_id=bead_id, key=key):
+                changed = copy.deepcopy(self.rows)
+                changed[bead_id]["metadata"][key] = value
+                source.write_bytes(canonical_bytes(changed))
+                with self.assertRaises(entry.RecordError):
+                    entry.read_native_continuation(store, claimed_step_id="step-1", requested_root_id="child-1")
+        source.write_bytes(canonical_bytes(self.rows))
+
     def test_native_drain_child_inherits_original_run_plan_policy_and_preserves_physical_root(self):
         self.drain_child()
         (self.repo / "file").write_text("moving default after original capture\n")

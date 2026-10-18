@@ -1,6 +1,8 @@
 description = """
 Single-lane item implementation formula used only inside core shared drain.
 
+New-mode preparation uses the same entry/dependency recipe and declared source member as do-work.
+
 Launch inputs:
 - input_convoy: {{convoy_id}}
 - context_path: {{context_path}} (empty means no extra context bundle)

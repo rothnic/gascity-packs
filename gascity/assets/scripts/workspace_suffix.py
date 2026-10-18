@@ -341,10 +341,12 @@ def validate(continuation, rows, *, store_ref, workflow_root_id, claimed_step_id
     return data
 
 
-def read(store, *, claimed_step_id, requested_root_id=None, recorded_root_id=None):
+def read(store, *, claimed_step_id, requested_root_id=None, recorded_root_id=None, observed_rows=None):
     from workspace_entry import healthy, native_root, reference
     from workspace_store import CONTINUATION_KEY, NativeRunContinuation, require
-    rows = {}
+    require(observed_rows is None or isinstance(observed_rows, dict) and not observed_rows,
+            'suffix observations must start empty')
+    rows = {} if observed_rows is None else observed_rows
     def get(bead_id):
         require(isinstance(bead_id, str) and bead_id and bead_id == bead_id.strip(), 'suffix has no exact native relationship ID')
         if bead_id not in rows: rows.update(store.snapshot([bead_id]))

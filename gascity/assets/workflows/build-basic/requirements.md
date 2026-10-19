@@ -1,7 +1,10 @@
 Use the built-in Gas City guided starter factory requirements flow.
 
 Read the complete original request and context before drafting. Resolve inputs
-for this claimed stage through the [workspace entry contract](../workspace-entry.md):
+for this claimed stage through the [workspace entry contract](../workspace-entry.md).
+Resolve that link from this prompt file's directory: the contract is
+`assets/workflows/workspace-entry.md` in the same imported pack, outside
+`build-basic/`.
 
 - **Native request:** Read the claimed step and workflow root in the selected
   native store. Follow the recorded original input and source pins. A task launch
@@ -11,8 +14,9 @@ for this claimed stage through the [workspace entry contract](../workspace-entry
 - **Context:** Read the complete target description and the root's
   `gc.var.context_path` bundle when supplied. Read each declared request and
   behavior input in full. Compare any materialized request with its original
-  native source. Use the recorded paths rather than guesses from the working
-  directory or an earlier workflow.
+  native source. Read the complete `gc.var.context_path` value exactly as
+  returned by the native root readback, including every directory. Copy that
+  value unchanged into the file read; do not shorten or reconstruct its path.
 - **Scope:** Preserve the full intended behavior, source/dependency topology,
   ordering, constraints and acceptance criteria. Trace the original source and
   file inputs with the upstream path/hash format below. Account for the complete

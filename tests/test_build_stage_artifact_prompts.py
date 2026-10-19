@@ -56,9 +56,12 @@ REVIEW_BUILDS = (
 
 # Shared by every checked `{target}` prompt: validate before passing, and on a
 # repair attempt start from the validator errors.
+CLAIMED_CHECK_COMMAND = 'gc_bead_id=<claimed-step-id> gc_rig_root="$gc_rig_root" "<gc.check_path>"'
+CONTROL_CHECK_COMMAND = 'gc_bead_id=<control-bead-id> gc_rig_root=<launcher-rig-root> "<gc.check_path>"'
+
 VALIDATION_FRAGMENTS = (
     "on the workflow root bead, not on the claimed step bead",
-    'gc_bead_id=<claimed-step-id> gc_rig_root="$gc_rig_root" "<gc.check_path>"',
+    CLAIMED_CHECK_COMMAND,
     "fix any error before setting `gc.outcome=pass`",
     "read the validator errors from `gc.attempt_log` on the validation loop control bead",
 )
@@ -86,7 +89,7 @@ REQUIREMENTS_TARGET_FRAGMENTS = (
     "read the validator errors from `gc.attempt_log` on the validation loop control bead",
     "repair the requirements artifact in place",
     "build artifact must start with yaml front matter",
-    'gc_bead_id=<claimed-step-id> gc_rig_root="$gc_rig_root" "<gc.check_path>"',
+    CLAIMED_CHECK_COMMAND,
     "approval metadata alone does not satisfy it",
 )
 
@@ -203,8 +206,12 @@ class ReviewReportPathContractTests(unittest.TestCase):
             exp_path, _, _, target = expansion_target(pack, build, "review")
             text = prompt_text(exp_path, target)
             for fragment in REVIEW_TARGET_FRAGMENTS:
+                if pack == "superpowers" and fragment == CLAIMED_CHECK_COMMAND:
+                    fragment = CONTROL_CHECK_COMMAND
                 with self.subTest(pack=pack, fragment=fragment):
                     self.assertIn(normalize(fragment), text)
+            if pack == "superpowers":
+                self.assertNotIn(CLAIMED_CHECK_COMMAND, text)
 
     def test_review_stage_overrides_keep_the_build_base_contract(self) -> None:
         for pack, build in REVIEW_BUILDS:
@@ -248,8 +255,11 @@ class SuperpowersRequirementsContractTests(unittest.TestCase):
     def test_requirements_target_repairs_from_validator_errors(self) -> None:
         text = prompt_text(self.exp_path, self.target)
         for fragment in REQUIREMENTS_TARGET_FRAGMENTS:
+            if fragment == CLAIMED_CHECK_COMMAND:
+                fragment = CONTROL_CHECK_COMMAND
             with self.subTest(fragment=fragment):
                 self.assertIn(normalize(fragment), text)
+        self.assertNotIn(CLAIMED_CHECK_COMMAND, text)
 
     def test_requirements_writer_states_the_front_matter_contract(self) -> None:
         text = prompt_text(self.exp_path, self.child_step("write-requirements-spec"))
@@ -330,11 +340,28 @@ class ApplyFindingsFrontMatterTests(unittest.TestCase):
             build_path, build_data = load_formula(pack, build)
             exp_path, exp_data = load_formula(pack, find_step(build_data, stage, "steps")["expand"])
             text = prompt_text(exp_path, find_step(exp_data, f"{{target}}.{lane}", "template"))
-            for fragment in (
-                "resolve `validator_path` from the same imported gas city pack as the native loop's `gc.check_path`",
-                "require that resolved validator and its pack schemas to exist",
-                "never copy a validator into the rig or select one from a source checkout",
-            ):
+            if pack == "superpowers":
+                # Direct edits validate against the canonical imported gc pack,
+                # independently of a permitted winning override of gc.check_path.
+                resolver_fragments = (
+                    "resolve `<gc-scripts-dir>` as the canonical imported `gc` pack's `assets/scripts` directory through native formula provenance",
+                    "keep the validator beside that pack's schemas",
+                    "[workspace entry contract](../../../../gascity/assets/workflows/workspace-entry.md)",
+                )
+                validator_command = 'python3 "<gc-scripts-dir>/validate_build_artifact.py"'
+                self.assertNotIn(".gc/scripts", text)
+                self.assertNotIn(
+                    "resolve `validator_path` from the same imported gas city pack as the native loop's `gc.check_path`",
+                    text,
+                )
+            else:
+                resolver_fragments = (
+                    "resolve `validator_path` from the same imported gas city pack as the native loop's `gc.check_path`",
+                    "require that resolved validator and its pack schemas to exist",
+                    "never copy a validator into the rig or select one from a source checkout",
+                )
+                validator_command = 'python3 "$validator_path"'
+            for fragment in resolver_fragments:
                 with self.subTest(pack=pack, lane=lane, fragment=fragment):
                     self.assertIn(normalize(fragment), text)
             if stage == "review":
@@ -357,7 +384,7 @@ class ApplyFindingsFrontMatterTests(unittest.TestCase):
             for artifact in artifacts:
                 schema_id = f"gc.build.{artifact}.v1"
                 with self.subTest(pack=pack, lane=lane, schema=schema_id):
-                    self.assertIn(f'python3 "$validator_path" --schema {schema_id} --path', text)
+                    self.assertIn(f'{validator_command} --schema {schema_id} --path', text)
                 with self.subTest(pack=pack, lane=lane, schema=schema_id, check="allowed statuses"):
                     if stage == "review":
                         sentence = re.search(rf"{re.escape(artifact)} status is (.*?)[;.]", text)

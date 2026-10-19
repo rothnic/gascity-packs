@@ -25,6 +25,8 @@ conflicting rows, revisions, hashes and changed JSON paths without refreshing th
 Controller-created retry attempts and Ralph iterations join their exact original
 compiled seed and frozen native specification. Earlier attempts remain read-only
 history; only the current claimed occurrence can publish records.
+Native child steps inherit source membership through the validated continuation;
+conflicting membership on an individual step still refuses admission.
 See the [workspace access contract](schemas/workspace/access.md#bind-the-writer)
 for the read and transaction limits.
 
@@ -430,6 +432,9 @@ checks do not establish native worker execution or installation acceptance.
   and [qualified outputs](assets/scripts/workspace_outputs.md).
 - **Source and behavior checks:** [closed inventory](schemas/workspace/discovery.md)
   and [acceptance fixture](tests/fixtures/workspace-acceptance/README.md).
+- **Imported helpers:** [workspace entry contract](assets/workflows/workspace-entry.md).
+  Use `gc gc workspace` for lifecycle helpers and native `gc.check_path` for gates,
+  keeping helpers with their pack schemas.
 
 The city-scoped command `gc gc workspace` exposes the entry, dependency,
 checkout, runtime and flow helpers from the installed pack. Native qualifiers

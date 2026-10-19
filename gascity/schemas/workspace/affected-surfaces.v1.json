@@ -1152,7 +1152,7 @@
     "superpowers/assets/workflows/superpowers-brainstorming/{target}.apply-spec-feedback.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "a317220a9764450fd0415d87190bf65ed06081aedfe08f4b75cf0e63ca438a3f"
+      "sha256": "c0881020a8895604409fbe6747858a98371758ca40fd9d32cfbe85ea9113d4a8"
     },
     "superpowers/assets/workflows/superpowers-brainstorming/{target}.brainstorm-design.md": {
       "classification": "reference",
@@ -1167,12 +1167,12 @@
     "superpowers/assets/workflows/superpowers-brainstorming/{target}.confirm-spec-approval.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "6aef36062c3d6ba10ad94553e34d9533cebfa64d1119f494ac598ec8c70182ae"
+      "sha256": "a6f79909ca117a841c5be927eec2e67ecb644231c11ab5efbd10229058adc98a"
     },
     "superpowers/assets/workflows/superpowers-brainstorming/{target}.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "1f173c58e92b792b1709471fa85e9b9219c2c1c41cd52ab18f59ceb72c76fb73"
+      "sha256": "a84a60c71a7cd964c50768c5d4b5a0e1e923010249ee18a6b3573cfc82ccaaea"
     },
     "superpowers/assets/workflows/superpowers-brainstorming/{target}.review-written-spec.md": {
       "classification": "reference",
@@ -1182,7 +1182,7 @@
     "superpowers/assets/workflows/superpowers-brainstorming/{target}.setup-superpowers-brainstorming.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "9fc7ea4edd9a8486dfa6ad77c4345dca00b693d56f1a6b25c2bc01f6ddc2bea2"
+      "sha256": "31f006d853d92966ea642a7950bb1b90839b9f518c6a06853f46ac0fa968f39c"
     },
     "superpowers/assets/workflows/superpowers-brainstorming/{target}.superpowers-design-approval-loop.md": {
       "classification": "reference",
@@ -1202,12 +1202,12 @@
     "superpowers/assets/workflows/superpowers-build/decompose.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "28fff9e19ebd7909110be2a7542d94ceba499d53e14884299b401d2731de3a15"
+      "sha256": "af4b93815691afccf1984df7b2ddcf755e8d780cdb0143c3b19c9e69faa3006c"
     },
     "superpowers/assets/workflows/superpowers-build/finalize.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "70ead9f99fa61db991375c1611918ffa33d374d8226790690f7ca1652cf29ae6"
+      "sha256": "08e089c1138e9604c4b6f05ca341b845b74922d640cbf827765a63929ba2b47a"
     },
     "superpowers/assets/workflows/superpowers-build/implement-same-session.md": {
       "classification": "new",
@@ -1227,17 +1227,17 @@
     "superpowers/assets/workflows/superpowers-build/plan.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "8a0eeb2b504fdf21f213b21f979e20e0485aa7fb0b81d70c7745d3abe5972846"
+      "sha256": "51208888f23873ec58961ea505bdc76b5c74e9446ecc9771127a28c2dd0f795e"
     },
     "superpowers/assets/workflows/superpowers-build/requirements.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "4f998d9e0b7c78d95ee9280c52d5addbb31c78fc8717986d0dee2f15140b67c5"
+      "sha256": "0ed185210c250af65cf68c2414e0a856d83f4029f595d4fd0dcd8ccfd62fae2d"
     },
     "superpowers/assets/workflows/superpowers-build/review.md": {
       "classification": "new",
       "responsibility": "review-delegator",
-      "sha256": "c76db4250738c370117939f196849cf61083faaf1cb5d86c58f3c86715ce4a17"
+      "sha256": "6006f3b99d4a9765db2f4c550836f41d17920c7004a7b4258e337a8f1f89f552"
     },
     "superpowers/assets/workflows/superpowers-code-review/{target}.gap-analysis-review.md": {
       "classification": "new",
@@ -1247,7 +1247,7 @@
     "superpowers/assets/workflows/superpowers-code-review/{target}.md": {
       "classification": "new",
       "responsibility": "review",
-      "sha256": "485fc861116b33bb2de1b3d955dec857edc87f09564aa92235f075400b904bea"
+      "sha256": "70823f1ee7f431dc41a9eac5da85cc82856a44980250936e1f0b0b654892f17d"
     },
     "superpowers/assets/workflows/superpowers-code-review/{target}.process-code-review.md": {
       "classification": "new",
@@ -1272,7 +1272,7 @@
     "superpowers/assets/workflows/superpowers-decomposition/decompose.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "6c31cc04c9b8b08b6d4b0b2c721d87563b3ebfed930f44a2b13214b3de645e26"
+      "sha256": "6790081ca2cc890eaa0c9a7892d0d1eb8b5f4a7c969e7bbb672826fd2020a3aa"
     },
     "superpowers/assets/workflows/superpowers-development/close-source-anchor.md": {
       "classification": "new",
@@ -1287,12 +1287,12 @@
     "superpowers/assets/workflows/superpowers-development/implement-item.md": {
       "classification": "new",
       "responsibility": "implementation-flow",
-      "sha256": "f7ccc3a35ea54c5914a2ae681f937480c31f67d7ca67fc323ee96faceac64037"
+      "sha256": "4b21e91105f7917246848ab3d4631f00d7cc2680858318041c8356c040887da0"
     },
     "superpowers/assets/workflows/superpowers-development/implement.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader",
-      "sha256": "e6e30d0bc71cfcbefaa17faafd2c5f83614b976b082e4724fcfa1b00d694d86e"
+      "sha256": "ecca7759144c4d181089ed1cc2a54fd3d8d80571e4d1953d08601d6c876cb43b"
     },
     "superpowers/assets/workflows/superpowers-development/record-item-result.md": {
       "classification": "new",
@@ -1332,7 +1332,7 @@
     "superpowers/assets/workflows/superpowers-plan-review/{target}.apply-plan-feedback.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "627126f12f3574b814eb40ef7f13a9b8019999ee75c7f76e9bf6a970a663731e"
+      "sha256": "bb6787114e6ca651a3bb67399eb8cb254cae12f4d08ef9dab8b977f313f5c08a"
     },
     "superpowers/assets/workflows/superpowers-plan-review/{target}.md": {
       "classification": "reference",
@@ -1347,7 +1347,7 @@
     "superpowers/assets/workflows/superpowers-plan-review/{target}.setup-superpowers-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "adb4ed4afbea185f2b9a975b9ecbbc63fc329794434d12c6eeaa3c7b74d9a8d1"
+      "sha256": "6aa48e30854c7a4dd4d02637841ed10ab4a06ed8cfa8ca4d13baea247b6d63f0"
     },
     "superpowers/assets/workflows/superpowers-plan-review/{target}.superpowers-plan-review-loop.md": {
       "classification": "reference",
@@ -1362,17 +1362,17 @@
     "superpowers/assets/workflows/superpowers-planning/plan.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "756ef54165e061aa7b9c7226393fbd6cd61f4ad042d6e96fcf5a608949cee295"
+      "sha256": "567ca1374e170e0d8b60a11ad0ed883dbba5f227e85f0d1e38f4c27e76c362d5"
     },
     "superpowers/assets/workflows/superpowers-planning/requirements.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "d17f1b526f88a07ddec8661573aa826bdfcd404ece686c01427ab6aaa5f242b8"
+      "sha256": "12380e652def0ea9b07701193cb286ec4ed4867cfd70c816fc19f821da97a7d5"
     },
     "superpowers/assets/workflows/superpowers-review/write-report.md": {
       "classification": "new",
       "responsibility": "review,review-delegator",
-      "sha256": "43af3fe3f75699163c48cc89532be9226e0997f2457f76213fc082857dd889a9"
+      "sha256": "a50a5fbfecd622886105fc7c5a87cec78c43c366db72b55bbe03eb1819ac6cd6"
     },
     "superpowers/assets/workflows/superpowers-task-review/{target}.apply-code-quality-findings.md": {
       "classification": "new",
@@ -1982,7 +1982,7 @@
     "gascity/assets/workflows/workspace-entry.md": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "0a608f6b1ee197f21360464c4faaa8b376c3020f2573a7c4637e678bbf111e99"
+      "sha256": "4428c2b7700f30bc0c6922bcaa0dccef3b479c85a31dc6452f50daf51254d71c"
     },
     "gascity/assets/workflows/workspace-publication.md": {
       "classification": "new",
@@ -2214,7 +2214,7 @@
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",
       "responsibility": "native claim/session and exact-commit project check, review and accepted-output qualification",
-      "sha256": "829a6e31be455a97670920153af572b8b2922cb7804f5c5735a07d00413c060d"
+      "sha256": "ac03946a383d5c1418b19964393096c7344a17e1a51b2feb0159dd85d163a2a3"
     },
     "gascity/assets/scripts/workspace_requests.py": {
       "classification": "new",

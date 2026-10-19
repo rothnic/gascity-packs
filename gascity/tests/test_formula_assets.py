@@ -3378,7 +3378,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertIn("waiting-human", spec_approval)
         self.assertIn("silence", spec_approval)
         self.assertIn("spec revision summary", spec_approval)
-        self.assertIn("Do not run the imported pack-owned `design-review-approved.sh`", spec_approval)
+        self.assertIn("Do not run the design-approval control's recorded `gc.check_path`", spec_approval)
         self.assertIn("Do not use\n`gc bd update --metadata`", spec_approval)
         self.assertIn("--metadata-field gc.step_id=requirements.review-written-spec", spec_approval)
         self.assertIn("--metadata-field gc.step_id=requirements.apply-spec-feedback", spec_approval)

@@ -25,6 +25,8 @@ conflicting rows, revisions, hashes and changed JSON paths without refreshing th
 Controller-created retry attempts and Ralph iterations join their exact original
 compiled seed and frozen native specification. Earlier attempts remain read-only
 history; only the current claimed occurrence can publish records.
+Native child steps inherit source membership through the validated continuation;
+conflicting membership on an individual step still refuses admission.
 See the [workspace access contract](schemas/workspace/access.md#bind-the-writer)
 for the read and transaction limits.
 

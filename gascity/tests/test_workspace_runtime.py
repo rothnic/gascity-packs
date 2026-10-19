@@ -294,8 +294,9 @@ class NativeRuntimeTests(unittest.TestCase):
             "gc.input_convoy_id": unit, "gc.drain_control_id": control, "gc.drain_member_id": member})
         self.rows[expansion]["metadata"]["gc.root_bead_id"] = child
         for role in roles:
-            self.rows[role]["metadata"].update({"gc.root_bead_id": child,
-                "gc.source_anchor_id": member, "gc.drain_member_id": member})
+            self.rows[role]["metadata"]["gc.root_bead_id"] = child
+            self.rows[role]["metadata"].pop("gc.source_anchor_id", None)
+            self.rows[role]["metadata"].pop("gc.drain_member_id", None)
             raw = self.rows[role]["metadata"].get("gc.worktree_ref")
             if raw:
                 ref = json.loads(raw)
@@ -363,6 +364,9 @@ class NativeRuntimeTests(unittest.TestCase):
 
     def test_native_child_initial_workspace_and_real_acceptance_pipeline(self):
         self.publish_child_workspace()
+        for role in self.attempts:
+            self.assertNotIn("gc.source_anchor_id", self.rows[role]["metadata"])
+            self.assertNotIn("gc.drain_member_id", self.rows[role]["metadata"])
         result = self.run_acceptance_pipeline()
         from workspace_flow import WorkspaceFlow
         flow = WorkspaceFlow(self.adapter())
@@ -371,6 +375,38 @@ class NativeRuntimeTests(unittest.TestCase):
         self.assertEqual(replay["result"], result)
         self.assertEqual(replay["checkpoint"]["outcome"], "replayed")
         self.assertEqual(flow.runtime.writer_map.continuation.binding["child_root_id"], "child")
+
+    def test_native_child_conflicting_membership_or_continuation_refuses_before_publication(self):
+        from workspace_flow import WorkspaceFlow
+        self.publish_child_workspace()
+        self.select_role("recorder")
+        rows, sessions = copy.deepcopy(self.rows), copy.deepcopy(self.sessions)
+        cases = [(role, key) for role in self.attempts
+                 for key in ("gc.source_anchor_id", "gc.drain_member_id")]
+        cases.append(("child", CONTINUATION_KEY))
+        state_path = self.root / "port.json"
+        command_log = state_path.with_suffix(".commands")
+        for row_id, key in cases:
+            with self.subTest(row_id=row_id, key=key):
+                self.rows, self.sessions = copy.deepcopy(rows), copy.deepcopy(sessions)
+                if key == CONTINUATION_KEY:
+                    changed = json.loads(self.rows[row_id]["metadata"][key])
+                    changed["member_id"] = "foreign-member"
+                    self.rows[row_id]["metadata"][key] = canonical_bytes(changed).decode()
+                else:
+                    self.rows[row_id]["metadata"][key] = "foreign-member"
+                self.save()
+                before = state_path.read_bytes()
+                mark = len(command_log.read_text().splitlines())
+                with self.assertRaises(RecordError):
+                    flow = WorkspaceFlow(self.adapter())
+                    flow.record_result("member", "member", self.oid, self.result["acceptance"]["project_checks"],
+                        self.result["acceptance"]["independent_review"], self.result["acceptance"]["artifacts"])
+                commands = [json.loads(line) for line in command_log.read_text().splitlines()[mark:]]
+                self.assertFalse(any("guarded-metadata-batch" in args
+                                     and any(arg.startswith("--request") for arg in args) for args in commands))
+                self.assertFalse(any("create" in args for args in commands))
+                self.assertEqual(state_path.read_bytes(), before)
 
     def next_child_workspace(self, result):
         """Advance the actual writer grant and native owner through declared adjacency."""
@@ -906,6 +942,12 @@ class NativeRuntimeTests(unittest.TestCase):
         return result, output
 
     def test_actual_accepted_predecessors_integrate_with_native_owner_verification(self):
+        self.assert_accepted_predecessors_integrate()
+
+    def test_native_child_accepted_predecessors_integrate_without_step_local_membership(self):
+        self.assert_accepted_predecessors_integrate(inherited=True)
+
+    def assert_accepted_predecessors_integrate(self, *, inherited=False):
         from workspace_inputs import materialize_integration, resolve_member_input
         self.plan["nodes"] = [dict(owner_id=owner, strategy="isolated", member_ids=[owner],
             source_predecessor_owner_ids=[], single_lane=False) for owner in ("a", "b")] + [
@@ -926,6 +968,10 @@ class NativeRuntimeTests(unittest.TestCase):
         self.git(self.repo, "config", "user.name", "Fixture")
         self.git(self.repo, "config", "user.email", "fixture@example.invalid")
         self.save()
+        if inherited:
+            self.native_child()
+            self.rows["workspace-record"]["metadata"]["gc.root_bead_id"] = "child"
+            self.save()
         adapter = self.adapter()
         bundle = resolve_member_input(self.plan, "member", "member", load_owner_output=lambda owner: adapter._record("owner-output", owner),
             load_member_result=lambda member: adapter._record("member-result", member), qualify_native=adapter.qualify_native,

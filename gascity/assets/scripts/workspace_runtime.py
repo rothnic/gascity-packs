@@ -498,10 +498,10 @@ class NativeSourceRuntime:
                 "result is outside the currently selected native source generation")
         context, historical, current_head = self._result_context(result)
         binding = context["binding"]
-        roles, _ = self._roles(result["writer_step_id"])
+        roles, writer_map = self._roles(result["writer_step_id"])
         identities = self._identities(roles)
         producer = self._fence.rows[roles["producer"]["bead_id"]]
-        require(producer["metadata"].get("gc.source_anchor_id", producer["metadata"].get("gc.drain_member_id")) == result["member_id"],
+        require(writer_map.declaration["source_member_id"] == result["member_id"],
                 "native producer occurrence belongs to another source member")
         raw = producer["metadata"].get("gc.worktree_ref")
         expected_ref = {"version": 1, "binding_step_id": producer["id"],
@@ -629,9 +629,9 @@ class NativeSourceRuntime:
         workspace = self._bound_workspace
         require(workspace is not None, "integration requires the bound provisioned workspace")
         _, attempt = self._admitted()
-        metadata = self._fence.rows[self.claimed_step_id]["metadata"]
+        writer_map, _ = self._writer_map(self.claimed_step_id)
         require(workspace["writer_step_id"] == self.claimed_step_id and workspace["writer_attempt_id"] == attempt.writer_attempt_id
-                and metadata.get("gc.source_anchor_id", metadata.get("gc.drain_member_id")) == workspace["active_member_id"],
+                and writer_map.declaration["source_member_id"] == workspace["active_member_id"],
                 "integration owner differs from the actual retained member writer attempt")
         require(bundle.get("strategy") == workspace["strategy"] == "integration"
                 and all(bundle.get(key) == workspace[key] for key in ("workflow_root_id", "generation", "workspace_owner_id"))

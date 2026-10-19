@@ -10,6 +10,9 @@ the child, drain control, unit convoy and source member against the original
 run, source plan and check policy. Lifecycle records retain the logical original
 root. Native workspace owners and launch references use the physical child root
 and the exact physical cooked step.
+Result qualification and integration use the cooked writer map's validated
+source member. Child steps need not repeat source membership fields; conflicting
+step-local fields or a changed continuation refuse acceptance.
 
 The run writer captures `gc.var.worktree_checks` once with the initial run:
 

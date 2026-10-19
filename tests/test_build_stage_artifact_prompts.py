@@ -56,9 +56,12 @@ REVIEW_BUILDS = (
 
 # Shared by every checked `{target}` prompt: validate before passing, and on a
 # repair attempt start from the validator errors.
+LEGACY_CHECK_COMMAND = f"gc_bead_id=<claimed-step-id> .gc/scripts/checks/{CHECK_SCRIPT}"
+CONTROL_CHECK_COMMAND = 'gc_bead_id=<control-bead-id> gc_rig_root=<launcher-rig-root> "<gc.check_path>"'
+
 VALIDATION_FRAGMENTS = (
     "on the workflow root bead, not on the claimed step bead",
-    f"gc_bead_id=<claimed-step-id> .gc/scripts/checks/{CHECK_SCRIPT}",
+    LEGACY_CHECK_COMMAND,
     "fix any error before setting `gc.outcome=pass`",
     "read the validator errors from `gc.attempt_log` on the validation loop control bead",
 )
@@ -86,7 +89,7 @@ REQUIREMENTS_TARGET_FRAGMENTS = (
     "read the validator errors from `gc.attempt_log` on the validation loop control bead",
     "repair the requirements artifact in place",
     "build artifact must start with yaml front matter",
-    f"gc_bead_id=<claimed-step-id> .gc/scripts/checks/{CHECK_SCRIPT}",
+    CONTROL_CHECK_COMMAND,
     "approval metadata alone does not satisfy it",
 )
 
@@ -203,8 +206,12 @@ class ReviewReportPathContractTests(unittest.TestCase):
             exp_path, _, _, target = expansion_target(pack, build, "review")
             text = prompt_text(exp_path, target)
             for fragment in REVIEW_TARGET_FRAGMENTS:
+                if pack == "superpowers" and fragment == LEGACY_CHECK_COMMAND:
+                    fragment = CONTROL_CHECK_COMMAND
                 with self.subTest(pack=pack, fragment=fragment):
                     self.assertIn(normalize(fragment), text)
+            if pack == "superpowers":
+                self.assertNotIn(LEGACY_CHECK_COMMAND, text)
 
     def test_review_stage_overrides_keep_the_build_base_contract(self) -> None:
         for pack, build in REVIEW_BUILDS:
@@ -250,6 +257,7 @@ class SuperpowersRequirementsContractTests(unittest.TestCase):
         for fragment in REQUIREMENTS_TARGET_FRAGMENTS:
             with self.subTest(fragment=fragment):
                 self.assertIn(normalize(fragment), text)
+        self.assertNotIn(LEGACY_CHECK_COMMAND, text)
 
     def test_requirements_writer_states_the_front_matter_contract(self) -> None:
         text = prompt_text(self.exp_path, self.child_step("write-requirements-spec"))
@@ -319,8 +327,7 @@ def status_sentence(artifact: str) -> str:
 class ApplyFindingsFrontMatterTests(unittest.TestCase):
 
     def test_validator_ships_beside_the_check_script(self) -> None:
-        # Prompts call `.gc/scripts/validate_build_artifact.py`; the check lives
-        # at `.gc/scripts/checks/build-artifact-valid.sh`, both from gascity/assets/scripts.
+        # Imported checks and legacy launcher copies use the same shipped validator.
         scripts = REPO_ROOT / "gascity" / "assets" / "scripts"
         self.assertTrue((scripts / "validate_build_artifact.py").is_file())
         self.assertTrue((scripts / "checks" / CHECK_SCRIPT).is_file())
@@ -333,10 +340,18 @@ class ApplyFindingsFrontMatterTests(unittest.TestCase):
             for fragment in APPLY_LANE_FRAGMENTS:
                 with self.subTest(pack=pack, lane=lane, fragment=fragment):
                     self.assertIn(normalize(fragment), text)
+            if pack == "superpowers":
+                resolver = "resolve `<gc-scripts-dir>` as the canonical imported `gc` pack's `assets/scripts` directory through native formula provenance"
+                self.assertIn(normalize(resolver), text)
+                self.assertIn("keep the validator beside that pack's schemas", text)
+                self.assertNotIn(".gc/scripts", text)
+                validator_command = 'python3 "<gc-scripts-dir>/validate_build_artifact.py"'
+            else:
+                validator_command = "python3 .gc/scripts/validate_build_artifact.py"
             for artifact in artifacts:
                 schema_id = f"gc.build.{artifact}.v1"
                 with self.subTest(pack=pack, lane=lane, schema=schema_id):
-                    self.assertIn(f"python3 .gc/scripts/validate_build_artifact.py --schema {schema_id} --path", text)
+                    self.assertIn(f"{validator_command} --schema {schema_id} --path", text)
                 with self.subTest(pack=pack, lane=lane, schema=schema_id, check="allowed statuses"):
                     self.assertIn(status_sentence(artifact), text)
 

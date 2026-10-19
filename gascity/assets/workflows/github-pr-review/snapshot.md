@@ -21,7 +21,8 @@ Verify `CITY_ROOT` and `RIG_NAME` against the current native claim and rig
 registration as described in [workspace identity](../workspace-entry.md).
 
 ```sh
-python3 "{{pack_root}}/assets/scripts/formula_methodology.py" --formula "{{code_review_formula}}" \
+PACK_SCRIPTS=$(gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace scripts-path) || exit "$?"
+python3 "$PACK_SCRIPTS/formula_methodology.py" --formula "{{code_review_formula}}" \
   --city-root "$CITY_ROOT" --rig "$RIG_NAME"
 ```
 

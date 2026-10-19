@@ -26,6 +26,18 @@ must use the canonical imported `gc` pack's `assets/scripts` path, resolved from
 native formula provenance, rather than a rig-local copy. Workspace helpers
 load `schemas/workspace/records.v1.json` relative to that pack layout.
 
+For another helper, resolve the canonical scripts directory through that same
+native binding. In each new worker session, run the path lookup and helper in
+one shell; a variable from an earlier stage is not available:
+
+```sh
+PACK_SCRIPTS=$(gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace scripts-path) || exit "$?"
+python3 "$PACK_SCRIPTS/formula_methodology.py" --help
+```
+
+Keep this imported path even when a higher layer overrides a prompt. Do not
+guess it from the worker directory, a checkout parent, or an absent `pack_root`.
+
 Formula validators use the native validation control's absolute `gc.check_path`.
 Keep that control's actual bead identity when self-running its check, rather
 than the claimed child step id. For direct schema validation, use

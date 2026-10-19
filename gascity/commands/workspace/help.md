@@ -8,8 +8,28 @@ own helpers. With the `gc` binding, use `gc gc workspace`.
 - **checkout:** verify ownership and resume a recognized unfinished native member.
 - **runtime:** run project checks and independent producer review with native identities.
 - **flow:** record accepted results, owner outputs, canonical review and publication.
+- **scripts-path:** print the imported pack's absolute `assets/scripts` directory; accepts no arguments.
 
-Each helper's `--help` lists its exact arguments. Commands require explicit native
+For a helper without a workspace subcommand, resolve its path in the same shell:
+
+```sh
+PACK_SCRIPTS=$(gc gc workspace scripts-path) || exit "$?"
+python3 "$PACK_SCRIPTS/formula_methodology.py" --help
+```
+
+Use normal `--city` and `--rig` selection for the intended workflow. The path
+comes from the native import binding, including local checkouts and cached packs.
+It does not depend on the worker directory or a formula `pack_root` variable.
+
+Gas City handles `--help` before dispatching a workspace action. To list a
+helper's arguments, run it directly:
+
+```sh
+PACK_SCRIPTS=$(gc gc workspace scripts-path) || exit "$?"
+python3 "$PACK_SCRIPTS/workspace_entry.py" --help
+```
+
+Actions require explicit native
 city, store, registered rig, root and claimed step. Start from a real intake task
 or convoy. Source access requires recorded `worktree_lifecycle=new`, the captured
 project policy and qualified core APIs. First capture needs an explicit configured

@@ -20,7 +20,7 @@ blocks preparation with the original state preserved:
   deciding whether the run or source plan exists:
 
   ```sh
-  WORKSPACE_ENTRY_JSON=$(python3 "$PACK_ROOT/assets/scripts/workspace_entry.py" read \
+  WORKSPACE_ENTRY_JSON=$("$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace entry read \
     --gc "$GC_BIN" --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" \
     --rig "$RIG_NAME" --workflow-root "$CLAIMED_ROOT_BEAD_ID" \
     --claimed-step "$CLAIMED_BEAD_ID" --worktree-lifecycle new \
@@ -32,7 +32,7 @@ blocks preparation with the original state preserved:
   Run both blocks in the same shell. Supply `ARTIFACT_ROOT` and
   `WORKSPACE_EVIDENCE_DIR` as existing admitted directories outside the repository
   and all worktrees. `CLAIMED_BEAD_ID` must be exported for the native-row check.
-  Resolve `PACK_ROOT` from this installed prompt's pack. Keep the actual command,
+  Use the registered `gc` pack binding. Keep the actual command,
   exit status and complete JSON output in the preparation evidence. A successful
   read returns `state=recorded`; it does not prepare a checkout. On refusal,
   retain the helper's actual diagnostic. Reading prompts or inspecting root
@@ -80,7 +80,7 @@ owners = [node["owner_id"] for node in entry["source_plan"]["nodes"]
           if os.environ["SOURCE_MEMBER_ID"] in node["member_ids"]]
 assert len(owners) == 1, "source member needs one declared workspace owner"
 print(owners[0])') || exit "$?"
-  python3 "$PACK_ROOT/assets/scripts/workspace_dependency.py" \
+  "$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace dependency \
     --gc "$GC_BIN" --worktree-lifecycle new --city-root "$CITY_ROOT" \
     --rig-name "$(python3 -c 'import json, os; print(json.loads(os.environ["WORKSPACE_ENTRY_JSON"])["rig_name"])')" \
     --store-ref "$(python3 -c 'import json, os; print(json.loads(os.environ["WORKSPACE_ENTRY_JSON"])["store_ref"])')" \

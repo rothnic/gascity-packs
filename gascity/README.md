@@ -230,6 +230,21 @@ providerless rig role agents under `gascity/roles`. Standalone use requires
 the top-level `gc` import for formulas, mayor skill, and `gc gc claim`, and
 `gascity/roles` on each target rig for `gc.*` role agents.
 
+Workspace helpers run through `gc gc workspace entry`, `dependency`, `checkout`,
+`runtime`, and `flow`. For another pack helper, obtain the imported scripts
+directory in the same shell:
+
+```sh
+PACK_SCRIPTS=$(gc gc workspace scripts-path) || exit "$?"
+python3 "$PACK_SCRIPTS/formula_methodology.py" --help
+```
+
+Use the normal city and rig selection for the intended workflow. This resolves
+both local checkouts and cached imports without a formula `pack_root` variable.
+See [workspace commands](commands/workspace/help.md) and the
+[workspace entry contract](assets/workflows/workspace-entry.md) for native identity
+and action arguments.
+
 Import roles for each target rig. By default agents inherit city/workspace
 provider; advanced users can patch individual roles without overriding formulas:
 

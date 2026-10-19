@@ -864,17 +864,18 @@ class FormulaAssetTests(unittest.TestCase):
             shlex.split(command.removesuffix(') || exit "$?"').replace("\\\n", " "))
             for code in re.findall(r"```sh\n(.*?)```", recipe, re.DOTALL)
             for command in re.findall(
-                r'python3 "\$PACK_ROOT/assets/scripts/workspace_(?:entry|dependency)\.py"(?:[^\n]*\\\n)*[^\n]*',
+                r'"\$GC_BIN" --city "\$CITY_ROOT" --rig "\$RIG_NAME" gc workspace (?:entry|dependency)(?:[^\n]*\\\n)*[^\n]*',
                 code,
             )
         ]
-        reads = [command for command in commands if command[1].endswith("/workspace_entry.py")]
-        preparations = [command for command in commands if command[1].endswith("/workspace_dependency.py")]
+        reads = [command for command in commands if command[command.index("workspace") + 1] == "entry"]
+        preparations = [command for command in commands if command[command.index("workspace") + 1] == "dependency"]
         self.assertEqual(len(reads), 1)
         self.assertEqual(len(preparations), 1)
         read, prepare = reads[0], preparations[0]
         self.assertLess(commands.index(read), commands.index(prepare))
-        self.assertEqual(read[2], "read")
+        self.assertEqual(read[0], "$GC_BIN")
+        self.assertEqual(read[read.index("workspace") + 2], "read")
         self.assertIn("--require-plan", read)
         self.assertIn('--require-plan) || exit "$?"', recipe)
         self.assertEqual(read[read.index("--workflow-root") + 1], "$CLAIMED_ROOT_BEAD_ID")
@@ -3778,7 +3779,8 @@ class FormulaAssetTests(unittest.TestCase):
         steps = {step["id"]: step for step in resolve_formula(root, "do-work")["steps"]}
         prepare = " ".join(node_description(root, steps["prepare-worktree"]).split())
         for fragment in (
-            "workspace_dependency.py", "--worktree-lifecycle new", "--claimed-step-id",
+            '"$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace dependency',
+            "--worktree-lifecycle new", "--claimed-step-id",
             "--launch-step-id", "original logical workflow root", "source member",
             "or use a synthetic convoy as the source member", "gc.worktree_ref",
             "selected input", "committed/replayed receipts", "Do not edit source files in the launcher checkout",
@@ -3831,7 +3833,7 @@ class FormulaAssetTests(unittest.TestCase):
     def test_source_consumers_keep_native_references_without_legacy_fallback(self) -> None:
         repo = pathlib.Path(__file__).resolve().parents[2]
         contracts = {
-            "gascity/assets/workflows/do-work/prepare-worktree.md": ("workspace_dependency.py", "gc.worktree_ref"),
+            "gascity/assets/workflows/do-work/prepare-worktree.md": ('"$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace dependency', "gc.worktree_ref"),
             "gascity/assets/workflows/do-work/implement.md": ("workspace_outputs.referenced_record", "workspace_outputs.result_binding"),
             "gascity/assets/workflows/do-work/close-source-anchor.md": ("gc gc workspace flow close-source", "accepted result and checkpoint"),
             "superpowers/assets/workflows/superpowers-development/close-source-anchor.md": ("gc gc workspace flow close-source", "accepted result and checkpoint"),

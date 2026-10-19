@@ -15,13 +15,14 @@ attempts either; the independent reviewer must retain real findings.
 On attempts two and three in agent mode, read the preceding actual blocked
 report and this request's explicit repair authority. Interactive mode also
 requires its existing permission; missing headless permission remains blocked.
-Before any edit, validate the preceding blocked report's repair identity. Resolve
-PACK_SCRIPTS from this real description's pinned pack and REPORT_PATH from the
-current native root. Read that exact report, including its real findings, then
-capture its SHA-256. Keep the actual claimed author child in GC_BEAD_ID. The
+Before any edit, validate the preceding blocked report's repair identity. Bind
+the city and rig using the [workspace identity](../workspace-entry.md), and resolve
+REPORT_PATH from the current native root. Read that exact report, including its
+real findings, then capture its SHA-256. Keep the actual claimed author child in GC_BEAD_ID. The
 helper reads the native plan, requirements and current report paths itself.
 
 ```sh
+PACK_SCRIPTS=$(gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace scripts-path) || exit "$?"
 REPORT_SHA256=$(sha256sum -- "$REPORT_PATH")
 REPORT_SHA256=${REPORT_SHA256%% *}
 python3 -B "$PACK_SCRIPTS/validate_plan_review.py" \

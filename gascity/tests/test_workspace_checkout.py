@@ -118,8 +118,8 @@ class StorePort(WorkspaceStore):
 class PrepareAssetTests(unittest.TestCase):
     def test_prepare_asset_routes_new_mode_to_recorded_workspace_before_fetch(self):
         asset = (SCRIPTS.parent / 'workflows' / 'do-work' / 'prepare-worktree.md').read_text()
-        self.assertIn('workspace_dependency.py', asset)
-        self.assertLess(asset.index('workspace_entry.py'), asset.index('workspace_dependency.py'))
+        self.assertIn('gc workspace dependency', asset)
+        self.assertLess(asset.index('gc workspace entry read'), asset.index('gc workspace dependency'))
         self.assertIn('worktree_lifecycle', asset)
         self.assertIn('explicit migration', asset)
         self.assertNotIn('git fetch', asset)

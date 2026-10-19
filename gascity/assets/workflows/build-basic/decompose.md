@@ -62,9 +62,9 @@ city/store routing, and read that original request alongside the approved plan.
 The request and approved plan define each source strategy and the ordered
 predecessors. An example is syntax guidance; it does not replace that graph.
 If the original request and approved plan conflict, record the blocker before
-allocation. Resolve linked files relative to this actual description file or
-the rendered `pack_root`, rather than the worker's current directory. An
-initial path error requires checking the rendered path; do not declare a helper
+allocation. Resolve linked files relative to this actual description file,
+rather than the worker's current directory. Obtain helpers from the native
+import binding as shown below. An initial path error requires checking that path; do not declare a helper
 unavailable without looking up and executing its actual command.
 
 Set `TASKS_PATH` to that creation file's absolute path. Keep it separate from
@@ -131,7 +131,8 @@ approved graph. Afterward verify the exact returned source plan; do not repair
 a mismatch by manually editing native records.
 
 ```sh
-python3 "{{pack_root}}/assets/scripts/create_beads_from_tasks.py" "$TASKS_PATH" \
+PACK_SCRIPTS=$(gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace scripts-path) || exit "$?"
+python3 "$PACK_SCRIPTS/create_beads_from_tasks.py" "$TASKS_PATH" \
   --city "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --workflow-root "$ROOT_ID" \
   --claimed-step "$CLAIMED_BEAD_ID" --worktree-lifecycle new --generation 1 \
   --evidence-dir '<existing-evidence-directory-outside-worktrees>'

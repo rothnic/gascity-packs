@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import tomllib
 import unittest
@@ -97,6 +98,55 @@ class ComposedFormulaTests(unittest.TestCase):
         bad = subprocess.run([str(command), "../foreign"], text=True, capture_output=True,
                              env=dict(os.environ, GC_PACK_DIR=str(REPO / "gascity")), timeout=10)
         self.assertEqual(bad.returncode, 2)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for layout in ("checkout with spaces/gascity", "city/.gc/cache/repos/pinned/gascity"):
+                pack = root / layout
+                scripts = pack / "assets/scripts"
+                scripts.mkdir(parents=True)
+                schema = pack / "schemas/workspace/records.v1.json"
+                schema.parent.mkdir(parents=True)
+                shutil.copy2(REPO / "gascity/schemas/workspace/records.v1.json", schema)
+                for name in ("workspace_entry.py", "formula_methodology.py",
+                             "workspace_records.py", "workspace_run.py"):
+                    shutil.copy2(REPO / "gascity/assets/scripts" / name, scripts / name)
+                env = dict(os.environ, GC_PACK_DIR=str(pack))
+                env.pop("pack_root", None)
+                with self.subTest(layout=layout):
+                    result = subprocess.run([str(command), "scripts-path"], cwd=root,
+                        text=True, capture_output=True, env=env, timeout=10)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, str(scripts) + "\n")
+                    helper = subprocess.run([sys.executable, "-B",
+                        str(Path(result.stdout.strip()) / "formula_methodology.py"), "--help"],
+                        cwd=root, text=True, capture_output=True, env=env, timeout=10)
+                    self.assertEqual(helper.returncode, 0, helper.stderr)
+                    self.assertIn("--interaction-mode", helper.stdout)
+                    for extra in ("extra", "--help", "../foreign"):
+                        refused = subprocess.run([str(command), "scripts-path", extra],
+                            text=True, capture_output=True, env=env, timeout=10)
+                        self.assertEqual(refused.returncode, 2)
+                        self.assertEqual(refused.stdout, "")
+            for binding in (None, "relative", str(root / "foreign")):
+                env = dict(os.environ)
+                env.pop("GC_PACK_DIR", None)
+                if binding is not None:
+                    env["GC_PACK_DIR"] = binding
+                with self.subTest(binding=binding):
+                    refused = subprocess.run([str(command), "scripts-path"], cwd=root,
+                        text=True, capture_output=True, env=env, timeout=10)
+                    self.assertNotEqual(refused.returncode, 0)
+                    self.assertEqual(refused.stdout, "")
+
+        for name in ("build-basic", "compound-build", "superpowers-build", "bmad-build", "gstack-build"):
+            formula = self.resolve(name)
+            step = next(step for step in formula["steps"] if step["id"] == "prepare")
+            prompt = (REPO / "gascity/formulas" / step["description_file"]).read_text()
+            with self.subTest(formula=name):
+                self.assertNotIn("pack_root", formula["vars"])
+                self.assertNotIn("{{pack_root}}", prompt)
+                self.assertIn('gc workspace scripts-path) || exit "$?"\npython3 "$PACK_SCRIPTS/formula_methodology.py"', prompt)
 
     def test_superpowers_setup_uses_installed_helpers_with_their_pack_schemas(self):
         from test_workspace_entry import EntryTests

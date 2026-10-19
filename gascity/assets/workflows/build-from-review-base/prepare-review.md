@@ -4,7 +4,7 @@ Apply the [workspace entry contract](../workspace-entry.md) before consuming
 review evidence:
 
 ```sh
-python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
+gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace entry gate \
   --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --rig "$RIG_NAME" \
   --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" \
   --entrypoint review --require-plan

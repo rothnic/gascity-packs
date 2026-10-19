@@ -215,7 +215,7 @@ class DefaultBranchResolutionTest(unittest.TestCase):
         # Managed preparation consumes the captured run through the dependency
         # bridge; its explicit @default selector captures the registered rig HEAD.
         prompt = WORKFLOW_STEP.read_text(encoding="utf-8")
-        self.assertIn('"$PACK_ROOT/assets/scripts/workspace_dependency.py"', prompt)
+        self.assertIn('"$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace dependency', prompt)
         self.assertNotIn("DEFAULT_BRANCH=", prompt)
         expected = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.clone,
                                   check=True, text=True, capture_output=True).stdout.strip()

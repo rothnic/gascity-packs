@@ -60,7 +60,7 @@ Validate the target, artifact root, and optional context inputs. Record the norm
 Apply the [workspace entry contract](../workspace-entry.md) before handoff:
 
 ```sh
-python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
+gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace entry gate \
   --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --rig "$RIG_NAME" \
   --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" \
   --entrypoint build --worktree-lifecycle "{{worktree_lifecycle}}" --allow-pending-source
@@ -98,7 +98,8 @@ malformed or ambiguous, stop as blocked and do not run formula show.
 Read the compact native declaration before evaluating supported modes:
 
 ```sh
-python3 "{{pack_root}}/assets/scripts/formula_methodology.py" --formula "$RUNNING_FORMULA" \
+PACK_SCRIPTS=$(gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace scripts-path) || exit "$?"
+python3 "$PACK_SCRIPTS/formula_methodology.py" --formula "$RUNNING_FORMULA" \
   --city-root "$CITY_ROOT" --rig "$RIG_NAME" \
   --interaction-mode "{{interaction_mode}}" --review-mode "{{review_mode}}" \
   --drain-policy "{{drain_policy}}"

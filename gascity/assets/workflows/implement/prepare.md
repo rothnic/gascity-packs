@@ -23,7 +23,7 @@ Requirements:
 - hard-fail if metadata is missing, malformed, or ambiguous
 - fail if the target is not a convoy or normalized singleton convoy
 - reject legacy `issue`, `bead_id`, or user-supplied `convoy_id` inputs
-- validate context_path {{context_path}} with `{{pack_root}}/assets/scripts/validate_context_bundle.py` when set
+- validate context_path {{context_path}} when set, using the imported helper below
 - reject drain_policy {{drain_policy}} values other than `separate` or `same-session`
 - record worktree_lifecycle {{worktree_lifecycle}} as `gc.var.worktree_lifecycle`
   on the workflow root; the preflight check permits only the declared source lifecycle
@@ -31,10 +31,18 @@ Requirements:
 - write a run-status artifact if summary_path {{summary_path}} or artifact root is provided
 - record push {{push}} and open_pr {{open_pr}}
 
+When `context_path` is set, use the [workspace identity](../workspace-entry.md)
+to bind the selected city and rig, then validate in one shell:
+
+```sh
+PACK_SCRIPTS=$(gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace scripts-path) || exit "$?"
+python3 "$PACK_SCRIPTS/validate_context_bundle.py" "{{context_path}}"
+```
+
 Before starting a drain, apply the [workspace entry contract](../workspace-entry.md):
 
 ```sh
-python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
+gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace entry gate \
   --city-root "$CITY_ROOT" --store-ref "$ROOT_STORE_REF" --rig "$RIG_NAME" \
   --workflow-root "$ROOT_ID" --claimed-step "$CLAIMED_BEAD_ID" \
   --entrypoint implement --worktree-lifecycle "{{worktree_lifecycle}}" --require-plan

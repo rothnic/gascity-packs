@@ -217,6 +217,22 @@ def test_city_scoped_gascity_registers_claim_command_from_rig(
     assert "Usage:\n  gc gc claim" in result.stdout
     assert "Gas City CLI — orchestration-builder" not in result.stdout
 
+    workspace.env["GC_PACK_DIR"] = str(tmp_path / "foreign")
+    scripts = run_gc(gc_test_bin, workspace, "gc", "workspace", "scripts-path")
+    assert scripts.returncode == 0, scripts.stderr
+    assert scripts.stdout == str(REPO_ROOT / "gascity/assets/scripts") + "\n"
+    for extra in ("extra", "../foreign"):
+        refused = run_gc(gc_test_bin, workspace, "gc", "workspace", "scripts-path", extra)
+        assert refused.returncode == 2
+        assert refused.stdout == ""
+
+    unbound = write_prompt_workspace(
+        tmp_path / "unbound", city_binding="other", city_pack=REPO_ROOT / "gascity"
+    )
+    refused = run_gc(gc_test_bin, unbound, "gc", "workspace", "scripts-path")
+    assert refused.returncode != 0
+    assert str(REPO_ROOT / "gascity/assets/scripts") not in refused.stdout
+
 
 def test_plain_gastown_polecat_sling_starts_default_graph_workflow(
     tmp_path: Path, gc_test_bin: Path

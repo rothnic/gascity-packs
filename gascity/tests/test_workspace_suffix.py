@@ -94,7 +94,7 @@ class SuffixEntryTests(unittest.TestCase):
                   'superpowers': 'superpowers-build', 'bmad': 'bmad-build', 'gstack': 'gstack-build'}
         layouts = ('worktree_base_ref', 'worktree_checks', 'worktree_parent',
                    'worktree_name_prefix', 'worktree_allow_external_parent', 'worktree_lifecycle')
-        supplied = {'pack_root': str(base), 'artifact_root': 'artifacts/accepted',
+        supplied = {'artifact_root': 'artifacts/accepted',
                     'requirements_path': 'artifacts/accepted/requirements.md',
                     'plan_path': 'artifacts/accepted/plan.md', 'worktree_run_root': 'root-1'}
         for pack, build in builds.items():
@@ -114,7 +114,8 @@ class SuffixEntryTests(unittest.TestCase):
                     values.update(supplied)
                     rendered = re.sub(r'\{\{([a-z_]+)\}\}',
                                       lambda match: str(values.get(match[1], match[0])), asset.read_text())
-                    self.assertIn(str(base / 'assets/scripts/workspace_entry.py') + '" gate', rendered)
+                    self.assertNotIn('pack_root', formula['vars'])
+                    self.assertIn('gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace entry gate', rendered)
                     self.assertIn('--entrypoint ' + stage, rendered)
                     self.assertIn('--claimed-step "$CLAIMED_BEAD_ID"', rendered)
                     if stage in ('convoy', 'review'):

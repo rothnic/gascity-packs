@@ -137,8 +137,10 @@ class SpecializedPlanReviewAcceptanceTests(unittest.TestCase):
             with self.subTest(pack=pack):
                 expansion = formulas.load_formula(ROOT / pack, f"{prefix}-plan-review")
                 loop = next(node for node in expansion["template"] if node.get("children"))
+                check_path = ("../assets/scripts/checks/design-review-approved.sh" if pack == "superpowers"
+                              else ".gc/scripts/checks/design-review-approved.sh")
                 self.assertEqual(loop["check"], {"max_attempts": 6, "check": {
-                    "mode": "exec", "path": ".gc/scripts/checks/design-review-approved.sh", "timeout": "10m"}})
+                    "mode": "exec", "path": check_path, "timeout": "10m"}})
                 children = loop["children"]
                 apply = next(node for node in children if ".apply-plan-" in node["id"])
                 self.assertEqual(apply["metadata"]["gc.run_target"], expected[pack][1])

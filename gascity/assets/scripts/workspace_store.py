@@ -814,7 +814,10 @@ def transition_locks(common_git_dir: Path | str, scope: dict, timeout: float = 3
     if not common.is_absolute() or common != common.resolve(strict=True) or not common.is_dir():
         raise StoreError("common_git_dir requires its canonical existing absolute directory")
     owner_scope = {k: scope[k] for k in SCOPE_FIELDS - {"record_kind"}}
-    held_key = (str(common), canonical_bytes(owner_scope))
+    root = {k: scope[k] for k in ("workflow_root_id", "generation")}
+    # The held root already excludes every other owner in this generation.
+    # Acquiring another owner first could deadlock with its root-lock waiter.
+    held_key = (str(common), canonical_bytes(root))
     if held_key in _HELD_LOCKS.get():
         yield
         return
@@ -825,7 +828,6 @@ def transition_locks(common_git_dir: Path | str, scope: dict, timeout: float = 3
         raise StoreError("workspace lock directory has unknown ownership")
     if stat.S_IMODE(lock_dir.stat().st_mode) & 0o077:
         raise StoreError("workspace lock directory must be private")
-    root = {k: scope[k] for k in ("workflow_root_id", "generation")}
     names = ["owner-" + hashlib.sha256(canonical_bytes(owner_scope)).hexdigest(),
              "root-" + hashlib.sha256(canonical_bytes(root)).hexdigest()]
     opened = []

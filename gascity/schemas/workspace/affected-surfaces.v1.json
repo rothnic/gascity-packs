@@ -2139,7 +2139,7 @@
     "gascity/assets/scripts/workspace_store.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "2689f2f6be99353c974acbc52b685bcce07c9db890f74e786537493e697b7ed2"
+      "sha256": "7edcc4cb89d7492e73cc4765e3b758785a66aebed9ebfc3d7b2c204edde0ad29"
     },
     "gascity/assets/scripts/workspace_entry.py": {
       "classification": "new",
@@ -2149,7 +2149,7 @@
     "gascity/assets/scripts/workspace_flow.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "879f82ea2237902981b4b91be71efe4c280ad77e58b63ee24da3273e1b94447b"
+      "sha256": "59e2bc1d08f2e65343f815a1d15ef9236b32ede65433c9eced8d7f464160f15b"
     },
     "gascity/assets/scripts/workspace_acceptance_fixture.py": {
       "classification": "new",
@@ -2214,7 +2214,7 @@
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",
       "responsibility": "native claim/session and exact-commit project check, review and accepted-output qualification",
-      "sha256": "ac03946a383d5c1418b19964393096c7344a17e1a51b2feb0159dd85d163a2a3"
+      "sha256": "f97be935d80286c7c2ab8f9df9a1947613e4fcf78c3387b76873904a104e095e"
     },
     "gascity/assets/scripts/workspace_requests.py": {
       "classification": "new",

@@ -660,6 +660,47 @@ class WorkspaceStoreTests(unittest.TestCase):
         self.assertFalse(worker.is_alive())
         self.assertEqual(["workspace transition lock timeout"], errors)
 
+    def test_nested_owner_does_not_wait_for_a_contender_that_waits_for_our_root(self):
+        import fcntl
+        import hashlib
+        scope = dict(self.scope, writer_scope_id="other-owner", record_kind="workspace")
+        owner = {key: scope[key] for key in scope if key != "record_kind"}
+        owner_name = "owner-" + hashlib.sha256(canonical_bytes(owner)).hexdigest()
+        waiting, done = threading.Event(), threading.Event()
+        errors = []
+        flock = fcntl.flock
+
+        def observed(descriptor, operation):
+            if threading.current_thread() is worker:
+                name = Path(os.readlink(f"/proc/self/fd/{descriptor}")).name
+                if name.startswith("root-"):
+                    waiting.set()
+            return flock(descriptor, operation)
+
+        def contend():
+            try:
+                with transition_locks(self.git, scope, timeout=1):
+                    done.set()
+            except Exception as exc:
+                errors.append(str(exc))
+
+        worker = threading.Thread(target=contend)
+        try:
+            with transition_locks(self.git, self.scope), patch.object(fcntl, "flock", observed):
+                worker.start()
+                self.assertTrue(waiting.wait(1), "contender never acquired its owner lock")
+                self.assertTrue((self.git / "gc-workspace-locks" / owner_name).exists())
+                self.assertFalse(done.is_set())
+                with transition_locks(self.git, scope, timeout=0.04):
+                    with transition_locks(self.git, dict(scope, record_kind="owner-output"), timeout=0.04):
+                        self.assertFalse(done.is_set())
+        finally:
+            if worker.ident is not None:
+                worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertTrue(done.is_set())
+        self.assertEqual(errors, [])
+
     def test_unknown_filesystem_symlink_and_permissions_refuse(self):
         with patch("workspace_store._filesystem", side_effect=StoreError("unsupported filesystem")):
             with self.assertRaisesRegex(StoreError, "unsupported filesystem"):

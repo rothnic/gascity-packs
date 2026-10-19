@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import copy
 import hashlib
 import json
@@ -15,7 +16,8 @@ from workspace_records import (RecordError, canonical_bytes, contracts, parse_re
 from workspace_run import (CHECKS_CONFIG_KEY, CHECKS_POLICY_KEY, capture_check_policy,
                            native_json, read_check_policy)
 from workspace_store import (Attempt, CONTINUATION_KEY, ROOT_KEYS, GuardRead, NativeRunContinuation,
-                             PreparedWrite, WorkspaceStore, merge_cooked_context, validate_native_continuation)
+                             PreparedWrite, StoreError, WorkspaceStore, merge_cooked_context, transition_locks,
+                             validate_native_continuation)
 from workspace_entry import _continuation_refusal, healthy, native_root, read_entry, read_native_continuation, reference
 from workspace_cooked import read_cooked_writer_map
 from workspace_checkout import WorkspaceCheckout, load_workspace_context
@@ -113,6 +115,46 @@ class NativeSourceRuntime:
     a new instance after a completed workflow transition, never refresh its rows.
     Session authority is read separately and is not a cross-store transaction.
     """
+    @classmethod
+    @contextlib.contextmanager
+    def open(cls, store, *, gc, city_root, rig_name, workflow_root_id,
+             claimed_step_id, generation, artifact_root, evidence_dir):
+        """Admit fresh native rows under the root lock through publication/readback."""
+        arguments = dict(gc=gc, city_root=city_root, rig_name=rig_name,
+            workflow_root_id=workflow_root_id, claimed_step_id=claimed_step_id,
+            worktree_lifecycle="new", generation=generation, require_plan=True)
+        discovery = read_entry(store, **arguments)
+        common = discovery["run"]["common_git_dir"]
+        require(store.common_git_dir is None or str(store.common_git_dir) == common,
+                "discovered repository differs from the selected store")
+        store.common_git_dir = common
+        run_hash, plan_hash = record_sha256(discovery["run"]), record_sha256(discovery["source_plan"])
+        keys = ("workflow_root_id", "generation", "store_ref", "rig_name", "input_convoy_id",
+                "run_reference", "source_plan_reference", "native_workflow_root_id", "native_input_convoy_id")
+        binding = {key: discovery.get(key) for key in keys}
+        scope = dict(workflow_root_id=discovery["workflow_root_id"], generation=generation,
+                     writer_scope_id=discovery["workflow_root_id"], record_kind="workspace")
+        entered = False
+        try:
+            with transition_locks(common, scope, store.timeout):
+                entered = True
+                entry = read_entry(store, **arguments, expected_run_sha256=run_hash,
+                                   expected_plan_sha256=plan_hash)
+                require({key: entry.get(key) for key in keys} == binding
+                        and entry["run"]["common_git_dir"] == common
+                        and record_sha256(entry["run"]) == run_hash
+                        and record_sha256(entry["source_plan"]) == plan_hash,
+                        "workspace admission binding changed during lock acquisition")
+                yield cls(store, gc=gc, city_root=city_root, rig_name=rig_name,
+                    run=entry["run"], plan=entry["source_plan"], artifact_root=artifact_root,
+                    evidence_dir=evidence_dir, claimed_step_id=claimed_step_id,
+                    native_rows=entry.get("_native_rows"))
+        except StoreError as exc:
+            if not entered and str(exc) == "workspace transition lock timeout":
+                raise RecordError("native workspace admission lock timeout before retained snapshots; "
+                                  "no allocation or write attempted") from exc
+            raise
+
     def __init__(self, store, *, gc, city_root, rig_name, run, plan, artifact_root,
                  evidence_dir, claimed_step_id, native_rows=None):
         self.store, self.gc = store, str(gc)
@@ -746,56 +788,64 @@ def main(argv=None):
         return json.loads(Path(path).read_text())
     try:
         store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city_root)
-        entry = read_entry(store, gc=args.gc, city_root=args.city_root, rig_name=args.rig_name,
-            workflow_root_id=args.workflow_root_id, claimed_step_id=args.claimed_step_id,
-            worktree_lifecycle="new", generation=args.generation, require_plan=True)
-        store.common_git_dir = entry["run"]["common_git_dir"]
-        runtime = NativeSourceRuntime(store, gc=args.gc, city_root=args.city_root, rig_name=args.rig_name,
-            run=entry["run"], plan=entry["source_plan"], artifact_root=args.artifact_root,
-            evidence_dir=args.evidence_dir, claimed_step_id=args.claimed_step_id)
-        if args.action in ("context", "checks", "begin-review", "make-result"):
-            require(args.owner_id and args.member_id and args.output_oid, "action requires owner, member and exact output OID")
-            if args.action == "context":
-                result = runtime.workspace_context(args.owner_id, args.member_id, args.output_oid)
-                result["policy_binding"] = runtime.policy_binding
-                result["identity"] = runtime._admitted()[0]
-            elif args.action == "checks":
-                result = runtime.execute_checks(args.owner_id, args.member_id, args.output_oid, timeout=args.timeout)
-            elif args.action == "begin-review":
-                result = runtime.begin_review(args.owner_id, args.member_id, args.output_oid, read(args.checks), read(args.artifacts))
-            else:
-                result = runtime.make_member_result(args.owner_id, args.member_id, args.output_oid,
-                                                     read(args.checks), read(args.review), read(args.artifacts))
-        elif args.action == "complete-review":
-            require(args.report and args.review_evidence, "completed review requires report and evidence paths")
-            result = runtime.complete_review(read(args.context), args.report, args.status, args.review_evidence)
-        elif args.action == "qualify":
-            result = runtime.qualify_native(read(args.result))
-            rows = result.pop("guard_rows")
-            result["guard_revisions"] = {key: row["revision"] for key, row in rows.items()}
+        if args.action == "record-result":
+            admission = NativeSourceRuntime.open(store, gc=args.gc, city_root=args.city_root,
+                rig_name=args.rig_name, workflow_root_id=args.workflow_root_id,
+                claimed_step_id=args.claimed_step_id, generation=args.generation,
+                artifact_root=args.artifact_root, evidence_dir=args.evidence_dir)
         else:
-            require(args.record_id and args.authority_id, "publication requires exact allocated record and authority IDs")
-            from workspace_requests import require_resolved_scope, retain_request, resolve_request
-            from workspace_store import SCOPE_OWNER
-            member_result = read(args.result)
-            validate_record("member-result", member_result)
-            require_resolved_scope(store, {
-                "workflow_root_id": member_result["workflow_root_id"], "generation": member_result["generation"],
-                "writer_scope_id": member_result[SCOPE_OWNER["member-result"]], "record_kind": "member-result",
-            })
-            prepared = runtime.prepare_member_result(member_result, record_id=args.record_id,
-                authority_id=args.authority_id, initial_write=args.initial_write, operation_nonce=args.operation_nonce)
-            runtime._fresh()
-            request_path, _ = retain_request(store, prepared)
-            recovery = "resolve the original retained request: " + str(request_path)
-            try:
-                store.execute(prepared)
-                result = resolve_request(store, request_path)
-            except (RecordError, OSError) as exc:
-                raise RecordError(str(exc) + "; " + recovery) from exc
-            require(result.get("outcome") in ("committed", "replayed"),
-                    "result publication outcome unknown; " + recovery)
-            result["request_path"] = str(request_path)
+            entry = read_entry(store, gc=args.gc, city_root=args.city_root, rig_name=args.rig_name,
+                workflow_root_id=args.workflow_root_id, claimed_step_id=args.claimed_step_id,
+                worktree_lifecycle="new", generation=args.generation, require_plan=True)
+            store.common_git_dir = entry["run"]["common_git_dir"]
+            runtime = NativeSourceRuntime(store, gc=args.gc, city_root=args.city_root, rig_name=args.rig_name,
+                run=entry["run"], plan=entry["source_plan"], artifact_root=args.artifact_root,
+                evidence_dir=args.evidence_dir, claimed_step_id=args.claimed_step_id)
+            admission = contextlib.nullcontext(runtime)
+        with admission as runtime:
+            if args.action in ("context", "checks", "begin-review", "make-result"):
+                require(args.owner_id and args.member_id and args.output_oid, "action requires owner, member and exact output OID")
+                if args.action == "context":
+                    result = runtime.workspace_context(args.owner_id, args.member_id, args.output_oid)
+                    result["policy_binding"] = runtime.policy_binding
+                    result["identity"] = runtime._admitted()[0]
+                elif args.action == "checks":
+                    result = runtime.execute_checks(args.owner_id, args.member_id, args.output_oid, timeout=args.timeout)
+                elif args.action == "begin-review":
+                    result = runtime.begin_review(args.owner_id, args.member_id, args.output_oid, read(args.checks), read(args.artifacts))
+                else:
+                    result = runtime.make_member_result(args.owner_id, args.member_id, args.output_oid,
+                                                         read(args.checks), read(args.review), read(args.artifacts))
+            elif args.action == "complete-review":
+                require(args.report and args.review_evidence, "completed review requires report and evidence paths")
+                result = runtime.complete_review(read(args.context), args.report, args.status, args.review_evidence)
+            elif args.action == "qualify":
+                result = runtime.qualify_native(read(args.result))
+                rows = result.pop("guard_rows")
+                result["guard_revisions"] = {key: row["revision"] for key, row in rows.items()}
+            else:
+                require(args.record_id and args.authority_id, "publication requires exact allocated record and authority IDs")
+                from workspace_requests import require_resolved_scope, retain_request, resolve_request
+                from workspace_store import SCOPE_OWNER
+                member_result = read(args.result)
+                validate_record("member-result", member_result)
+                require_resolved_scope(store, {
+                    "workflow_root_id": member_result["workflow_root_id"], "generation": member_result["generation"],
+                    "writer_scope_id": member_result[SCOPE_OWNER["member-result"]], "record_kind": "member-result",
+                })
+                prepared = runtime.prepare_member_result(member_result, record_id=args.record_id,
+                    authority_id=args.authority_id, initial_write=args.initial_write, operation_nonce=args.operation_nonce)
+                runtime._fresh()
+                request_path, _ = retain_request(store, prepared)
+                recovery = "resolve the original retained request: " + str(request_path)
+                try:
+                    store.execute(prepared)
+                    result = resolve_request(store, request_path)
+                except (RecordError, OSError) as exc:
+                    raise RecordError(str(exc) + "; " + recovery) from exc
+                require(result.get("outcome") in ("committed", "replayed"),
+                        "result publication outcome unknown; " + recovery)
+                result["request_path"] = str(request_path)
         print(json.dumps(result, sort_keys=True))
         return 0
     except (RecordError, OSError, UnicodeError, KeyError, TypeError, ValueError) as exc:

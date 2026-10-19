@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import copy
+import contextlib
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -267,6 +270,92 @@ class NativeRuntimeTests(unittest.TestCase):
     def adapter(self, claimed="recorder"):
         return runtime.NativeSourceRuntime(self.store, gc=str(self.port), city_root=str(self.city), rig_name="fixture",
             run=self.run, plan=self.plan, artifact_root=self.artifacts, evidence_dir=str(self.diagnostics), claimed_step_id=claimed)
+
+    def test_admission_timeout_precedes_retained_rows_allocation_and_write(self):
+        from workspace_store import transition_locks
+        entry = runtime.read_entry(self.store, gc=str(self.port), city_root=str(self.city), rig_name="fixture",
+            workflow_root_id="root", claimed_step_id="recorder", worktree_lifecycle="new", generation=1,
+            require_plan=True)
+        state = (self.root / "port.json").read_bytes()
+        journals = {str(p.relative_to(self.repo)): p.read_bytes() for p in self.repo.rglob("*.json")}
+        scope = dict(workflow_root_id="root", generation=1, writer_scope_id="member", record_kind="owner-output")
+        held, release, errors = threading.Event(), threading.Event(), []
+        def contend():
+            try:
+                with transition_locks(self.repo / ".git", scope):
+                    held.set()
+                    if not release.wait(5):
+                        raise AssertionError("admission refusal did not release its contender")
+            except Exception as exc:
+                errors.append(str(exc))
+        worker = threading.Thread(target=contend)
+        self.store.timeout = 0.04
+        stdout, stderr = io.StringIO(), io.StringIO()
+        try:
+            worker.start()
+            self.assertTrue(held.wait(1), errors)
+            with patch.object(runtime, "WorkspaceStore", return_value=self.store), \
+                    patch.object(runtime, "read_entry", return_value=entry) as discovery, \
+                    patch.object(runtime.NativeSourceRuntime, "__init__", side_effect=AssertionError("retained rows admitted")) as constructor, \
+                    patch.object(self.store, "execute", side_effect=AssertionError("write attempted")) as execute, \
+                    patch("workspace_flow.allocate_placeholder", side_effect=AssertionError("allocation attempted")) as allocate, \
+                    contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                code = runtime.main(["record-result", "--gc", str(self.port), "--city-root", str(self.city),
+                    "--store-ref", "rig:fixture", "--rig-name", "fixture", "--workflow-root-id", "root",
+                    "--claimed-step-id", "recorder", "--generation", "1", "--artifact-root", str(self.artifacts),
+                    "--evidence-dir", str(self.diagnostics)])
+            self.assertEqual(code, 1)
+            self.assertEqual(stdout.getvalue(), "")
+            self.assertEqual(stderr.getvalue(), "native workspace admission lock timeout before retained snapshots; "
+                             "no allocation or write attempted\n")
+            self.assertEqual(discovery.call_count, 1)
+            constructor.assert_not_called()
+            execute.assert_not_called()
+            allocate.assert_not_called()
+            self.assertEqual((self.root / "port.json").read_bytes(), state)
+            self.assertEqual({str(p.relative_to(self.repo)): p.read_bytes() for p in self.repo.rglob("*.json")}, journals)
+        finally:
+            release.set()
+            if worker.ident is not None:
+                worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertEqual(errors, [])
+
+    def test_admission_refuses_changed_discovery_binding_before_constructor(self):
+        arguments = dict(gc=str(self.port), city_root=str(self.city), rig_name="fixture",
+            workflow_root_id="root", claimed_step_id="recorder", generation=1,
+            artifact_root=self.artifacts, evidence_dir=str(self.diagnostics))
+        entry = runtime.read_entry(self.store, **{key: value for key, value in arguments.items()
+            if key not in ("artifact_root", "evidence_dir")}, worktree_lifecycle="new", require_plan=True)
+        state = (self.root / "port.json").read_bytes()
+        for key in ("run", "source_plan", "workflow_root_id", "generation", "input_convoy_id",
+                    "run_reference", "source_plan_reference", "native_workflow_root_id"):
+            with self.subTest(binding=key):
+                changed = copy.deepcopy(entry)
+                if key in ("run", "source_plan"):
+                    changed[key]["base_oid"] = "0" * 40
+                elif key in ("run_reference", "source_plan_reference"):
+                    changed[key]["bead_id"] += "-replaced"
+                elif key == "generation":
+                    changed[key] += 1
+                else:
+                    changed[key] = "changed"
+                with patch.object(runtime, "read_entry", side_effect=[copy.deepcopy(entry), changed]) as read, \
+                        patch.object(runtime.NativeSourceRuntime, "__init__", side_effect=AssertionError("retained rows admitted")) as constructor:
+                    with self.assertRaisesRegex(RecordError, "admission binding changed"):
+                        with runtime.NativeSourceRuntime.open(self.store, **arguments):
+                            self.fail("changed binding admitted")
+                self.assertEqual(read.call_args.kwargs["expected_run_sha256"], record_sha256(entry["run"]))
+                self.assertEqual(read.call_args.kwargs["expected_plan_sha256"], record_sha256(entry["source_plan"]))
+                constructor.assert_not_called()
+                self.assertEqual((self.root / "port.json").read_bytes(), state)
+        from workspace_store import StoreError
+        with patch.object(runtime, "read_entry", return_value=entry), \
+                patch.object(runtime.NativeSourceRuntime, "__init__", return_value=None):
+            with self.assertRaises(StoreError) as failure:
+                with runtime.NativeSourceRuntime.open(self.store, **arguments):
+                    raise StoreError("workspace transition lock timeout")
+        self.assertEqual(str(failure.exception), "workspace transition lock timeout")
 
     def select_role(self, selected):
         for role in self.attempts:

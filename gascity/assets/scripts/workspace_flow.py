@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -10,7 +11,7 @@ import secrets
 from pathlib import Path
 
 from workspace_records import RecordError, canonical_bytes, contracts, parse_record, record_sha256
-from workspace_entry import allocate_placeholder, native_json, read_entry, reference
+from workspace_entry import allocate_placeholder, native_json, reference
 from workspace_store import (GRANT_REFS_KEY, GRANT_KEY, MISSING, WorkspaceStore, validate_cooked_writer_map, validate_grant_index,
                              NativeSourceClose, RecordWrite, ReferenceWrite, SuccessorRelation, record_reference)
 from workspace_requests import retain_request, resolve_request, require_resolved_scope, allocation_directory
@@ -23,6 +24,12 @@ import github_api
 
 class WorkspaceFlow:
     """One admitted native attempt with original rows through guarded readback."""
+
+    @classmethod
+    @contextlib.contextmanager
+    def open(cls, store, **arguments):
+        with NativeSourceRuntime.open(store, **arguments) as runtime:
+            yield cls(runtime)
 
     def __init__(self, runtime: NativeSourceRuntime):
         outputs.require(isinstance(runtime, NativeSourceRuntime), "an actual native source runtime is required")
@@ -436,49 +443,44 @@ def main(argv=None):
             value = resolve_request(store, args.prepared_request)
             print(json.dumps(value, sort_keys=True))
             return 0 if value.get("outcome") in ("committed", "replayed") else 1
-        entry = read_entry(store, gc=args.gc, city_root=args.city_root, rig_name=args.rig_name,
-            workflow_root_id=args.workflow_root_id, claimed_step_id=args.claimed_step_id,
-            worktree_lifecycle="new", generation=args.generation, require_plan=True)
-        store.common_git_dir = entry["run"]["common_git_dir"]
-        native = NativeSourceRuntime(store, gc=args.gc, city_root=args.city_root, rig_name=args.rig_name,
-            run=entry["run"], plan=entry["source_plan"], artifact_root=args.artifact_root,
-            evidence_dir=args.evidence_dir, claimed_step_id=args.claimed_step_id,
-            native_rows=entry["_native_rows"])
-        flow = WorkspaceFlow(native)
-        if args.action == "record-result":
-            value = flow.record_result(args.owner_id, args.member_id, args.output_oid,
-                                       read(args.checks), read(args.review), read(args.artifacts))
-        elif args.action == "owner-output":
-            value = flow.owner_output(args.owner_id, args.integration_evidence)
-        elif args.action == "canonical":
-            outputs.require(args.summary, "canonical requires its accepted terminal summary")
-            value = flow.canonical(args.summary)
-        elif args.action == "begin-canonical-review":
-            value = flow.begin_canonical_review()
-        elif args.action == "complete-canonical-review":
-            value = flow.complete_canonical_review(read(args.context), args.report, args.review_evidence, args.status)
-        elif args.action == "publish":
-            value = flow.publication(args.review_owner_id or args.workflow_root_id, args.decision,
-                                     title_path=args.title_file, body_path=args.body_file)
-        elif args.action == "artifacts":
-            outputs.require(args.artifact, "artifacts requires at least one actual artifact path")
-            value = [outputs.artifact(path, native.artifact_root) for path in args.artifact]
-        elif args.action == "close-source":
-            outputs.require(args.member_id, "source closure requires its exact member")
-            value = flow.close_source(args.member_id)
-        elif args.action == "fix-plan":
-            outputs.require(args.plan_owner_id and args.terminal_owner_id and args.implementation_convoy_id,
-                            "fix plan requires its actual native owner, terminal and implementation convoy")
-            value = flow.fix_plan(read(args.nodes), args.plan_owner_id, args.terminal_owner_id,
-                                  args.implementation_convoy_id, args.max_iterations)
-        elif args.action == "inspect":
-            result, context = flow.subject()
-            canonical = flow.record("canonical", native.run["workflow_root_id"])
-            review.canonical_subject(canonical, result, artifact_root=native.artifact_root, **context)
-            value = dict(ok=True, output_oid=result["output_oid"], canonical_sha256=record_sha256(canonical))
-        else:
-            canonical, approval, result, context = flow.approved_subject(args.review_owner_id)
-            value = dict(ok=True, output_oid=result["output_oid"], policy_binding=native.policy_binding)
+        with WorkspaceFlow.open(store, gc=args.gc, city_root=args.city_root, rig_name=args.rig_name,
+                workflow_root_id=args.workflow_root_id, claimed_step_id=args.claimed_step_id,
+                generation=args.generation, artifact_root=args.artifact_root, evidence_dir=args.evidence_dir) as flow:
+            native = flow.runtime
+            if args.action == "record-result":
+                value = flow.record_result(args.owner_id, args.member_id, args.output_oid,
+                                           read(args.checks), read(args.review), read(args.artifacts))
+            elif args.action == "owner-output":
+                value = flow.owner_output(args.owner_id, args.integration_evidence)
+            elif args.action == "canonical":
+                outputs.require(args.summary, "canonical requires its accepted terminal summary")
+                value = flow.canonical(args.summary)
+            elif args.action == "begin-canonical-review":
+                value = flow.begin_canonical_review()
+            elif args.action == "complete-canonical-review":
+                value = flow.complete_canonical_review(read(args.context), args.report, args.review_evidence, args.status)
+            elif args.action == "publish":
+                value = flow.publication(args.review_owner_id or args.workflow_root_id, args.decision,
+                                         title_path=args.title_file, body_path=args.body_file)
+            elif args.action == "artifacts":
+                outputs.require(args.artifact, "artifacts requires at least one actual artifact path")
+                value = [outputs.artifact(path, native.artifact_root) for path in args.artifact]
+            elif args.action == "close-source":
+                outputs.require(args.member_id, "source closure requires its exact member")
+                value = flow.close_source(args.member_id)
+            elif args.action == "fix-plan":
+                outputs.require(args.plan_owner_id and args.terminal_owner_id and args.implementation_convoy_id,
+                                "fix plan requires its actual native owner, terminal and implementation convoy")
+                value = flow.fix_plan(read(args.nodes), args.plan_owner_id, args.terminal_owner_id,
+                                      args.implementation_convoy_id, args.max_iterations)
+            elif args.action == "inspect":
+                result, context = flow.subject()
+                canonical = flow.record("canonical", native.run["workflow_root_id"])
+                review.canonical_subject(canonical, result, artifact_root=native.artifact_root, **context)
+                value = dict(ok=True, output_oid=result["output_oid"], canonical_sha256=record_sha256(canonical))
+            else:
+                canonical, approval, result, context = flow.approved_subject(args.review_owner_id)
+                value = dict(ok=True, output_oid=result["output_oid"], policy_binding=native.policy_binding)
         print(json.dumps(value, sort_keys=True))
         if args.action == "complete-canonical-review" and value["review"]["verdict"] != "approved":
             return 1

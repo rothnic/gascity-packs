@@ -1,8 +1,8 @@
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the methodology below. Its legacy source/path/state operations apply only
-to explicit `legacy`; the managed instructions govern an admitted `new` run.
-Unknown modes and failed managed reads never authorize legacy fallback.
+Use the native managed source contract below. Only `new` is supported.
+Legacy or unclassified state requires explicit migration; preserve its checkout
+and original run. Never infer source authority from paths or artifacts.
 Resolve shared helpers through the imported Gas City `assets/scripts` layer.
 
 For an admitted `new` release pass, use the exact canonical source and

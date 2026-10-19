@@ -53,7 +53,92 @@ def body(formula_name, node, **values):
 
 
 class MethodologyWorkspaceTests(unittest.TestCase):
-    def test_direct_items_declare_new_with_explicit_legacy_compatibility(self):
+    def test_effective_build_prepare_allows_recorded_planning_without_waiving_admission(self):
+        for name in ("build-basic", "compound-build", "superpowers-build", "bmad-build", "gstack-build"):
+            with self.subTest(formula=name):
+                formula = resolve_formula_from_dirs(DIRS, name)
+                prepare = next(step for step in formula["steps"] if step["id"] == "prepare")
+                text = " ".join(body(name, prepare).split())
+                self.assertIn("successful `recorded` result allows requirements, planning and decomposition", text)
+                self.assertIn("`committed` or `replayed` receipt", text)
+                self.assertIn("source plan is not required at this stage", text)
+                self.assertIn("`awaiting-source` result permits planning only", text)
+                self.assertIn("Implementation still requires the original recorded run, source plan and admitted workspace", text)
+                self.assertIn("nonzero exit, unknown receipt or refused read blocks handoff", text)
+                self.assertIn("preserve the original request", text)
+
+    def test_effective_canonical_summary_retains_member_path_hash_and_provenance(self):
+        for name in ("build-basic", "compound-build", "superpowers-build", "bmad-build", "gstack-build"):
+            with self.subTest(formula=name):
+                formula = resolve_formula_from_dirs(DIRS, name)
+                steps = {step["id"]: step for step in formula["steps"]}
+                prepare = " ".join(body(name, steps["prepare"]).split())
+                self.assertIn("Leave `gc.build.implementation_summary_path` unresolved", prepare)
+                self.assertNotIn("`implementation-summary.md` for `gc.build.implementation_summary_path`", prepare)
+                text = " ".join(body(name, steps["summarize-implementation"]).split())
+                for contract in ("committed or replayed canonical binding", "earlier unqualified placeholder",
+                                 "conflicting current qualified canonical binding", "changed bytes/hash blocks",
+                                 "accepted member's original workflow, methodology, producer and trace",
+                                 "Do not restamp", "<accepted-producer-stage>", "separate optional report"):
+                    self.assertIn(contract, text)
+                self.assertNotIn("stage: summarize-implementation", text)
+        formula = resolve_formula_from_dirs(DIRS, "implement")
+        summary = next(step for step in formula["steps"] if step["id"] == "summarize")
+        text = " ".join(body("implement", summary, summary_path="/owned/reports/nondefault-member.md").split())
+        self.assertIn("/owned/reports/nondefault-member.md", text)
+        self.assertIn("accepted member's original workflow, methodology, producer and trace", text)
+        self.assertNotIn("stage: summarize,", text)
+        self.assertIn("Preserve those bytes and their hash", text)
+
+    def test_effective_separate_item_summary_option_reaches_producer_and_close(self):
+        items = [("do-work", "implement"),
+                 *[(separate, writer) for separate, _, writer, _ in ITEMS.values()]]
+        for name, writer in items:
+            with self.subTest(formula=name):
+                formula = resolve_formula_from_dirs(DIRS, name)
+                self.assertIn("summary_path", formula["vars"])
+                steps = {step["id"]: step for step in nodes(formula)}
+                text = " ".join(body(name, steps[writer], summary_path="/owned/reports/nondefault-member.md").split())
+                # The BMAD and Superpowers leaf assets are also shared-member
+                # assets, so they read the declared native input without an
+                # undefined template variable in the shared formula.
+                self.assertTrue("/owned/reports/nondefault-member.md" in text or
+                                "native root's `gc.var.summary_path`" in text)
+                self.assertIn("When it is empty", text)
+                self.assertIn("before project checks, independent acceptance and result publication", text)
+                self.assertIn("same path and its exact bytes", text)
+                self.assertIn("Do not move or rewrite an accepted summary", text)
+                close = " ".join(body(name, steps["close-source-anchor"],
+                                      summary_path="/owned/reports/nondefault-member.md").split())
+                self.assertTrue("/owned/reports/nondefault-member.md" in close or
+                                "native root's `gc.var.summary_path`" in close)
+                self.assertIn("absolute path and its original hash", close)
+                self.assertIn("mismatch blocks closure", close)
+        for separate, shared, _, writer in ITEMS.values():
+            with self.subTest(shared=shared):
+                formula = resolve_formula_from_dirs(DIRS, shared)
+                self.assertNotIn("summary_path", formula.get("vars", {}))
+                step = next(step for step in nodes(formula) if step["id"] == writer)
+                self.assertNotIn("{{summary_path}}", body(shared, step))
+
+    def test_effective_review_fix_drafts_cannot_replace_accepted_artifacts(self):
+        for name, suffix in (("compound-code-review", "apply-review-findings"),
+                             ("bmad-code-review-flow", "apply-bmad-review-findings"),
+                             ("gstack-code-review", "apply-review-findings")):
+            with self.subTest(formula=name):
+                formula = load_formula_from_dirs(DIRS, name)
+                fix = next(node for node in nodes(formula) if node["id"].endswith("." + suffix))
+                text = " ".join(body(name, fix).split())
+                self.assertIn("workspace_review.fix_plan", text)
+                self.assertIn("replacement generation", text)
+                self.assertIn("distinct generation-specific paths before checks, independent review, result publication and canonical qualification", text)
+                self.assertIn("Repair only this attempt's unaccepted draft in place", text)
+                self.assertIn("accepted artifact remains immutable", text)
+                self.assertIn("Schema validation alone cannot approve a replacement", text)
+                self.assertNotIn("Edit it in place", text)
+                self.assertNotIn("repair the artifact in place", text)
+
+    def test_direct_items_require_new_without_legacy_compatibility(self):
         records = records_module()
         for separate, shared, _, _ in ITEMS.values():
             for name in (separate, shared):
@@ -65,7 +150,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                 self.assertEqual(formula["vars"]["worktree_lifecycle"]["default"], "new")
                 declared = json.loads(gate["metadata"]["gc.lifecycle.source_modes"])
                 self.assertEqual(records.verify_source_modes("new", declared), "new")
-                self.assertEqual(gate["metadata"]["gc.lifecycle.compatibility"], "legacy")
+                self.assertNotIn("gc.lifecycle.compatibility", gate["metadata"])
                 with self.assertRaises(records.RecordError):
                     records.verify_source_modes("legacy", declared)
                 first = "prepare-worktree" if name == separate else "implement-item"
@@ -74,7 +159,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                     self.assertEqual(steps[first]["metadata"]["gc.lifecycle.source_modes"], gate["metadata"]["gc.lifecycle.source_modes"])
                     self.assertEqual(steps[first]["check"], gate["check"])
 
-    def test_imported_admission_check_refuses_new_and_malformed_native_state(self):
+    def test_imported_admission_check_accepts_only_new_and_refuses_malformed_state(self):
         check = BASE / "assets/scripts/checks/workspace-lifecycle-valid.py"
         with tempfile.TemporaryDirectory(prefix="methodology-mode-") as directory:
             scratch = Path(directory)
@@ -96,12 +181,12 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                             snapshot.write_text(json.dumps([{"id": "methodology-check", "metadata": metadata}]))
                             result = subprocess.run([sys.executable, "-S", str(check)], env=env,
                                                     capture_output=True, text=True, timeout=5)
-                            self.assertEqual(result.returncode, 0 if mode in ("legacy", "new") else 1, result.stderr)
+                            self.assertEqual(result.returncode, 0 if mode == "new" else 1, result.stderr)
                             if mode == "legacy":
-                                self.assertIn("deprecated", result.stderr)
+                                self.assertIn("explicit migration", result.stderr)
                             elif mode == "new":
                                 self.assertEqual(result.stderr, "")
-                            if mode not in ("legacy", "new"):
+                            if mode != "new":
                                 self.assertEqual(result.stdout, "")
                     snapshot.write_text(json.dumps([{"id": "foreign-check", "metadata": gate["metadata"]}]))
                     result = subprocess.run([sys.executable, "-S", str(check)], env=env,
@@ -116,7 +201,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
             with self.subTest(asset=asset):
                 text = (REPO / asset).read_text()
                 self.assertIn("worktree_lifecycle", text)
-                self.assertIn("legacy", text)
+                self.assertIn("explicit migration", " ".join(text.lower().split()))
                 self.assertIn("new", text)
 
     def test_actual_writer_steps_keep_native_routes_and_render_exact_result_contract(self):
@@ -130,7 +215,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                     for contract in ("workspace_outputs.result_binding", "workspace_outputs.execute_checks",
                                      "input_oid", "output_oid", "no_change", "record-result"):
                         self.assertIn(contract, text)
-                    self.assertIn("legacy", text)
+                    self.assertIn("explicit migration", " ".join(text.lower().split()))
                     self.assertIn("proofs/methodology", text)
 
     def test_composed_items_have_complete_result_and_closure_dependencies(self):
@@ -149,7 +234,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                     self.assertIn("record-result", steps["close-source-anchor"]["needs"])
                     if "condition" not in steps["close-source-anchor"]:
                         self.assertIn(producer, steps["close-source-anchor"]["needs"],
-                                      "legacy closure must wait for the actual producer when managed stages skip")
+                                      "closure must wait for the actual producer")
                     self.assertEqual(steps["independent-acceptance"]["needs"], [producer])
                     self.assertEqual(steps["independent-acceptance"]["metadata"]["gc.run_target"], "gc.implementation-reviewer")
                     self.assertIn("gc gc workspace flow close-source", body(name, steps["close-source-anchor"], worktree_lifecycle="new"))
@@ -239,7 +324,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                          "workspace_publish.reconcile_publication", "output_oid", "QA", "release", "no-op"):
             self.assertIn(contract, text)
 
-    def test_continuation_and_inherited_fix_formulas_keep_explicit_legacy_admission(self):
+    def test_continuation_and_inherited_fix_formulas_refuse_legacy_admission(self):
         records = records_module()
         for pack, (_, shared, _, _) in ITEMS.items():
             for stage in ("plan", "decompose", "convoy", "review"):
@@ -248,7 +333,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                 self.assertEqual(formula["vars"]["worktree_lifecycle"]["default"], "new")
                 declared = json.loads(prepare["metadata"]["gc.lifecycle.source_modes"])
                 self.assertEqual(records.verify_source_modes("new", declared), "new")
-                self.assertEqual(prepare["metadata"]["gc.lifecycle.compatibility"], "legacy")
+                self.assertNotIn("gc.lifecycle.compatibility", prepare["metadata"])
             prefix = "compound" if pack == "compound-engineering" else pack
             fix = resolve_formula_from_dirs(DIRS, prefix + "-fix-loop")
             self.assertEqual(fix["vars"]["implementation_formula"]["default"], prefix + "-implementation")

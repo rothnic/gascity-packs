@@ -5,9 +5,18 @@ run/plan/workspace/grant references. After the final focused commit and summary,
 run `gc gc workspace runtime checks`; the captured native policy selects required
 commands. Preserve the exact output OID and actual receipts for independent-acceptance.
 Leave source closure to the guarded result/checkpoint and close stages.
-The legacy instructions below retain their existing behavior.
+Only `new` is supported. Preserve older or unclassified state and follow explicit migration guidance.
 
 Record the Superpowers task result.
+
+For a separate-item formula exposing `summary_path`, read its supplied value
+from the native root's `gc.var.summary_path` and use that exact absolute path.
+When it is empty, or this shared-member formula exposes no such option,
+select a distinct item summary under the artifact root.
+Record the selected path as `gc.implementation.summary_path` on this item's
+workflow root before project checks, independent acceptance and result
+publication. Those stages must qualify that same path and its exact bytes.
+Do not move or rewrite an accepted summary to satisfy a different later option.
 
 Retain `worktree_lifecycle` {{worktree_lifecycle}}. `new` requires the composed native helpers and captured policy. For an admitted managed run,
 reload the exact run/source-plan/workspace through the imported Gas City
@@ -33,9 +42,6 @@ acceptance. A final shared member also requires the qualified owner-output.
 Do not publish an accepted result, advance the shared member or close the
 source anchor here. A failed TDD, spec, quality or managed acceptance gate
 leaves the source anchor open.
-
-The existing result procedure below applies only to explicit `legacy`.
-Missing or conflicting managed records never authorize a legacy fallback.
 
 Update the per-item summary with changed files, test commands, command output
 locations, commits to make, blockers, and traceability back to the plan task.

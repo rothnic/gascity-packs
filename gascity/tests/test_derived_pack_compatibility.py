@@ -507,9 +507,13 @@ class DerivedPackCompatibilityTests(unittest.TestCase):
             resolved = resolved_build_formula("bmad", {"formula": formula_name})
             steps = {step["id"]: step for step in resolved["steps"]}
             with self.subTest(pack="bmad", formula=formula_name, step=step_id):
+                gate = steps[step_id]["check"]
+                self.assertEqual(gate["max_attempts"], 8)
+                self.assertEqual(gate["check"]["mode"], "exec")
+                self.assertEqual(gate["check"]["timeout"], "10m")
                 self.assertEqual(
-                    steps[step_id]["check"]["check"]["path"],
-                    ".gc/scripts/checks/implementation-review-approved.sh",
+                    gate["check"]["path"],
+                    "../assets/scripts/checks/implementation-review-approved.sh",
                     "bmad story development must keep its methodology "
                     "review check",
                 )

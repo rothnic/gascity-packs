@@ -1,8 +1,8 @@
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the methodology below. Its legacy source/path/state operations apply only
-to explicit `legacy`; the managed instructions govern an admitted `new` run.
-Unknown modes and failed managed reads never authorize legacy fallback.
+Use the native managed source contract below. Only `new` is supported.
+Legacy or unclassified state requires explicit migration; preserve its checkout
+and original run. Never infer source authority from paths or artifacts.
 Resolve shared helpers through the imported Gas City `assets/scripts` layer.
 
 For an admitted `new` finalization, load the exact canonical,
@@ -19,7 +19,7 @@ Finalize the Compound Engineering build.
 
 Record the final resolution summary path, final verdict, and artifact paths on the build-base workflow root bead. Close the expansion target with pass or fail according to the synthesized resolution.
 
-Final report: this step is gated by `.gc/scripts/checks/build-artifact-valid.sh`,
+Final report: this step is gated by the imported pack-owned `build-artifact-valid.sh` check,
 which validates the artifact recorded at workflow root metadata
 `gc.build.final_report_path` against schema `gc.build.final-report.v1`, and the
 build gate checks the same key. Write the final report from the synthesized
@@ -77,7 +77,7 @@ trace:
   a JSON object.
 - From `$GC_RIG_ROOT`, run the artifact validator with the claimed bead id and
   fix any error before setting `gc.outcome=pass`:
-  `GC_BEAD_ID=<claimed-step-id> .gc/scripts/checks/build-artifact-valid.sh`.
+  `GC_BEAD_ID=<claimed-step-id> GC_RIG_ROOT="$GC_RIG_ROOT" "<gc.check_path>"`.
 - On repair attempts (`gc.attempt` greater than 1), first read the validator
   errors from `gc.attempt_log` on the validation loop control bead (the
   dependent of this step bead) and fix every listed error in place.

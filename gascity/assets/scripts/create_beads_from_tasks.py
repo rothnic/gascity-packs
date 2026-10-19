@@ -1067,8 +1067,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--city", help="Optional city path/name passed through to gc")
     parser.add_argument("--dry-run", action="store_true", help="Validate and print gc commands without creating beads")
     parser.add_argument("--force", action="store_true", help="Allow rerun when tasks.md status is created")
-    parser.add_argument("--worktree-lifecycle", choices=("legacy", "new"),
-                        help="Inherit the recorded workflow mode, otherwise use new; legacy is deprecated")
+    parser.add_argument("--worktree-lifecycle",
+                        help="Use new with the original native run; older state requires explicit migration")
     parser.add_argument("--store-ref")
     parser.add_argument("--workflow-root")
     parser.add_argument("--recorded-root", help="Locate an original run; native input relationships must also match")
@@ -1084,6 +1084,9 @@ def main(argv: list[str] | None = None) -> int:
         workspace = None
         store = None
         mode = args.worktree_lifecycle or "new"
+        if args.worktree_lifecycle is not None:
+            from workspace_records import require_new_mode
+            require_new_mode(args.worktree_lifecycle)
         if any((args.store_ref, args.workflow_root, args.claimed_step)):
             from workspace_entry import read_entry_mode
             from workspace_store import Attempt, WorkspaceStore
@@ -1119,14 +1122,6 @@ def main(argv: list[str] | None = None) -> int:
                 "record_id": args.source_plan_record_id, "authority_id": args.authority_id,
                 "implementation_convoy_key": args.implementation_convoy_key, "canonical": canonical,
                 "evidence_dir": args.evidence_dir}
-        else:
-            if store is not None:
-                from workspace_entry import gate_entry
-                gate_entry(store, Attempt.from_env(args.claimed_step), gc=args.gc, city_root=args.city,
-                    rig_name=parse_plan(extract_payload(Path(args.tasks_md).read_text(encoding="utf-8"))).target_rig,
-                    workflow_root_id=args.workflow_root, entrypoint="decompose", worktree_lifecycle=mode)
-            print("create_beads_from_tasks: worktree_lifecycle=legacy is deprecated; retain the original mode for legacy work",
-                  file=sys.stderr)
         return create_from_tasks(Path(args.tasks_md), city=args.city, dry_run=args.dry_run, force=args.force, workspace=workspace)
     except (PlanError, RecordError, OSError, ValueError) as exc:
         print(f"create_beads_from_tasks: {exc}", file=sys.stderr)

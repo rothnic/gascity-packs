@@ -43,7 +43,7 @@ description = "Initial source selector; @default captures the registered reposit
 default = "@default"
 
 [vars.worktree_checks]
-description = "Canonical JSON required_checks [{id, argv}]. Required when worktree_lifecycle is new; captured once on the run."
+description = "Canonical JSON required_checks [{id, argv}]. Captured once on the native run."
 default = ""
 
 [vars.worktree_parent]
@@ -62,7 +62,7 @@ enum = ["false", "true"]
 [vars.worktree_lifecycle]
 description = "Source lifecycle for this run. New mode requires the composed native workspace helpers and frozen check policy."
 default = "new"
-enum = ["legacy", "new"]
+enum = ["new"]
 
 [vars.artifact_root]
 description = "Build artifact root."
@@ -139,7 +139,7 @@ default = "false"
 [[steps]]
 id = "prepare"
 title = "Prepare build context"
-metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/build-base/prepare.md"
 
 [steps.check]

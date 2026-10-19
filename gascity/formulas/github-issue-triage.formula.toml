@@ -1,4 +1,7 @@
 description = """
+Source access uses the recorded new workspace lifecycle. Legacy or unclassified
+state requires explicit migration; no artifact or current-checkout fallback.
+
 Public GitHub issue triage adapter.
 
 This wrapper inherits the base adapter stack from `github-issue-triage-base`.

@@ -1,18 +1,16 @@
 Validate the retained source lifecycle before source access.
 
-Use `worktree_lifecycle` {{worktree_lifecycle}} from cooked native variables and
-the captured run. The native check reads this exact claimed/check bead. Current
-methodology source classification is `legacy`, so a request for `new` must fail
-before source access. Missing, mixed or conflicting modes fail as well.
-Do not change the classification or clear records to bypass the check.
+Require `worktree_lifecycle` {{worktree_lifecycle}} to be `new` on the cooked
+native root and captured run. The native check reads the exact claimed/check
+bead and rejects missing, mixed, legacy or conflicting modes. Preserve rejected
+state for explicit migration; do not relabel or clear records to bypass it.
 
-When an immutable run reference is present, load that exact run through the
-imported `workspace_outputs.referenced_record` API and compare its retained
-mode/root with `workspace_records.verify_run_mode` before selecting either
-route. Missing helpers or conflicting references block. Legacy without a run
-reference is valid only when no managed workspace/result reference exists.
-Do not recapture a base or reinterpret a managed run as legacy.
+Load the exact immutable run reference through the imported
+`workspace_outputs.referenced_record` API and compare its retained mode/root
+with `workspace_records.verify_run_mode`. Missing helpers, unknown reads or
+conflicting references stop source access. Never recapture a base from the
+current directory, artifact path or old `work_dir`.
 
-Managed mode requires the composed imported helpers, native claim/owner guards
-and methodology acceptance before activation. A source or schema test supplies
-no runtime acceptance. Leave existing native routing and owners intact.
+Use the composed imported helpers, current native claim and owner grants.
+Source checks do not establish runtime acceptance. Keep native routing and
+existing owners intact.

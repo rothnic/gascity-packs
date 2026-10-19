@@ -246,6 +246,15 @@ def exercise(root: Path, topology: str = "ordinary", core_oid: str | None = None
         cases.append({"scenario": scenario, "name": name, "layer": "component", "required": False,
                       "status": status, "expected": "refuse", "observed": {"status": observed_status, "reason": reason}})
 
+    historical = dict(run_record, worktree_lifecycle="legacy")
+    try:
+        records.verify_run_mode(historical, "legacy", historical["workflow_root_id"])
+        status, observed_status, reason = "fail", "pass", "legacy execution unexpectedly accepted"
+    except records.RecordError as exc:
+        status, observed_status, reason = "pass", "fail", str(exc)
+    cases.append({"scenario": 19, "name": "legacy-mode-component-refusal", "layer": "component", "required": False,
+                  "status": status, "expected": "refuse", "observed": {"status": observed_status, "reason": reason}})
+
     catalog = records.parse_record(CATALOG.read_text())
     scenarios = []
     for scenario in catalog["scenarios"]:
@@ -260,7 +269,7 @@ def exercise(root: Path, topology: str = "ordinary", core_oid: str | None = None
                         ("separate", "dependent", "shared", "fanout-fanin", "review-fix", "publish", "restart")]
         if number == 19:
             pending = [{"name": name, "layer": "native-controller"} for name in
-                       ("explicit-legacy-completes", "unclassified-asset-refuses")]
+                       ("explicit-legacy-refuses", "unclassified-asset-refuses")]
         if number == 20:
             pending = [{"name": name, "layer": "store-concurrency"} for name in
                        ("barrier-dedicated-record-race", "real-store-stress")]

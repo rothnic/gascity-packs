@@ -1,8 +1,8 @@
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the task/story procedure below in either mode. Legacy source/path
-resolution applies only to explicit `legacy`; managed source operations use
-the recorded workspace. Unknown modes or failed reads never select legacy.
+Use the recorded native workspace for the task/story procedure below.
+Only `new` is supported. Preserve older or unclassified state for explicit
+migration; failed reads grant no source authority.
 
 For an admitted `new` item, reload the exact run/source-plan/workspace
 through the imported Gas City `workspace_checkout.load_workspace_context`
@@ -29,7 +29,7 @@ independent-acceptance and record-result qualify it before closure.
 
 Run the BMAD story-development loop for the source-anchor worktree.
 
-Use the `work_dir` already prepared by the inherited do-work lifecycle. The
+Use the verified path returned by the native continuation helper. The
 child lanes replace BMAD quick-dev's native sub-agent/task handoff: implement
 story, self-check, acceptance audit, and apply findings. Use the
 implementation-review approval check to decide whether another loop iteration

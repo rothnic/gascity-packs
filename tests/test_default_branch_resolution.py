@@ -1,26 +1,20 @@
-"""Run the shipped default-branch resolution against real git repositories.
+"""Exercise default-source resolution against real Git repositories.
 
-Four assets resolve a repository's default branch: the `prepare-worktree`
-workflow step in the `gascity` pack, and the guard that refuses to ship from
-the default branch in `contributing-to-gascity` and twice in `pr-pipeline`. All
-four used to do it with `git remote show origin`, which contacts the remote on
-every invocation.
+The contribution and PR-shipping formulas resolve the default branch from local
+remote refs, refreshing them only when necessary. Managed do-work preparation
+instead consumes the recorded run through the dependency bridge: its explicit
+@default selector captures the registered rig's HEAD as a full commit OID.
 
-This test does not assert that the files contain a particular string. It pulls
-the shell out of the shipped asset and runs it under `sh` against git
-repositories built on disk, so a passing result is a statement about what the
-shipped code does, not about how it is written.
-
-The repositories here use a default branch named `trunk` on purpose. `main` is
-the answer a broken resolution reaches by accident, through the hardcoded
-fallback, so a fixture on `main` cannot tell a working resolution from a
-failing one.
+The fixtures use a default branch named trunk so a hardcoded main fallback
+cannot accidentally pass. Historical pipeline controls retain the original
+wrong-answer failure, while current managed checks run the actual source helper.
 """
 
 from __future__ import annotations
 
 import re
 import shutil
+import sys
 import subprocess
 import tempfile
 import textwrap
@@ -29,6 +23,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO_ROOT / "gascity/assets/scripts"))
+from workspace_run import RunError, resolve_base
 
 WORKFLOW_STEP = REPO_ROOT / "gascity/assets/workflows/do-work/prepare-worktree.md"
 FORMULAS = (
@@ -53,15 +49,7 @@ FORMULA_BLOCK = (
     ),
     re.compile(r"^DEFAULT=\$\(git remote show origin.*$", re.MULTILINE),
 )
-# The fence sits inside a nested list item, so both it and its contents are
-# indented. Capture the body and dedent it rather than pinning a column count.
-# The legacy form was an inline backticked command in the same list item.
-WORKFLOW_BLOCK = (
-    re.compile(r"```sh\n(\s*DEFAULT_BRANCH=.*?)\n[ \t]*```", re.DOTALL),
-    re.compile(r"`(DEFAULT_BRANCH=\$\(git remote show origin[^`]*)`"),
-)
-
-# What the four assets replaced. Kept here as an executable control rather than
+# What the original default-branch assets replaced. Kept here as an executable control rather than
 # a comment: the `|| echo "main"` reads as a fallback and cannot fire, because
 # sed exits 0 on empty input, so a failed `git remote show` yields an empty
 # string rather than "main".
@@ -224,18 +212,22 @@ class DefaultBranchResolutionTest(unittest.TestCase):
     # --- the shipped workflow step ---------------------------------------
 
     def test_workflow_step_resolves_without_the_remote(self) -> None:
-        snippet = extract(WORKFLOW_STEP, WORKFLOW_BLOCK)
+        # Managed preparation consumes the captured run through the dependency
+        # bridge; its explicit @default selector captures the registered rig HEAD.
+        prompt = WORKFLOW_STEP.read_text(encoding="utf-8")
+        self.assertIn('"$PACK_ROOT/assets/scripts/workspace_dependency.py"', prompt)
+        self.assertNotIn("DEFAULT_BRANCH=", prompt)
+        expected = subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.clone,
+                                  check=True, text=True, capture_output=True).stdout.strip()
         self.sever_remote()
-        self.assertEqual(run_snippet(snippet, "DEFAULT_BRANCH", self.clone), "trunk")
+        self.assertEqual(resolve_base(str(self.clone), "@default"), expected)
 
     def test_workflow_step_fails_closed_rather_than_guessing(self) -> None:
-        """It has no `main` fallback, deliberately: #228 landed because basing
-        a worktree on the wrong branch is worse than refusing to make one.
-        """
-        snippet = extract(WORKFLOW_STEP, WORKFLOW_BLOCK)
+        """A missing requested ref must not fall back to HEAD or main."""
         self.drop_origin_head()
         self.sever_remote()
-        self.assertEqual(run_snippet(snippet, "DEFAULT_BRANCH", self.clone), "")
+        with self.assertRaises(RunError):
+            resolve_base(str(self.clone), "refs/remotes/origin/HEAD")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,14 @@ the actual current request/context, plan, upstream files and any author
 repair summary, then review those bytes independently. The logical check
 still allows only three total attempts and alone gates decomposition.
 
+Planning requires the recorded `new` lifecycle. Follow the existing
+[entry contract](../workspace-entry.md) and verify the native run, captured base
+commit and check policy. Inspect that exact commit read-only while authoring or
+reviewing artifacts. Source-plan and workspace admission is required before
+implementation or source edits. Artifact paths, closed tasks, old `work_dir`
+fields and the current checkout cannot select source. Legacy or unclassified
+work stops for explicit migration with the original records and checkout preserved.
+
 This is the `build-from-plan-base` plan-review stage.
 
 Review the implementation plan before decomposition. The verdict must map to

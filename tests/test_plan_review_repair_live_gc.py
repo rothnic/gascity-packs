@@ -21,6 +21,17 @@ def test_native_default_review_joins_distinct_author_and_reviewer(
 ):
     result = run_gc(gc_test_bin, review_city, "formula", "show", formula, "--json",
                     "--var", "worktree_lifecycle=" + lifecycle, "--var", "drain_policy=" + drain)
+    if lifecycle == "legacy" and formula in ("build-base", "build-basic", "build-from-plan-base"):
+        assert result.returncode == 1, result.stdout + result.stderr
+        refusal = json.loads(result.stdout)
+        assert refusal["schema_version"] == "1" and refusal["ok"] is False
+        error = refusal["error"]
+        assert error["code"] == "command_failed" and error["exit_code"] == 1
+        assert ('variable "worktree_lifecycle": value "legacy" not in allowed values [new]'
+                in error["message"])
+        assert "steps" not in refusal and "deps" not in refusal
+        record_property("native_legacy_refusal", json.dumps(refusal, sort_keys=True))
+        return
     assert result.returncode == 0, result.stdout + result.stderr
     recipe = json.loads(result.stdout)
     assert recipe["ok"] is True and recipe["name"] == formula

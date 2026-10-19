@@ -20,7 +20,7 @@ review_modes = ["report", "agent", "interactive"]
 
 [vars]
 [vars.worktree_checks]
-description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+description = "Canonical JSON required_checks [{id, argv}], captured once on the native run."
 default = ""
 
 [vars.worktree_base_ref]
@@ -43,7 +43,7 @@ enum = ["false", "true"]
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle. New uses native owned workspaces and captured project checks."
 default = "new"
-enum = ["legacy", "new"]
+enum = ["new"]
 
 [vars.planning_formula]
 description = "Planning methodology formula used for requirements and implementation-plan artifacts."
@@ -60,7 +60,7 @@ default = ""
 [[steps]]
 id = "prepare-plan"
 title = "Validate plan continuation inputs"
-metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/build-from-plan-base/prepare-plan.md"
 
 [steps.check]
@@ -118,7 +118,7 @@ description_file = "../assets/workflows/build-from-plan-base/plan-review.md"
 id = "prepare-decompose"
 title = "Validate decompose continuation inputs"
 needs = ["plan-review"]
-metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "setup", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/build-from-plan-base/prepare-decompose.md"
 
 [steps.check]

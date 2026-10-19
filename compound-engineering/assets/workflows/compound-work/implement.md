@@ -5,7 +5,7 @@ run/plan/workspace/grant references. After the final focused commit and summary,
 run `gc gc workspace runtime checks`; the captured native policy selects required
 commands. Preserve the exact output OID and actual receipts for independent-acceptance.
 Leave source closure to the guarded result/checkpoint and close stages.
-The legacy instructions below retain their existing behavior.
+Only `new` is supported. Preserve older or unclassified state and follow explicit migration guidance.
 
 Implement this Compound Engineering item with {{implementation_target}}.
 
@@ -33,33 +33,20 @@ admitted recorder and an independent review of the same commit. Do not close
 the source anchor or publish accepted metadata here. Failed or missing checks,
 review, records or claims block. A summary schema pass supplies no acceptance.
 
-Use the source-anchor procedure below only for explicit `legacy`. An unknown
-mode or failed managed read must never select legacy.
-
-For legacy work, read the claimed step's `gc.root_bead_id` and that root's
-stamped `gc.source_anchor_id`. Use the exact stamp from inherited preparation.
-For a native drain, it must equal `gc.drain_member_id`; the synthetic
-`gc.synthetic_kind=drain-unit-convoy` is a wrapper, never the source anchor.
-If the stamp is absent or conflicts, stop with source preserved. The inherited
-close-source-anchor resolves and closes that same original member.
-
-Read `work_dir` from the source anchor, validate that it is an absolute existing
-git worktree, set `WORKTREE` to that path, and `cd "$WORKTREE"` before reading
-or editing source files. If `work_dir` is missing, invalid, or points at the
-launcher checkout, fail before editing. `gc.work_dir` is the launcher rig root,
-not the implementation worktree; do not edit, test, or commit in the launcher
-checkout.
-
 Use the installed ce-work guidance as the implementation prompt for this Gas
-City lane. Implement only the owned source anchor boundary, run focused
+City lane. Implement only the owned member boundary, run focused
 verification from inside the worktree, then make a focused commit in the
-worktree (`git add` the changed files and `git commit`). The inherited
-`close-source-anchor` step fails closed when the worktree has no implementation
-commit, so uncommitted edits are a failed implementation, not a pass. Write an
-implementation summary to `{{artifact_root}}/task-<source-anchor-id>-summary.md`
-after resolving the source anchor. Record the summary path, focused commit
-hash, changed files, and verification result on this implement step and on the
-source anchor before closing this step.
+worktree (`git add` the changed files and `git commit`). A changed result requires a committed output. A verified no-change result
+retains the accepted input OID. Write an
+implementation summary at `{{summary_path}}` when supplied as the absolute
+per-item summary path. When it is empty, use
+`{{artifact_root}}/task-<source-anchor-id>-summary.md` after resolving the source
+anchor. Record the selected path as `gc.implementation.summary_path` on this
+item's workflow root before project checks, independent acceptance and result
+publication. Those stages must qualify that same path and its exact bytes.
+Do not move or rewrite an accepted summary to satisfy a different later option.
+Record the summary path, exact output OID, changed files and verification
+result on this implement step. Accepted records belong to the admitted recorder.
 
 Close with `gc.outcome=pass` only after the work is implemented, verified, and
 committed.
@@ -67,4 +54,4 @@ committed.
 Do not invoke provider-native subagents. Leave the source anchor open for the
 close-source-anchor step.
 
-Artifact validation: this step is gated by `.gc/scripts/checks/build-artifact-valid.sh`, which validates the summary recorded at `gc.implementation.summary_path` (fallbacks `gc.build.implementation_summary_path`, then `gc.var.summary_path`) against schema `gc.build.implementation-summary.v1`. On repair attempts (`gc.attempt` greater than 1), read the validator errors from `gc.attempt_log` on the validation loop control bead (the dependent of this step bead) and repair the summary in place instead of rewriting it. Two bounded repair attempts follow the first failure; exhausting them closes this stage with `gc.outcome=fail` and machine-readable validation errors that block downstream stages. Never ask questions in headless mode; record unresolved ambiguity inside the summary.
+Artifact validation: this step is gated by the imported pack-owned `build-artifact-valid.sh` check, which validates the summary recorded at `gc.implementation.summary_path` (fallbacks `gc.build.implementation_summary_path`, then `gc.var.summary_path`) against schema `gc.build.implementation-summary.v1`. On repair attempts (`gc.attempt` greater than 1), read the validator errors from `gc.attempt_log` on the validation loop control bead (the dependent of this step bead) and repair the summary in place instead of rewriting it. Two bounded repair attempts follow the first failure; exhausting them closes this stage with `gc.outcome=fail` and machine-readable validation errors that block downstream stages. Never ask questions in headless mode; record unresolved ambiguity inside the summary.

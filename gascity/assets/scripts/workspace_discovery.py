@@ -13,7 +13,7 @@ import tomllib
 
 SUPPORTED_PACKS = {"gascity", "compound-engineering", "superpowers", "bmad", "gstack"}
 MANIFEST = Path("gascity/schemas/workspace/affected-surfaces.v1.json")
-MIGRATION = "Coordinate the inventory classification, responsibility, content hash, owning steps and final source checkpoint. See gascity/schemas/workspace/discovery.md."
+MIGRATION = "Preserve old runs and checkouts; follow gascity/docs/worktree-dependencies.md#migrate-existing-work. Source changes also require coordinated classifications, responsibility, hashes and owning-step bindings in gascity/schemas/workspace/discovery.md."
 
 
 def formula_name(name):
@@ -55,7 +55,7 @@ def source_asset(root, formula, raw_path, seen=()):
     return matches.pop()
 
 
-def check_inventory(root: Path, manifest: dict, stage="a", layers=()):
+def check_inventory(root: Path, manifest: dict, stage="b", layers=()):
     root = root.resolve(strict=True)
     report = {"ok": False, "stage": stage, "classifications": {}, "issues": [],
               "inspected_roots": [], "unresolved_inputs": [], "runtime_verified": False,
@@ -65,8 +65,8 @@ def check_inventory(root: Path, manifest: dict, stage="a", layers=()):
         report["issues"].append({"path": str(path), "classification": classification,
                                  "reason": reason, "migration": MIGRATION})
 
-    if stage not in {"a", "b"}:
-        fail(MANIFEST, "unknown discovery stage")
+    if stage != "b":
+        fail(MANIFEST, "only final Stage B discovery is supported; inspect historical Stage A with its original qualified source")
     if type(manifest.get("version")) is not int or manifest["version"] != 1:
         fail(MANIFEST, "unsupported inventory version")
     if (not isinstance(manifest.get("packs"), list) or len(manifest["packs"]) != len(SUPPORTED_PACKS)
@@ -140,7 +140,7 @@ def check_inventory(root: Path, manifest: dict, stage="a", layers=()):
             continue
         classification = row.get("classification")
         if classification not in counts or not row.get("responsibility"):
-            fail(path, "unclassified asset: declare legacy/new or a planning-only reference")
+            fail(path, "unclassified asset: declare new or a planning-only reference")
         else:
             counts[classification] += 1
         if path not in discovered:
@@ -154,8 +154,8 @@ def check_inventory(root: Path, manifest: dict, stage="a", layers=()):
             continue
         if actual != row.get("sha256"):
             fail(path, "changed content requires a coordinated migration declaration")
-        if stage == "b" and classification == "legacy":
-            fail(path, "Stage B requires completed migration and an explicit new declaration", "legacy")
+        if classification == "legacy":
+            fail(path, "legacy source assets are unsupported; complete explicit migration before declaring new", "legacy")
     report["classifications"] = dict(counts)
     if report["issues"]:
         return report
@@ -211,8 +211,8 @@ def check_inventory(root: Path, manifest: dict, stage="a", layers=()):
         roles = binding.get("roles", [])
         for path in (formula, asset):
             roles_by_path.setdefault(path, set()).update(roles)
-            if path not in inventory or inventory[path]["classification"] not in {"legacy", "new"}:
-                fail(path, "owning assets require an explicit legacy/new classification")
+            if path not in inventory or inventory[path]["classification"] != "new":
+                fail(path, "owning assets require an explicit new classification")
         try:
             origin, step = effective_steps(formula)[step_id]
             actual = source_asset(root, origin, step["description_file"])
@@ -269,7 +269,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[3], help="Source repository root")
     parser.add_argument("--manifest", type=Path, help="Explicit version 1 inventory, otherwise the base pack inventory")
-    parser.add_argument("--stage", choices=("a", "b"), default="a")
+    parser.add_argument("--stage", choices=("b",), default="b")
     parser.add_argument("--layer", action="append", default=[], help="Additional pack/override root inside --root, repeatable")
     args = parser.parse_args(argv)
     try:

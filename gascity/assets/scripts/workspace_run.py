@@ -11,7 +11,7 @@ import subprocess
 import sys
 from typing import Any
 
-from workspace_records import (RecordError, canonical_bytes, parse_record,
+from workspace_records import (LIFECYCLE_MIGRATION, RecordError, canonical_bytes, parse_record,
                                record_identity, validate_record)
 
 
@@ -116,16 +116,20 @@ def resolve_base(rig_root: str, selector: str) -> str:
 
 def capture_payload(*, workflow_root_id: str, input_convoy_id: str, source_anchor_id: str,
                     rig_root: str, writer_step_id: str, worktree_lifecycle: str,
-                    base_ref: str = "@default", stored: dict[str, Any] | None = None) -> dict[str, Any]:
+                    base_ref: str | None = None, stored: dict[str, Any] | None = None) -> dict[str, Any]:
+    require(worktree_lifecycle == "new", LIFECYCLE_MIGRATION)
+    if stored is not None:
+        require(stored.get("worktree_lifecycle") == "new", LIFECYCLE_MIGRATION)
+    if stored is None or base_ref is not None:
+        require(isinstance(base_ref, str) and bool(base_ref) and base_ref == base_ref.strip()
+                and not base_ref.startswith("-") and not re.search(r"[\x00-\x1f\x7f]", base_ref),
+                "initial capture requires an explicit base ref, including @default; do not infer an ambient HEAD")
     root, common = repository_identity(rig_root)
     candidate = dict(version=1, workflow_root_id=workflow_root_id, generation=1,
                      writer_step_id=writer_step_id, input_convoy_id=input_convoy_id,
                      source_anchor_id=source_anchor_id, rig_root=root, common_git_dir=common,
                      base_oid="0" * 40, worktree_lifecycle=worktree_lifecycle)
     validate_record("run", candidate)
-    require(isinstance(base_ref, str) and bool(base_ref) and base_ref == base_ref.strip()
-            and not base_ref.startswith("-") and not re.search(r"[\x00-\x1f\x7f]", base_ref),
-            "base ref must be nonempty, or explicit @default")
     if stored is not None:
         validate_record("run", stored)
         require(record_identity("run", candidate) == record_identity("run", stored),
@@ -266,6 +270,7 @@ def read_run(store: Any, *, gc: str, city_root: str, rig_name: str,
              workflow_root_id: str, input_convoy_id: str, record_bead_id: str,
              worktree_lifecycle: str, expected_source_anchor_id: str | None = None,
              claimed_step_id: str | None = None) -> dict[str, Any]:
+    require(worktree_lifecycle == "new", LIFECYCLE_MIGRATION)
     city_root = canonical_path(city_root)
     rig_root = registered_rig(gc, city_root, rig_name, store.store_ref)
     anchor, rows = source_context(store, gc=gc, city_root=city_root, workflow_root_id=workflow_root_id,
@@ -287,7 +292,7 @@ def read_run(store: Any, *, gc: str, city_root: str, rig_name: str,
 
 def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: str,
                 workflow_root_id: str, input_convoy_id: str, record_bead_id: str,
-                authority_id: str, worktree_lifecycle: str, writer_map: Any, base_ref: str = "@default",
+                authority_id: str, worktree_lifecycle: str, writer_map: Any, base_ref: str | None = None,
                 writer_rows: dict[str, Any] | None = None,
                 allocation_rows: dict[str, Any] | None = None,
                 captured_run: dict[str, Any] | None = None,
@@ -297,6 +302,7 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
                                  RunCheckPolicyProjection, read_cooked_context)
     from workspace_requests import require_resolved_scope, retain_request, resolve_request
 
+    require(worktree_lifecycle == "new", LIFECYCLE_MIGRATION)
     city_root = canonical_path(city_root)
     rig_root = registered_rig(gc, city_root, rig_name, store.store_ref)
     require(canonical_path(str(store.common_git_dir)) == repository_identity(rig_root)[1],
@@ -356,14 +362,12 @@ def capture_run(store: Any, attempt: Any, *, gc: str, city_root: str, rig_name: 
         absent = [bead_id for bead_id in map_ids if bead_id not in rows]
         if absent:
             rows.update(read_cooked_context(store, absent))
-    projections = []
-    if worktree_lifecycle == "new":
-        raw_checks = root_meta.get(CHECKS_CONFIG_KEY)
-        require(captured_run is None or raw_checks == captured_checks_config,
-                "native required-check configuration changed after retained allocation")
-        policy = capture_check_policy(payload, record_bead_id, raw_checks)
-        projections = [RunCheckPolicyProjection(record_bead_id, policy)]
-        guards += (GuardRead(workflow_root_id, CHECKS_CONFIG_KEY, raw_checks),)
+    raw_checks = root_meta.get(CHECKS_CONFIG_KEY)
+    require(captured_run is None or raw_checks == captured_checks_config,
+            "native required-check configuration changed after retained allocation")
+    policy = capture_check_policy(payload, record_bead_id, raw_checks)
+    projections = [RunCheckPolicyProjection(record_bead_id, policy)]
+    guards += (GuardRead(workflow_root_id, CHECKS_CONFIG_KEY, raw_checks),)
     from workspace_allocation import admit_writer
     replacement = {}
     method = store.install_grant if stored is None else store.write_records
@@ -404,15 +408,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("action", choices=("capture", "read"))
     for flag in ("store-ref", "city-root", "rig-name", "workflow-root-id", "input-convoy-id", "record-bead-id"):
         parser.add_argument("--" + flag, required=True)
-    parser.add_argument("--worktree-lifecycle", choices=("legacy", "new"), required=True)
+    parser.add_argument("--worktree-lifecycle", help="Only new is supported; older state requires explicit migration", required=True)
     parser.add_argument("--claimed-step-id")
     parser.add_argument("--authority-id")
     parser.add_argument("--source-anchor-id")
-    parser.add_argument("--base-ref", default="@default")
+    parser.add_argument("--base-ref")
     parser.add_argument("--operation-nonce")
     parser.add_argument("--gc", default="gc")
     args = parser.parse_args(argv)
     try:
+        require(args.worktree_lifecycle == "new", LIFECYCLE_MIGRATION)
         from workspace_store import Attempt, WorkspaceStore
         city_root = canonical_path(args.city_root)
         rig_root = registered_rig(args.gc, city_root, args.rig_name, args.store_ref)

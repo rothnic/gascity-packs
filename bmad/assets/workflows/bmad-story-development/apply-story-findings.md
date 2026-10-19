@@ -5,9 +5,18 @@ run/plan/workspace/grant references. After the final focused commit and summary,
 run `gc gc workspace runtime checks`; the captured native policy selects required
 commands. Preserve the exact output OID and actual receipts for independent-acceptance.
 Leave source closure to the guarded result/checkpoint and close stages.
-The legacy instructions below retain their existing behavior.
+Only `new` is supported. Preserve older or unclassified state and follow explicit migration guidance.
 
 Apply required BMAD story findings.
+
+For a separate-item formula exposing `summary_path`, read its supplied value
+from the native root's `gc.var.summary_path` and use that exact absolute path.
+When it is empty, or this shared-member formula exposes no such option,
+select a distinct item summary under the artifact root.
+Record the selected path as `gc.implementation.summary_path` on this item's
+workflow root before project checks, independent acceptance and result
+publication. Those stages must qualify that same path and its exact bytes.
+Do not move or rewrite an accepted summary to satisfy a different later option.
 
 Retain `worktree_lifecycle` {{worktree_lifecycle}}. `new` requires the composed native helpers and captured policy. For an admitted managed run,
 reload the exact run/source-plan/workspace using the imported Gas City
@@ -15,9 +24,9 @@ reload the exact run/source-plan/workspace using the imported Gas City
 from clean first entry. The clean `workspace_checkout.manage_workspace` path
 verifier cannot admit an intermediate committed HEAD. Require recognized
 same-member continuation evidence for implement-story and fix commits; if the
-composed contract is absent, block with that source preserved. Require
-the native claim, admitted owner grant and active `gc.drain_member_id` at the
-recorded position/generation. Preserve unexpected dirty state, HEAD drift or
+composed contract is absent, block with that source preserved. Verify native
+workspace provenance through the native claim, admitted owner grant and active
+`gc.drain_member_id` at the recorded position/generation. Preserve unexpected dirty state, HEAD drift or
 owner mismatch as a blocker. Never fall back to raw `work_dir` metadata.
 
 Apply findings in that workspace. A changed pass makes a focused commit and
@@ -39,21 +48,7 @@ admitted recorder. The final shared member also needs an accepted owner-output.
 Only committed/replayed native readback permits checkpoint or later closure.
 An absent stage, claim, check or review blocks with evidence retained.
 
-The source-anchor procedure below applies only to explicit `legacy`.
-Unknown modes and failed managed reads never select legacy.
-
 Make the smallest implementation and test changes needed to resolve required self-check or acceptance-audit findings. If no required findings exist, record a no-op fix result and preserve the review artifact path.
-
-Resolve the source anchor as the workflow root's stamped `gc.source_anchor_id`;
-only when the root has none, use the same rules as the do-work `prepare-worktree`
-step (for a shared-drain item, the drain member in `gc.drain_member_id`), read
-`work_dir` from the source anchor, validate that it is an absolute existing git
-worktree, set `WORKTREE` to that path, and `cd "$WORKTREE"` before reading or
-editing source files. This step may run in a different session from
-implement-story, so resolve the worktree here. If `work_dir` is missing,
-invalid, or points at the launcher checkout, fail before editing. `gc.work_dir`
-is the launcher rig root, not the implementation worktree; do not edit, test,
-or commit in the launcher checkout.
 
 Read the BMAD story self-check and acceptance-audit reports from the current
 attempt. Write the fix summary under
@@ -65,7 +60,7 @@ If there are no required findings, perform a no-op pass and close with
 `code_review.verdict=done` and `code_review.report_path=<fix summary path>` so
 the inherited implementation-review check can approve the BMAD story loop.
 
-Make any code or test changes in `$WORKTREE`, the same source-anchor worktree
+Make any code or test changes in the same verified workspace
 the implement-story step committed in, and commit them there as a focused
 commit (`git add` the changed files and `git commit`) so `close-source-anchor`
 verifies the fixed code, not only the first attempt. Commit only when

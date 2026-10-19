@@ -37,6 +37,19 @@ def test_native_compilation_preserves_required_stage_failure_boundaries(
     result = run_gc(gc_test_bin, build_city, "formula", "show", formula, "--json",
                     "--var", f"worktree_lifecycle={lifecycle}",
                     "--var", f"drain_policy={drain}")
+    # Stage B refuses legacy admission. Keep every legacy combination as a
+    # native refusal case; new-mode cases retain the full scope checks below.
+    if lifecycle == "legacy":
+        assert result.returncode == 1, result.stdout + result.stderr
+        refusal = json.loads(result.stdout)
+        assert refusal["schema_version"] == "1" and refusal["ok"] is False
+        error = refusal["error"]
+        assert error["code"] == "command_failed" and error["exit_code"] == 1
+        assert ('variable "worktree_lifecycle": value "legacy" not in allowed values [new]'
+                in error["message"])
+        assert "steps" not in refusal and "deps" not in refusal
+        record_property("native_legacy_refusal", json.dumps(refusal, sort_keys=True))
+        return
     assert result.returncode == 0, result.stdout + result.stderr
     recipe = json.loads(result.stdout)
     assert recipe["schema_version"] == "1" and recipe["ok"] is True

@@ -66,8 +66,12 @@ python3 "{{pack_root}}/assets/scripts/workspace_entry.py" gate \
   --entrypoint build --worktree-lifecycle "{{worktree_lifecycle}}" --allow-pending-source
 ```
 
-An `awaiting-source` result permits planning only. Keep implementation blocked
-until the original workflow has a valid native source and recorded run.
+A successful `recorded` result allows requirements, planning and decomposition.
+Initial capture must have a `committed` or `replayed` receipt; an existing run
+must pass exact native readback. A source plan is not required at this stage.
+An `awaiting-source` result permits planning only. Implementation still requires
+the original recorded run, source plan and admitted workspace. A nonzero exit,
+unknown receipt or refused read blocks handoff; preserve the original request.
 
 Validate mode inputs with the compact native reader below before any stage runs:
 `interaction_mode` must be `interactive`, `autonomous`, or `headless`;
@@ -120,7 +124,10 @@ this virtual contract. Entrypoint adapters may launch those formulas explicitly;
 concrete build formulas may instead override stage steps while preserving the
 same artifact names and close semantics.
 
-Persist the normalized values on the workflow root bead using `gc.var.<name>` for each launch input and `gc.build.<artifact>_path` for resolved artifact paths. If an optional path input is blank, derive it under the resolved artifact root and record the derived absolute path.
+Persist the normalized values on the workflow root bead using `gc.var.<name>`
+for each launch input and `gc.build.<artifact>_path` for resolved artifact paths.
+Derive blank optional paths under the resolved artifact root, except for the
+implementation summary: its accepted path is not known during preparation.
 
 Build artifacts are Markdown files with YAML front matter, not JSON. When a
 path input is blank, derive these canonical filenames under the artifact root:
@@ -128,16 +135,17 @@ path input is blank, derive these canonical filenames under the artifact root:
 - `requirements.md` for `gc.build.requirements_path`
 - `implementation-plan.md` for `gc.build.plan_path`
 - `decomposition.md` for `gc.build.decomposition_path`
-- `implementation-summary.md` for `gc.build.implementation_summary_path`
 - `review-report.md` for `gc.build.review_report_path`
 - `factory-run.md` for `gc.build.final_report_path`
 
 Resolved artifact path keys recorded on the workflow root are
 `gc.build.requirements_path`, `gc.build.plan_path`,
-`gc.build.decomposition_path`, `gc.build.implementation_summary_path`,
-`gc.build.review_report_path`, and `gc.build.final_report_path`. Producer-stage
-validation gates read these keys, so record every derived path even when the
-matching launch input was blank.
+`gc.build.decomposition_path`, `gc.build.review_report_path`, and
+`gc.build.final_report_path`. Producer-stage validation gates read these keys,
+so record every derived path even when the matching launch input was blank.
+Leave `gc.build.implementation_summary_path` unresolved until the canonical
+stage reads the exact accepted terminal summary. Do not prepopulate a reporting
+placeholder as though it were an accepted artifact.
 
 When updating metadata, store plain scalar strings without embedded quote
 characters. Prefer a single JSON-object update with `gc bd update <root> --metadata

@@ -11,9 +11,12 @@ own helpers. With the `gc` binding, use `gc gc workspace`.
 
 Each helper's `--help` lists its exact arguments. Commands require explicit native
 city, store, registered rig, root and claimed step. Start from a real intake task
-or convoy. New mode requires the captured project policy and qualified core APIs.
-Fresh supported work defaults to `new`. Existing runs keep their recorded mode.
-Explicit `legacy` remains deprecated compatibility.
+or convoy. Source access requires recorded `worktree_lifecycle=new`, the captured
+project policy and qualified core APIs. First capture needs an explicit configured
+base selector. `@default` selects the verified registered checkout's current
+commit and immediately records that exact commit. Continuations use the recorded
+commit. Preserve legacy or unclassified records and checkouts for
+[explicit migration](../../docs/worktree-dependencies.md#migrate-existing-work).
 
 Unknown writes or effects require readback of the original operation. Keep the
 private allocation journals and guarded requests outside source checkouts.

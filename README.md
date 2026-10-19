@@ -22,7 +22,7 @@ For the full model (cities, rigs, formulas, beads, runtime providers) see the
 ## Start here: configure and launch a build
 
 Use matching Gas City core and pack versions. See
-[worktree configuration](./gascity/docs/worktree-dependencies.md#select-a-mode)
+[worktree configuration](./gascity/docs/worktree-dependencies.md#source-lifecycle)
 for lifecycle modes and prerequisites. The steps below configure and launch a
 build.
 

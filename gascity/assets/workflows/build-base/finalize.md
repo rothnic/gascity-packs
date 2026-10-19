@@ -1,14 +1,14 @@
-For `new`, run `gc gc workspace flow verify` using
+Run `gc gc workspace flow verify` using
 [the native runtime arguments](../workspace-runtime.md) before finalization.
 The command requires the exact canonical approval and actual native reviewer.
 
 This is the `build-base` finalize stage. Treat it as a virtual contract that concrete formulas may override.
 
-For captured `new` mode, read current canonical and approved review records and
+For the captured `new` run, read current canonical and approved review records and
 call `workspace_review.validate_approval` against actual terminal requirement
 evidence and unchanged source/artifacts before recording pass. Missing review,
 stale X approval after Y, exhaustion or unresolved setup/failed/skipped/unrun evidence
-remains blocked. Disabled publication cannot turn this into success. Legacy retains finalization below.
+remains blocked. Disabled publication cannot turn this into success.
 
 Synthesize the workflow result from the requirements, plan, decomposition, implementation, and review artifacts. Record pass/fail outcome, artifact paths, and any remaining follow-up work.
 

@@ -20,9 +20,11 @@ readbacks. Do not infer them from the current directory, artifacts or
 
 Run `workspace_entry.py gate` before creating implementation work or handing
 off to another suffix. Pass the entrypoint named in the stage instructions.
-The helper reads `gc.var.worktree_lifecycle` and the optional
-`gc.var.worktree_base_ref` from the root. An omitted base uses the registered
-repository's `HEAD`; an explicitly empty or invalid base is rejected.
+The helper requires `gc.var.worktree_lifecycle=new` and an explicit
+`gc.var.worktree_base_ref` on the native root before first capture. The formula
+default `@default` is an explicit selection of the verified registered repository.
+Capture records its exact commit immediately without fetching. Missing, empty or
+invalid selectors refuse capture; continuation always uses the retained commit.
 
 New lifecycle also requires `gc.var.worktree_checks` on that same native root.
 Use canonical JSON with explicit project check IDs and command arguments:
@@ -36,16 +38,22 @@ Run capture freezes these commands with the exact initial base in
 that policy. Missing, empty, malformed or changed configuration refuses capture
 or replay; a result artifact cannot select easier checks.
 
-- **Legacy:** the existing workflow continues with its legacy lifecycle. A run
-  already captured in new mode cannot switch to legacy mode.
+- **Legacy or unclassified:** refuse source access and preserve the original
+  state for [explicit migration](../../docs/worktree-dependencies.md#migrate-existing-work).
+  Changing a selector cannot convert an existing run.
 - **Recorded:** the native run retains its original input, base commit and
   lifecycle. Changing the implementation convoy or default branch does not
-  select another base.
+  select another base. Successful exact readback permits requirements, planning
+  and decomposition before a source plan exists. Initial capture also requires
+  a `committed` or `replayed` receipt. Implementation requires the later source
+  plan and workspace admission; recorded preparation does not waive those gates.
 - **Awaiting source:** `--allow-pending-source` permits planning when source
   capture is not yet possible. It does not enable a targetless native launch.
   Implementation requires a valid source convoy and recorded run.
 - **Refused:** missing records, a different root/store/generation, changed
   lifecycle, or artifact-only input require repair or explicit migration.
+  A nonzero exit or unknown capture receipt blocks handoff; reconcile the
+  original operation rather than treating missing evidence as success.
 
 Initial `requirements`, `plan` and `decompose` entries may capture generation 1
 from their real native input before a run exists. Capture records the registered

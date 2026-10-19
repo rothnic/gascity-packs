@@ -1,7 +1,6 @@
-This is the `implementation-base` methodology contract worktree preparation
-step.
+Prepare the item through the [native dependency preparation recipe](../do-work/prepare-worktree.md).
 
-Concrete methodology packs override this step only when their implementation
-items need different setup. Preserve the source-anchor metadata contract, pass
-through optional context `{{context_path}}`, and do not edit launcher-checkout
-files here.
+Concrete methodology overrides preserve the exact native run, source plan,
+member, owner, generation and current claim. Retain context `{{context_path}}`.
+Do not write source during preparation. Missing records or older unclassified
+state require explicit migration with the original checkout preserved.

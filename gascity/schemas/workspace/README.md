@@ -3,9 +3,10 @@
 The base pack defines version 1 JSON records for source lifecycle state and a
 read-only validator. These contracts bind run identity, source OIDs and evidence.
 The [record-access adapter](access.md) publishes validated records with native
-writer admission, guarded transactions and bounded local locks. Fresh supported
-formulas default to new; existing runs retain their recorded lifecycle. Native
-workflow acceptance requires the matched source pair.
+writer admission, guarded transactions and bounded local locks. Supported source
+execution requires recorded `worktree_lifecycle=new`. Historical records remain
+readable for inspection and explicit migration. Native workflow acceptance
+requires the matched source pair.
 
 ## Validate
 
@@ -36,9 +37,11 @@ Every record requires integer `version: 1`, `workflow_root_id`, positive integer
 The run record captures the initial generation, `1`; later source-plan
 generations refer to its fixed base rather than recapturing it.
 
-Run records also require `worktree_lifecycle`, either `legacy` or `new`.
+Historical run records retain `worktree_lifecycle`, either `legacy` or `new`,
+for read-only inspection. Active execution requires `new`; schema parsing alone
+does not authorize legacy execution.
 `verify_run_mode(run, selected_mode, workflow_root_id)` validates a supplied run
-snapshot and rejects a different root or mode. The mode is payload, so exact
+snapshot and rejects a different root, non-new mode or conflicting mode. The mode is payload, so exact
 replay rejects a changed value under the same identity. These pure checks do
 not perform first durable capture or atomically enforce later store reads.
 Those operations belong to the run-capture and record-access writers.
@@ -164,8 +167,9 @@ entrypoints remain visible. The artifact path check is recorded as an additional
 source helper. Review delegation, fix-generation ownership and interactive
 review's conditional source writes are explicit lifecycle responsibilities.
 
-`new` classifies composed managed paths, `legacy` retains compatibility surfaces,
-and `reference` identifies planning/artifact-only surfaces. Every discovered asset
+`new` classifies supported source paths and `reference` identifies
+planning/artifact-only surfaces. Legacy classifications are rejected with
+explicit migration guidance. Every discovered asset
 must be listed. Changed content or bindings require matching classifications and
 hashes. Source declarations do not establish native workflow acceptance.
 
@@ -175,9 +179,8 @@ classification and accepts only the selected lifecycle plus planning-only
 entry preflights use the executable `workspace-lifecycle-valid.py` check with
 `gc.lifecycle` and JSON-string `gc.lifecycle.source_modes` step metadata. The
 check reads the exact check bead through `gc bd show`; it makes no store writes.
-Composed entry declarations select `new` source support with explicit
-`gc.lifecycle.compatibility=legacy`. Fresh work defaults to new. Explicit legacy
-execution requires that compatibility declaration and emits a deprecation warning.
+Composed entry declarations require `new` source support. A compatibility
+metadata value cannot bypass missing, legacy or conflicting declarations.
 This checks supplied declarations. Installed-layer priority, shadowed source
 admission and new-workflow acceptance require separate runtime verification.
 

@@ -1,8 +1,8 @@
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the task/story procedure below in either mode. Legacy source/path
-resolution applies only to explicit `legacy`; managed source operations use
-the recorded workspace. Unknown modes or failed reads never select legacy.
+Use the recorded native workspace for the task/story procedure below.
+Only `new` is supported. Preserve older or unclassified state for explicit
+migration; failed reads grant no source authority.
 
 For an admitted `new` item, reload the exact run/source-plan/workspace
 through the imported Gas City `workspace_checkout.load_workspace_context`
@@ -32,21 +32,10 @@ Implement the BMAD story with the installed `bmad-quick-dev` and
 
 Treat BMAD's "hand to a sub-agent/task" instruction as this Gas City lane.
 
-Resolve the source anchor as the workflow root's stamped `gc.source_anchor_id`;
-only when the root has none, use the same rules as the do-work `prepare-worktree`
-step (for a shared-drain item, the drain member in `gc.drain_member_id`), read
-`work_dir` from the source anchor, validate that it is an absolute existing git
-worktree, set `WORKTREE` to that path, and `cd "$WORKTREE"` before reading or
-editing source files. If `work_dir` is missing, invalid, or points at the
-launcher checkout, fail before editing.
-`gc.work_dir` is the launcher rig root, not the implementation worktree; do not
-edit, test, or commit in the launcher checkout.
-
 Implement the story, run focused tests from inside the worktree, update task
 completion evidence, then make a focused commit in the worktree (`git add` the
-changed files and `git commit`). Do-work's `close-source-anchor` step fails
-closed when the worktree has no implementation commit, so uncommitted edits are
-a failed implementation, not a pass. Commit only when `git status --porcelain`
+changed files and `git commit`). A changed result requires a committed
+output; a verified no-change result retains the recorded input OID. Commit only when `git status --porcelain`
 shows changes, and never use `git commit --allow-empty`. This step re-runs on
 every story loop iteration: if the story is already committed and nothing
 changed, do not commit again; record the existing `HEAD` commit hash instead.

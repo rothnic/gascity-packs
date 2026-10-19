@@ -25,7 +25,7 @@ reviewed implementation in your repository with a full artifact trail.
 ## Quick start
 
 Use matching Gas City core and pack versions. See
-[worktree configuration](../gascity/docs/worktree-dependencies.md#select-a-mode)
+[worktree configuration](../gascity/docs/worktree-dependencies.md#source-lifecycle)
 for lifecycle modes and prerequisites.
 
 Prerequisites: Gas City installed and a city running, plus a git repository
@@ -238,9 +238,10 @@ coding. See the shared
 
 ### Source workspaces
 
-`worktree_lifecycle=new` is the default for fresh source work. Continuations
-retain the original run's mode. Explicit `legacy` remains deprecated
-compatibility and emits a warning. New mode uses the imported native entry,
+`worktree_lifecycle=new` is required for source work. Continuations retain the
+original run and recorded base. Legacy or unclassified work requires
+[explicit migration](../gascity/docs/worktree-dependencies.md#migrate-existing-work).
+The workflow uses the imported native entry,
 checkout, runtime and record helpers. Configure its fixed base and required
 checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
 Native worker execution and installation require separate matched-pair validation.

@@ -15,7 +15,7 @@ single_lane = true
 
 [vars]
 [vars.worktree_checks]
-description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+description = "Canonical JSON required_checks [{id, argv}], captured once on the native run."
 default = ""
 
 [vars.worktree_base_ref]
@@ -38,7 +38,7 @@ enum = ["false", "true"]
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle. New uses the composed native workspace helpers and captured policy."
 default = "new"
-enum = ["legacy", "new"]
+enum = ["new"]
 
 [vars.implementation_target]
 description = "Superpowers task implementation role."
@@ -47,7 +47,7 @@ default = "superpowers.implementer"
 [[steps]]
 id = "validate-workspace-mode"
 title = "Validate methodology source lifecycle"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/workspace-mode/validate.md"
 
 [steps.check]
@@ -70,7 +70,7 @@ max_attempts = 3
 
 [steps.check.check]
 mode = "exec"
-path = ".gc/scripts/checks/build-artifact-valid.sh"
+path = "../assets/scripts/checks/build-artifact-valid.sh"
 timeout = "5m"
 
 [[steps]]

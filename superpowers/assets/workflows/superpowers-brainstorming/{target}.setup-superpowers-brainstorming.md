@@ -5,16 +5,12 @@ artifact path, optional context bundle, and brainstorming approval mode. Use
 workflow root metadata `gc.var.brainstorming_approval_mode` when present;
 otherwise default to `autonomous`.
 
-Create the brainstorming artifact directory under the build artifact root and
-ensure the rig-local script cache contains the imported `gc` pack checks. If
-`.gc/scripts/checks/design-review-approved.sh` is missing, locate the imported
-`gc` formula search path with `gc formula show superpowers-build --json`, use
-its sibling `../assets/scripts` directory as the source, and refresh
-`.gc/scripts` from that directory.
+Create the brainstorming artifact directory under the build artifact root.
+Read the native loop control's `gc.check_path` and verify it resolves the imported
+Gas City pack's executable `design-review-approved.sh`. Do not copy or refresh
+rig-local scripts. A missing resolved helper stops setup.
 
-Write a compact context note for the design-approval loop and written-spec
-loop. Confirm that `.gc/scripts/checks/design-review-approved.sh` is
-executable.
+Write a compact context note for the design-approval and written-spec loops.
 
 Do not invoke provider-native subagents or upstream plugin runtime commands.
 This Gas City graph stage is the delegation mechanism.

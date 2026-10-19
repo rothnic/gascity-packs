@@ -11,7 +11,7 @@ import secrets
 import sys
 from typing import Any
 
-from workspace_records import (RecordError, canonical_bytes, contracts, parse_record,
+from workspace_records import (LIFECYCLE_MIGRATION, RecordError, canonical_bytes, contracts, parse_record,
                                record_identity, record_sha256, validate_record)
 from workspace_run import (RunError, canonical_path, capture_payload, capture_run,
                            native_json, read_check_policy, registered_rig, repository_identity, source_context, run_scope)
@@ -101,10 +101,11 @@ def allocate_placeholder(store, *, title: str, existing_id: str | None = None,
 
 def allocate_run_placeholders(store, attempt, *, workflow_root_id: str, input_convoy_id: str,
                               source_anchor_id: str, rig_root: str, worktree_lifecycle: str,
-                              base_ref: str = "@default", run_record_id: str | None = None,
+                              base_ref: str | None = None, run_record_id: str | None = None,
                               authority_id: str | None = None, checks_config: str | None = None,
                               writer_map=None, writer_rows=None) -> dict[str, Any]:
     """Retain the source and each native create boundary before effects."""
+    require(worktree_lifecycle == "new", LIFECYCLE_MIGRATION)
     from workspace_requests import allocation_directory, require_resolved_scope
     from workspace_store import read_cooked_context, transition_locks
     from workspace_outputs import immutable_json
@@ -207,6 +208,8 @@ def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: 
         value = parse_record(raw)
         validate_record(kind, value)
         require(list(record_identity(kind, value)) == ref["identity"], "native continuation record identity changed")
+        if kind == "run":
+            require(value["worktree_lifecycle"] == "new", LIFECYCLE_MIGRATION)
         return value
 
     claim = read(claimed_step_id)
@@ -324,6 +327,7 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
     The caller must fence this state again in the operation that uses it.
     """
     try:
+        require(worktree_lifecycle == "new", LIFECYCLE_MIGRATION)
         require(type(generation) is int and generation > 0, "generation must be a positive integer")
         city_root = canonical_path(city_root)
         require(city_root == store.cwd, "selected city conflicts with the native store adapter")
@@ -456,11 +460,11 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
 
 def prepare_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
                   workflow_root_id: str, entrypoint: str, worktree_lifecycle: str,
-                  base_ref: str = "@default", generation: int = 1,
+                  base_ref: str | None = None, generation: int = 1,
                   input_convoy_id: str | None = None, run_record_id: str | None = None,
                   authority_id: str | None = None, require_plan: bool = False,
                   allow_pending_source: bool = False, recorded_root_id: str | None = None) -> dict[str, Any]:
-    require(worktree_lifecycle in ("legacy", "new"), "unknown worktree lifecycle")
+    require(worktree_lifecycle == "new", LIFECYCLE_MIGRATION)
     require(type(generation) is int and generation > 0, "generation must be a positive integer")
     require(canonical_path(city_root) == store.cwd, "selected city conflicts with the native store adapter")
     rows = store.snapshot([workflow_root_id, attempt.claimed_bead_id])
@@ -535,6 +539,7 @@ def prepare_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
 def read_entry_mode(store, *, workflow_root_id: str, claimed_step_id: str,
                     worktree_lifecycle: str | None = None, recorded_root_id: str | None = None):
     """Read the retained run or explicit cooked mode before source effects."""
+    require(worktree_lifecycle is None or worktree_lifecycle == "new", LIFECYCLE_MIGRATION)
     observed = store.snapshot(list(dict.fromkeys([workflow_root_id, claimed_step_id])))
     root = observed[workflow_root_id]
     step = observed[claimed_step_id]
@@ -568,7 +573,7 @@ def read_entry_mode(store, *, workflow_root_id: str, claimed_step_id: str,
                 and workflow_root_id in (physical_root_id, original_root_id)
                 and control["metadata"].get("gc.kind") == "drain"
                 and control["metadata"].get("gc.root_store_ref") == store.store_ref,
-                "native legacy or inherited child has no exact original root/store")
+                "native inherited child has no exact original root/store")
         original_root = store.snapshot([original_root_id])[original_root_id]
         require(original_root["metadata"].get("gc.kind") == "workflow"
                 and original_root["metadata"].get("gc.root_store_ref") == store.store_ref,
@@ -583,12 +588,7 @@ def read_entry_mode(store, *, workflow_root_id: str, claimed_step_id: str,
                     and original_root["metadata"].get("gc.var.worktree_lifecycle", mode) == mode,
                     "native child mode conflicts with its immutable inherited run")
         else:
-            original_mode = original_root["metadata"].get("gc.var.worktree_lifecycle")
-            mode = original_mode if mode is None else mode
-            require(mode == "legacy" and original_mode == "legacy"
-                    and RUN_REF not in metadata,
-                    "native child cannot bypass an original managed run or its required capture")
-            retained = None
+            raise EntryError("native child has no recorded original run; " + LIFECYCLE_MIGRATION)
     elif RUN_REF in metadata:
         retained = _load(store, "run", reference(metadata[RUN_REF], "run"))
         mode = retained["worktree_lifecycle"] if mode is None else mode
@@ -597,8 +597,8 @@ def read_entry_mode(store, *, workflow_root_id: str, claimed_step_id: str,
                 "native workflow mode conflicts with its immutable recorded run")
     else:
         retained = None
-    require(mode in ("legacy", "new"),
-            "native workflow has no valid recorded worktree lifecycle; resume its original classified workflow or migrate explicitly")
+    require(mode == "new", LIFECYCLE_MIGRATION)
+    require(retained is None or retained["worktree_lifecycle"] == "new", LIFECYCLE_MIGRATION)
     claimed_mode = step["metadata"].get("gc.lifecycle")
     require(claimed_mode is None or claimed_mode == mode,
             "claimed native lifecycle conflicts with the workflow mode")
@@ -621,9 +621,11 @@ def gate_entry(store, attempt, *, gc: str, city_root: str, rig_name: str,
         require(common == retained["common_git_dir"], "recorded run lock repository changed")
         store.common_git_dir = common
         require_resolved_scope(store, run_scope(retained["workflow_root_id"]))
-    if mode == "legacy":
-        return {"state": "legacy", "workflow_root_id": workflow_root_id, "store_ref": store.store_ref}
-    base = store.snapshot([workflow_root_id])[workflow_root_id]["metadata"].get("gc.var.worktree_base_ref", "@default")
+    base = (retained["base_oid"] if retained is not None else
+            store.snapshot([workflow_root_id])[workflow_root_id]["metadata"].get("gc.var.worktree_base_ref"))
+    require(isinstance(base, str) and bool(base),
+            "initial source selection requires the native worktree_base_ref, including explicit @default; "
+            "do not infer an ambient HEAD")
     return prepare_entry(store, attempt, gc=gc, city_root=city_root, rig_name=rig_name,
         workflow_root_id=workflow_root_id, entrypoint=entrypoint, generation=generation,
         worktree_lifecycle=mode, base_ref=base, **kwargs)
@@ -640,8 +642,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--claimed-step")
     parser.add_argument("--entrypoint", choices=("build", "implement", "requirements", "plan", "decompose", "convoy", "review"), default="build")
     parser.add_argument("--recorded-root", help="Locate an original run; native input relationships must still prove its authority")
-    parser.add_argument("--worktree-lifecycle", choices=("legacy", "new"))
-    parser.add_argument("--base-ref", default="@default")
+    parser.add_argument("--worktree-lifecycle", help="Only new is supported; older state requires explicit migration")
+    parser.add_argument("--base-ref")
     parser.add_argument("--generation", type=int, default=1)
     parser.add_argument("--input-convoy-id")
     parser.add_argument("--run-record-id")
@@ -653,6 +655,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--title", default="Workspace record")
     args = parser.parse_args(argv)
     try:
+        require(args.worktree_lifecycle is None or args.worktree_lifecycle == "new", LIFECYCLE_MIGRATION)
         from workspace_store import Attempt, WorkspaceStore
         store = WorkspaceStore(args.store_ref, gc=args.gc, cwd=args.city_root)
         if args.action == "allocate":

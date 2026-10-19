@@ -33,7 +33,7 @@ for the read and transaction limits.
 Prerequisites: Gas City installed and a city running (`gc init`, `gc start`),
 and your project added as a rig (`gc rig add .` inside the repo). Use matching
 Gas City core and pack versions. See
-[worktree configuration](docs/worktree-dependencies.md#select-a-mode) for
+[worktree configuration](docs/worktree-dependencies.md#source-lifecycle) for
 lifecycle modes and prerequisites, and the [repository README](../README.md)
 for the from-scratch path.
 
@@ -168,10 +168,10 @@ launch or pin them in a rig's `formula_vars`:
 | `implementation_target` | `gc.implementation-worker` | The rig role that implements each work item. |
 | `push` / `open_pr` | `false` | Allow the publish stage to push and open a PR after all checks pass. |
 | `max_iterations` | `10` | Bound on implementation/review fix attempts. |
-| `worktree_lifecycle` | `new` | Recorded source inputs, owned workspaces and qualified output handoff. Explicit `legacy` is deprecated. |
+| `worktree_lifecycle` | `new` | Recorded source inputs, owned workspaces and qualified output handoff. Other modes require explicit migration. |
 | `worktree_run_root` | empty | Locates an original run for a separate suffix; actual native source relationships must authorize it. |
-| `worktree_base_ref` | `@default` | Captures the registered checkout HEAD once. Empty is invalid. |
-| `worktree_checks` | empty | Canonical JSON `required_checks: [{id, argv}]`, required only for `new` and captured on the run. |
+| `worktree_base_ref` | `@default` | Explicit first-capture policy for the verified registered checkout; records its exact commit once. Empty or missing is invalid. |
+| `worktree_checks` | empty | Canonical JSON `required_checks: [{id, argv}]`, required and captured on the run. |
 | `worktree_parent` | empty | Default rig workspace parent, or an absolute existing directory. |
 | `worktree_name_prefix` | empty | Prefix for the stable `<owner>-g<generation>` directory name. |
 | `worktree_allow_external_parent` | `false` | Explicit permission for a parent outside the rig. |
@@ -371,13 +371,12 @@ and resume each step independently.
 
 Use these mode inputs when designing or launching methodology formulas:
 
-- `worktree_lifecycle` defaults to `new` for fresh work. Explicit `legacy`
-  retains deprecated compatibility and emits a warning. New mode uses the native entry,
+- `worktree_lifecycle=new` uses the native entry,
   source-selection, checkout, acceptance and guarded record helpers. Initial
   capture freezes the registered base and project check policy atomically.
   Native drains and explicit child launches retain the original mode and policy.
   Continuations must prove the original run and current source generation.
-  A recorded legacy run keeps its mode after the default changes.
+  Legacy or unclassified work requires [explicit migration](docs/worktree-dependencies.md#migrate-existing-work).
   Use a matched core/pack revision qualified for the intended workflow.
   Native worker execution and installation remain unverified in this candidate.
 
@@ -417,8 +416,8 @@ asset tests fail if a formula exists without a requirements row.
 
 New mode wires accepted source selection through owned checkout preparation,
 independent project checks/review, result checkpoints, canonical review and
-publication. Fresh work defaults to new mode, with explicit deprecated legacy
-compatibility. The candidate's source and component
+publication. Source access requires the recorded new lifecycle; legacy or
+unclassified work stops for explicit migration. The candidate's source and component
 checks do not establish native worker execution or installation acceptance.
 
 - **Configuration and recovery:** [Worktree dependencies](docs/worktree-dependencies.md).
@@ -1124,8 +1123,8 @@ task plan. The script requires Python 3 with PyYAML available, invokes `gc bd --
 convoy heads and membership, and records the created mapping in `tasks.md`.
 New source expansion requires the existing native workflow, claimed step and
 recorded run. The script inherits that run's mode and refuses an incompatible
-override before creation. Standalone legacy creation requires explicit
-`--worktree-lifecycle legacy` and emits a deprecation warning.
+override before creation. Standalone legacy creation is refused; preserve its
+original state for [explicit migration](docs/worktree-dependencies.md#migrate-existing-work).
 
 The `tasks.md` payload uses nested `convoys[]` and `beads[]`; `epics[]` is a
 hard validation error. `convoys[].dependencies` expands to runnable bead edges

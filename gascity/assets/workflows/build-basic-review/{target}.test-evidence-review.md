@@ -5,16 +5,19 @@ command, proof command, changed files, and remaining risks. Verify that the
 commands actually cover the acceptance criteria claimed by the requirements and
 plan.
 
-Before evaluating proof, read `gc.build.code_review_context_path` from the
-workflow root bead and use its `## Implementation Worktrees` section as the
-authority for where commands must run. `gc.work_dir` is the launcher rig root,
-not the implementation worktree. Do not run evidence commands from the launcher
-checkout. Resolve relative command paths against the listed implementation
-worktree, run `cd "$WORKTREE"`, and verify `pwd -P` equals that worktree before
-executing proof commands. If the context is missing a usable implementation
-worktree, write an iterate finding against review setup.
+Resolve the exact run, source plan, workspace, terminal accepted result, owner
+output and canonical record through the imported `workspace_outputs` helpers.
+Validate native qualification and the captured check policy before source access.
+Use `workspace_review.begin_canonical_review` with the current native reviewer,
+recorded workspace and exact binding; retain its canonical/result hashes and
+source snapshot. Every lane reviews that same full canonical output OID.
+Artifact paths and old `work_dir` fields do not establish source authority.
+Missing or conflicting records stop review for explicit recovery or migration.
 
-Contract: `gc.work_dir` is the launcher rig root, not the implementation worktree.
+Read `gc.build.code_review_context_path` for requirements and methodology
+evidence. Resolve source paths and proof commands against the verified canonical
+workspace, then verify its exact OID and clean state. Keep review read-only. An
+unchanged launcher checkout is irrelevant to the accepted canonical result.
 
 Write concrete findings under the build artifact root. Distinguish missing
 proof from real product defects so the fix lane can either run the missing

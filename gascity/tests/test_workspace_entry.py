@@ -95,7 +95,7 @@ class EntryTests(unittest.TestCase):
         self.git("commit", "-m", "base")
         self.record = run.capture_payload(workflow_root_id="root-1", input_convoy_id="initial-1",
             source_anchor_id="initial-1", rig_root=str(self.repo), writer_step_id="prepare-1",
-            worktree_lifecycle="new")
+            worktree_lifecycle="new", base_ref="@default")
         self.reference = {"kind": "run", "identity": list(record_identity("run", self.record)), "bead_id": "record-1"}
         self.rows = {
             "root-1": self.row("root-1", metadata={"gc.kind": "workflow", "gc.root_store_ref": "rig:example",
@@ -559,7 +559,8 @@ class EntryTests(unittest.TestCase):
         with self.assertRaisesRegex(entry.EntryError, "lifecycle"):
             entry.gate_entry(self.store, attempt, **args)
         self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
-        self.assertEqual(entry.gate_entry(self.store, attempt, **args)["state"], "legacy")
+        with self.assertRaisesRegex(entry.EntryError, "explicit migration"):
+            entry.gate_entry(self.store, attempt, **args)
         self.rows["root-1"]["metadata"][entry.RUN_REF] = saved_reference
         with self.assertRaises(entry.EntryError):
             entry.gate_entry(self.store, attempt, **args)
@@ -568,6 +569,20 @@ class EntryTests(unittest.TestCase):
             self.assertEqual(entry.gate_entry(self.store, attempt, **args)["run"], self.record)
         with self.assertRaises(entry.EntryError):
             entry.gate_entry(self.store, attempt, worktree_lifecycle="legacy", **args)
+
+    def test_fresh_gate_requires_native_selector_and_never_uses_current_checkout(self):
+        from workspace_store import Attempt
+        self.rows["root-1"]["metadata"].pop(entry.RUN_REF)
+        self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "new"
+        args = dict(gc="gc", city_root=str(self.root), rig_name="example", workflow_root_id="root-1", entrypoint="build")
+        attempt = Attempt("session-1", "instance-1", "step-1")
+        with patch.object(entry, "prepare_entry", return_value={"state": "capture"}) as prepare:
+            with self.assertRaisesRegex(entry.EntryError, "native worktree_base_ref"):
+                entry.gate_entry(self.store, attempt, **args)
+            prepare.assert_not_called()
+            self.rows["root-1"]["metadata"]["gc.var.worktree_base_ref"] = "@default"
+            self.assertEqual(entry.gate_entry(self.store, attempt, **args), {"state": "capture"})
+            self.assertEqual(prepare.call_args.kwargs["base_ref"], "@default")
 
     def test_recorded_mode_is_inherited_and_rejects_native_mode_change(self):
         from workspace_store import Attempt
@@ -622,11 +637,11 @@ class EntryTests(unittest.TestCase):
         pending = directory / (hashlib.sha256(canonical_bytes(run.run_scope("root-1"))).hexdigest() + ".pending")
         pending.write_text(str(directory / "original-legacy-request.json"))
         with patch.object(entry, "registered_rig", return_value=str(self.repo)), \
-             self.assertRaisesRegex(run.RecordError, "original retained request"):
+             self.assertRaisesRegex(run.RecordError, "explicit migration"):
             entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), gc="gc",
                 city_root=str(self.root), rig_name="example", workflow_root_id="root-1", entrypoint="convoy")
 
-    def test_unrecorded_native_legacy_child_stays_legacy_and_cannot_downgrade_new_original_root(self):
+    def test_unrecorded_native_legacy_child_refuses_without_allocation(self):
         from workspace_store import Attempt
         self.drain_child()
         self.rows["root-1"]["metadata"].pop(entry.RUN_REF)
@@ -634,10 +649,11 @@ class EntryTests(unittest.TestCase):
         self.rows["child-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
         args = dict(gc="gc", city_root=str(self.root), rig_name="example", workflow_root_id="child-1", entrypoint="convoy")
         with patch.object(entry, "allocate_placeholder") as create:
-            self.assertEqual(entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), **args)["state"], "legacy")
+            with self.assertRaisesRegex(entry.EntryError, "explicit migration"):
+                entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), **args)
             create.assert_not_called()
         self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "new"
-        with self.assertRaisesRegex(entry.EntryError, "cannot bypass"):
+        with self.assertRaisesRegex(entry.EntryError, "explicit migration"):
             entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), **args)
 
     def test_task_creation_defaults_to_new_and_requires_native_inputs_before_creation(self):
@@ -653,7 +669,7 @@ class EntryTests(unittest.TestCase):
         for child in (False, True):
             if child:
                 self.drain_child()
-            for mode in (("new",) if child else ("new", "legacy")):
+            for mode in ("new", "legacy"):
                 self.record["worktree_lifecycle"] = mode
                 self.rows["record-1"]["metadata"][contracts()["run"]["metadata_key"]] = canonical_bytes(self.record).decode()
                 if child:
@@ -667,8 +683,11 @@ class EntryTests(unittest.TestCase):
                              contextlib.redirect_stdout(io.StringIO()) as stdout, \
                              contextlib.redirect_stderr(io.StringIO()) as stderr:
                             before = copy.deepcopy(self.rows)
-                            self.assertEqual(entry.main([action, *args, "--workflow-root", workflow_root]), 0, stderr.getvalue())
-                            self.assertEqual(json.loads(stdout.getvalue())["run"]["worktree_lifecycle"], mode)
+                            self.assertEqual(entry.main([action, *args, "--workflow-root", workflow_root]), 0 if mode == "new" else 1, stderr.getvalue())
+                            if mode == "new":
+                                self.assertEqual(json.loads(stdout.getvalue())["run"]["worktree_lifecycle"], mode)
+                            else:
+                                self.assertIn("explicit migration", stderr.getvalue())
                             self.assertEqual(self.rows, before)
 
     def test_task_creation_explicit_legacy_cannot_allocate_in_recorded_new_run(self):
@@ -688,7 +707,7 @@ class EntryTests(unittest.TestCase):
                     create.assert_not_called()
                 self.assertEqual(self.rows, before)
 
-    def test_task_creation_inherits_recorded_mode_and_refuses_explicit_changes(self):
+    def test_task_creation_inherits_new_and_refuses_historical_legacy_without_effects(self):
         from workspace_store import Attempt
         path = self.root / "tasks.md"
         path.write_text("## Bead Creation Payload\n```yaml\n" + tasks.yaml.safe_dump(source_payload()) + "```\n")
@@ -704,31 +723,28 @@ class EntryTests(unittest.TestCase):
                      patch.object(entry, "registered_rig", return_value=str(self.repo)), \
                      patch.object(tasks, "create_from_tasks", return_value=0) as create, \
                      contextlib.redirect_stderr(io.StringIO()) as stderr:
-                    self.assertEqual(tasks.main(args), 0, stderr.getvalue())
-                    workspace = create.call_args.kwargs["workspace"]
+                    self.assertEqual(tasks.main(args), 0 if mode == "new" else 1, stderr.getvalue())
                     if mode == "new":
-                        self.assertEqual(workspace["state"]["run"], self.record)
-                        self.assertEqual(stderr.getvalue(), "")
+                        self.assertEqual(create.call_args.kwargs["workspace"]["state"]["run"], self.record)
                     else:
-                        self.assertIsNone(workspace)
-                        self.assertIn("deprecated", stderr.getvalue())
+                        create.assert_not_called()
+                        self.assertIn("explicit migration", stderr.getvalue())
                     create.reset_mock()
-                    self.assertEqual(tasks.main(args + ["--worktree-lifecycle", "legacy" if mode == "new" else "new"]), 1)
+                    self.assertEqual(tasks.main(args + ["--worktree-lifecycle", "legacy"]), 1)
                     create.assert_not_called()
                 self.assertEqual(self.rows, before)
 
-    def test_task_creation_explicit_standalone_legacy_warns_and_partial_native_binding_refuses(self):
+    def test_task_creation_explicit_standalone_legacy_refuses_before_native_reads(self):
         args = [str(self.root / "tasks.md"), "--worktree-lifecycle", "legacy", "--dry-run"]
-        with patch.object(tasks, "create_from_tasks", return_value=0) as create, \
+        with patch.object(tasks, "create_from_tasks") as create, \
+             patch("workspace_store.WorkspaceStore") as native, \
              contextlib.redirect_stderr(io.StringIO()) as stderr:
-            self.assertEqual(tasks.main(args), 0)
-            self.assertIsNone(create.call_args.kwargs["workspace"])
-            self.assertIn("deprecated", stderr.getvalue())
-            create.reset_mock()
-            self.assertEqual(tasks.main(args + ["--workflow-root", "root-1"]), 1)
+            self.assertEqual(tasks.main(args), 1)
+            self.assertIn("explicit migration", stderr.getvalue())
             create.assert_not_called()
+            native.assert_not_called()
 
-    def test_task_creation_inherits_cooked_legacy_and_refuses_unclassified_or_uncaptured_new(self):
+    def test_task_creation_refuses_cooked_legacy_unclassified_and_uncaptured_new(self):
         from workspace_store import Attempt
         path = self.root / "tasks.md"
         path.write_text("## Bead Creation Payload\n```yaml\n" + tasks.yaml.safe_dump(source_payload()) + "```\n")
@@ -741,19 +757,15 @@ class EntryTests(unittest.TestCase):
              contextlib.redirect_stderr(io.StringIO()) as stderr:
             before = copy.deepcopy(self.rows)
             self.assertEqual(tasks.main(args), 1)
-            self.assertIn("no valid recorded worktree lifecycle", stderr.getvalue())
+            self.assertIn("explicit migration", stderr.getvalue())
             create.assert_not_called()
             self.assertEqual(self.rows, before)
             for mode in ("legacy", "new"):
                 self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = mode
                 before = copy.deepcopy(self.rows)
                 with self.subTest(mode=mode):
-                    self.assertEqual(tasks.main(args), 0 if mode == "legacy" else 1)
-                    if mode == "legacy":
-                        self.assertIsNone(create.call_args.kwargs["workspace"])
-                        self.assertIn("deprecated", stderr.getvalue())
-                    else:
-                        create.assert_not_called()
+                    self.assertEqual(tasks.main(args), 1)
+                    create.assert_not_called()
                     self.assertEqual(self.rows, before)
                     create.reset_mock()
 
@@ -762,10 +774,41 @@ class EntryTests(unittest.TestCase):
         self.rows["root-1"]["metadata"].pop(entry.RUN_REF, None)
         self.rows["root-1"]["metadata"]["gc.var.worktree_lifecycle"] = "legacy"
         self.rows["step-1"]["metadata"]["gc.lifecycle"] = "new"
+        before = copy.deepcopy(self.rows)
         with patch.object(entry, "prepare_entry", side_effect=AssertionError("recapture")), \
-             self.assertRaisesRegex(entry.EntryError, "claimed native lifecycle conflicts"):
+             self.assertRaisesRegex(entry.EntryError, "explicit migration"):
             entry.gate_entry(self.store, Attempt("session-1", "instance-1", "step-1"), gc="gc",
                 city_root=str(self.root), rig_name="example", workflow_root_id="root-1", entrypoint="build")
+        self.assertEqual(self.rows, before)
+
+    def test_inherited_legacy_without_selectors_refuses_with_history_preserved(self):
+        self.drain_child()
+        for bead in ("root-1", "child-1"):
+            self.rows[bead]["metadata"].pop("gc.var.worktree_lifecycle", None)
+        mode, retained = entry.read_entry_mode(self.store, workflow_root_id="child-1", claimed_step_id="step-1")
+        self.assertEqual((mode, retained), ("new", self.record))
+        historical = dict(self.record, worktree_lifecycle="legacy")
+        key = contracts()["run"]["metadata_key"]
+        self.rows["record-1"]["metadata"][key] = canonical_bytes(historical).decode()
+        before = copy.deepcopy(self.rows)
+        with patch.object(entry, "native_json") as native, patch.object(entry, "allocate_placeholder") as allocate:
+            with self.assertRaisesRegex(entry.EntryError, "explicit migration.*migrate-existing-work"):
+                entry.read_entry_mode(self.store, workflow_root_id="child-1", claimed_step_id="step-1")
+            native.assert_not_called()
+            allocate.assert_not_called()
+        self.assertEqual(self.rows, before)
+        self.assertEqual(entry.parse_record(self.rows["record-1"]["metadata"][key]), historical)
+
+    def test_explicit_legacy_cli_refuses_before_native_or_git_reads(self):
+        with patch("workspace_store.WorkspaceStore") as store, patch.object(entry, "native_json") as native, \
+             contextlib.redirect_stderr(io.StringIO()) as stderr:
+            code = entry.main(["gate", "--city-root", str(self.root), "--store-ref", "rig:example",
+                "--rig", "example", "--workflow-root", "root-1", "--claimed-step", "step-1",
+                "--worktree-lifecycle", "legacy"])
+        self.assertEqual(code, 1)
+        self.assertIn("explicit migration", stderr.getvalue())
+        store.assert_not_called()
+        native.assert_not_called()
 
     def test_standalone_allocation_cli_cannot_create_an_unjournaled_native_record(self):
         import contextlib

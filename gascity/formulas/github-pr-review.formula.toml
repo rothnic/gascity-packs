@@ -1,4 +1,7 @@
 description = """
+Source access uses the recorded new workspace lifecycle. Legacy or unclassified
+state requires explicit migration; no artifact or current-checkout fallback.
+
 Targetless GitHub PR review adapter.
 
 This formula accepts only a full canonical GitHub pull request URL. It

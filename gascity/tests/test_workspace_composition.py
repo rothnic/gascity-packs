@@ -45,7 +45,7 @@ class ComposedFormulaTests(unittest.TestCase):
                             for variable in POLICY_VARS:
                                 self.assertEqual(step["expand_vars"][variable], "{{" + variable + "}}")
 
-    def test_loaded_pack_imports_default_to_new_and_retain_explicit_legacy(self):
+    def test_loaded_pack_imports_require_new_and_preserve_native_policy(self):
         for pack in PACKS:
             directories = [REPO / "gascity/formulas"]
             if pack != "gascity":
@@ -60,7 +60,7 @@ class ComposedFormulaTests(unittest.TestCase):
                 if mode is not None:
                     with self.subTest(pack=pack, formula=name):
                         self.assertEqual(mode["default"], "new")
-                        self.assertEqual(mode["enum"], ["legacy", "new"])
+                        self.assertEqual(mode["enum"], ["new"])
 
     def test_both_drain_contexts_prepare_before_implementation_and_accept_before_close(self):
         for name, producer in (("do-work", "implement"), ("do-work-item", "implement-item"),

@@ -23,14 +23,14 @@ from typing import Any, Iterator
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 REQUIRED_FRAGMENTS = (
-    "read `work_dir` from the source anchor",
-    'cd "$worktree"',
+    "workspace_checkout.load_workspace_context",
+    "workspace_checkout.manage_workspace",
+    "only `new` is supported",
     # Only an explicit instruction to commit satisfies these two; asking to
     # record a "focused commit hash" does not make the implementer commit.
-    "make a focused commit in the worktree",
-    "`git commit`",
-    "commit hash",
-    "leave the source anchor open",
+    "focused commit",
+    "independent-acceptance",
+    "record-result",
 )
 
 IMPLEMENTING_STEPS = (
@@ -45,9 +45,13 @@ IMPLEMENTING_STEPS = (
 FIX_STEPS = (("bmad/formulas/bmad-story-development.formula.toml", "apply-story-findings"),)
 
 FIX_STEP_FRAGMENTS = (
-    "read `work_dir` from the source anchor",
-    'cd "$worktree"',
-    "do not edit, test, or commit in the launcher checkout",
+    "workspace_checkout.load_workspace_context",
+    "workspace_checkout.manage_workspace",
+    "only `new` is supported",
+    "never fall back to raw `work_dir` metadata",
+    "same verified workspace",
+    "output_oid",
+    "input_oid",
     "`git commit`",
     "commit only when `git status --porcelain` shows changes",
     "never use `git commit --allow-empty`",
@@ -90,9 +94,23 @@ class DoWorkImplementOverrideTests(unittest.TestCase):
 
     def test_implementing_prompts_require_a_focused_worktree_commit(self) -> None:
         self.assert_prompts_contain(IMPLEMENTING_STEPS, REQUIRED_FRAGMENTS)
+        for rel, prompt in step_prompts(IMPLEMENTING_STEPS).items():
+            text = " ".join(prompt.read_text(encoding="utf-8").lower().split())
+            with self.subTest(formula=rel, contract="commit and guarded closure"):
+                self.assertRegex(text, r"make a focused commit in the worktree|commit owned changes in that workspace")
+                self.assertRegex(text, r"commit hash|full `output_oid`|exact output oid")
+                self.assertRegex(text, r"leave the source anchor open|leave source closure to the inherited close stage")
+                self.assertNotIn("read `work_dir` from the source anchor", text)
 
     def test_fix_prompts_commit_only_real_changes_in_the_worktree(self) -> None:
         self.assert_prompts_contain(FIX_STEPS, FIX_STEP_FRAGMENTS)
+        for rel, prompt in step_prompts(FIX_STEPS).items():
+            text = " ".join(prompt.read_text(encoding="utf-8").lower().split())
+            with self.subTest(formula=rel, contract="current owner and exact subject"):
+                self.assertIn("native claim, admitted owner grant", text)
+                self.assertIn("independent-acceptance", text)
+                self.assertIn("record-result", text)
+                self.assertNotIn("read `work_dir` from the source anchor", text)
 
 
 if __name__ == "__main__":

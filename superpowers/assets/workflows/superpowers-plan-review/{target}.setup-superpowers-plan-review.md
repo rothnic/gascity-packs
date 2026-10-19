@@ -22,7 +22,7 @@ Update workflow root metadata before closing:
 The context file must state the loop contract: the plan-document-review lane
 writes `design_review.review_verdict=approve|iterate`; the apply-plan-feedback
 lane owns `design_review.verdict=done|iterate` for
-`.gc/scripts/checks/design-review-approved.sh`.
+the imported pack-owned `design-review-approved.sh` check.
 
 Include the imported Gas City
 [plan-review acceptance contract](../../../../gascity/docs/plan-review-acceptance.md):

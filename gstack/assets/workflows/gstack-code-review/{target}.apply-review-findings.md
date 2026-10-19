@@ -1,8 +1,13 @@
+Resolve `VALIDATOR_PATH` from the same imported Gas City pack as the native
+loop's `gc.check_path`: its absolute path is `<check-directory>/../validate_build_artifact.py`.
+Require that resolved validator and its pack schemas to exist; never copy a
+validator into the rig or select one from a source checkout.
+
 Retain `worktree_lifecycle` {{worktree_lifecycle}} from the captured run.
 `new` requires the composed native workspace helpers and captured check policy.
-Keep the methodology below. Its legacy source/path/state operations apply
-only to explicit `legacy`; the managed instructions govern an admitted `new`
-run. Unknown modes or failed reads never authorize legacy fallback.
+Keep the methodology below. Source access requires the recorded `new` lifecycle.
+Legacy or unclassified work stops for explicit migration; preserve its original
+run and checkout. Do not infer source authority from artifacts or old paths.
 Resolve helper modules through the imported Gas City `assets/scripts` layer;
 keep that resolved directory on Python's import path for sibling modules.
 
@@ -23,7 +28,7 @@ its tested commit and independent review. A changed pass returns `iterate`;
 only a later independent review of the new canonical commit can approve.
 Preserve artifacts for both generations. Do not rewrite the old accepted
 summary, review or receipt. Any missing native route, grant or helper blocks
-with original state retained. Existing raw artifact edits below are legacy only.
+with original state retained. Artifact paths grant no source-write authority.
 
 Apply gstack code-review findings.
 
@@ -45,29 +50,31 @@ Always close with `gc.outcome=pass`,
 `code_review.report_path=<review-fix artifact path>`, and
 `code_review.output_path=<review-fix artifact path>`.
 
-Keep edited build artifacts schema-valid. Stage checks and the build gate's final artifact check validate these
-Markdown build artifacts, so any edit you make to one must leave it valid:
+Keep this attempt's unaccepted draft artifacts schema-valid. The paths at
+`gc.build.implementation_summary_path` and `gc.build.code_review_report_path`
+identify accepted input artifacts; read them without modifying their bytes,
+paths, hashes or producer fields.
 
-- The implementation summary at workflow root metadata `gc.build.implementation_summary_path`, schema `gc.build.implementation-summary.v1`:
-  front-matter `status` must be one of `draft`, `approved`, `blocked`, or `superseded`.
-- The synthesized review report at workflow root metadata `gc.build.code_review_report_path`, schema `gc.build.review.v1`:
-  front-matter `status` must be one of `draft`, `questions`, `approved`, `changes_required`, `blocked`, or `superseded`.
+An artifact change belongs to the replacement generation declared above. Write
+its new summary and review to distinct generation-specific paths before checks,
+independent review, result publication and canonical qualification. Schema
+validation alone cannot approve a replacement or refresh an accepted hash.
 
-When you edit one of them:
+For an unaccepted draft owned by this attempt:
 
-- Edit it in place and preserve its YAML front matter: keep `schema`,
-  `workflow`, `methodology`, `producer`, and `trace` intact, and keep
-  `trace.coverage` and the Markdown `ID`/`Status` coverage table in sync.
-- Use only the allowed `status` values listed above. Do not invent statuses
-  such as `reviewed`; record review progress in the apply summary and bead
-  metadata, not in the artifact's front matter.
-- Before closing with `gc.outcome=pass`, from `$GC_RIG_ROOT`, re-run the
-  validator on every build artifact you edited and fix every reported error:
-  `python3 .gc/scripts/validate_build_artifact.py --schema gc.build.implementation-summary.v1 --path "<implementation summary path>"`.
-  `python3 .gc/scripts/validate_build_artifact.py --schema gc.build.review.v1 --path "<review report path>"`.
-- On a repeated attempt (`gc.attempt` greater than 1), first read the validator
-  errors from `gc.attempt_log` on the loop control bead and repair the
-  artifact in place.
+- Preserve the YAML mapping shape for `schema`, `workflow`, `methodology`,
+  `producer` and `trace`. Keep `trace.coverage` and the Markdown `ID`/`Status`
+  coverage table in sync.
+- Implementation-summary status is `draft`, `approved`, `blocked` or
+  `superseded`; review status is `draft`, `questions`, `approved`,
+  `changes_required`, `blocked` or `superseded`. A status is not acceptance.
+- Before closing, validate each new draft with the imported validator:
+  `python3 "$VALIDATOR_PATH" --schema gc.build.implementation-summary.v1 --path "<new summary path>"`.
+  `python3 "$VALIDATOR_PATH" --schema gc.build.review.v1 --path "<new review path>"`.
+- On a repeated attempt, read `gc.attempt_log` on the loop control. Repair only
+  this attempt's unaccepted draft in place. An accepted artifact remains
+  immutable even when a later validator reports an error; block and qualify a
+  replacement generation instead.
 
 Do not invoke provider-native subagents. This Gas City graph lane is the delegation
 mechanism for fixes.

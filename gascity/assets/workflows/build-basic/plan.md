@@ -64,18 +64,19 @@ Cover these readiness details within the required sections below:
   followed by synthesis, required fixes and the final report/verdict handoff.
   Read the [implementation review recipe](review.md) before describing it.
 - **Source completion:** Read the selected `do-work` or `do-work-item` recipes.
-  For legacy `do-work`, describe [worktree preparation](../do-work/prepare-worktree.md),
-  the focused [implementation commit and summary](../do-work/implement.md), then
+  Bind work to the recorded run, source plan, workspace and captured check policy.
+  Describe [worktree preparation](../do-work/prepare-worktree.md), required checks
+  and [independent acceptance](../do-work/independent-acceptance.md), the accepted
+  [result and checkpoint](../do-work/record-result.md), then
   [source-anchor closure and readback](../do-work/close-source-anchor.md).
-  For legacy shared work, follow [the item recipe](../do-work-item/implement-item.md)
-  that owns its source closure. Bind legacy evidence to the recorded source
-  `work_dir` and committed output OID. For `new`, retain the selected managed
-  checks, independent acceptance, result/checkpoint and source-close procedure.
+  For shared work, follow [the item recipe](../do-work-item/implement-item.md)
+  that owns each member's checkpoint and closure. Retain the exact input/output
+  commits and their native check and acceptance references.
 - **Final handoff:** Describe the canonical implementation summary and review
   report consumed by [finalization](finalize.md), the final report path and the
-  selected [publish policy](publish.md). Include any required legacy stamp and
-  deprecation-warning evidence. Mark later allocated identities, output OIDs
-  and closure evidence as pending until their owning stages produce them.
+  selected [publish policy](publish.md). Require the accepted canonical commit
+  and its current check and review evidence. Mark later allocated identities,
+  output OIDs and closure evidence as pending until their owning stages produce them.
 
 Use these required level-two headings verbatim, in this order; a single `#`
 heading does not satisfy the artifact check:

@@ -1,4 +1,7 @@
 description = """
+Source access uses the recorded new workspace lifecycle. Legacy or unclassified
+state requires explicit migration; no artifact or current-checkout fallback.
+
 Visible internal helper documenting the pack-facing same-session policy. Public
 launches should use `implement --var drain_policy=same-session`.
 

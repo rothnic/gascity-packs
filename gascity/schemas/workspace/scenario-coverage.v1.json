@@ -197,9 +197,9 @@
       "name": "Legacy migration and refusal",
       "implementation_owner": {
         "workstream": "https://github.com/gastownhall/gascity-packs/issues/519",
-        "component": "Mode selection / Stage A migration"
+        "component": "Final new-only lifecycle / explicit migration"
       },
-      "oracle": "Separate cases: an explicit legacy run completes entirely in legacy mode, and an unclassified shadowed asset refuses with migration evidence. Mixed lifecycle paths and implicit adoption earn no success.",
+      "oracle": "At final Stage B source, explicit legacy execution and unclassified shadowed assets refuse with migration guidance before source effects. Preserve historical Stage A legacy-success evidence at its original qualified source; it does not satisfy final refusal or new-run acceptance. Mixed paths and implicit adoption earn no success.",
       "status": "implementation-required"
     },
     {

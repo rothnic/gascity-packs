@@ -22,7 +22,7 @@ description = "Initial source selector; @default captures the registered reposit
 default = "@default"
 
 [vars.worktree_checks]
-description = "Canonical JSON required_checks [{id, argv}]. Required when worktree_lifecycle is new; captured once on the run."
+description = "Canonical JSON required_checks [{id, argv}]. Captured once on the native run."
 default = ""
 
 [vars.worktree_parent]
@@ -41,7 +41,7 @@ enum = ["false", "true"]
 [vars.worktree_lifecycle]
 description = "Retained run source lifecycle; new uses recorded inputs, managed workspaces and accepted outputs."
 default = "new"
-enum = ["legacy", "new"]
+enum = ["new"]
 
 [vars.context_path]
 description = "Optional context bundle path."
@@ -58,7 +58,7 @@ default = ""
 [[steps]]
 id = "prepare-worktree"
 title = "Prepare item worktree"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/do-work/prepare-worktree.md"
 
 [steps.check]

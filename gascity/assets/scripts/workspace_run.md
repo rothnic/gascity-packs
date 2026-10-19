@@ -1,9 +1,12 @@
 # Capturing workflow inputs
 
-`workspace_run.py capture` records the selected rig, common Git directory, source
-task, base commit and lifecycle mode once. Repeated capture uses the recorded
-commit even when the default branch moves. Native source, store and cooked-step
-checks must still match.
+`workspace_run.py capture` requires an explicit source selector and records the
+selected rig, common Git directory, source task, base commit and `new` lifecycle
+once. Explicit `@default` selects the verified registered checkout on first
+capture; an omitted selector cannot infer the caller's HEAD or working directory.
+Repeated capture uses the recorded commit even when a branch moves. Native
+source, store and cooked-step checks must still match. Preserve older or
+unclassified runs for [explicit migration](../../docs/worktree-dependencies.md#migrate-existing-work).
 
 ## Recovering an uncertain publication
 

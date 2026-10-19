@@ -58,7 +58,7 @@ REVIEW_BUILDS = (
 # repair attempt start from the validator errors.
 VALIDATION_FRAGMENTS = (
     "on the workflow root bead, not on the claimed step bead",
-    f"gc_bead_id=<claimed-step-id> .gc/scripts/checks/{CHECK_SCRIPT}",
+    'gc_bead_id=<claimed-step-id> gc_rig_root="$gc_rig_root" "<gc.check_path>"',
     "fix any error before setting `gc.outcome=pass`",
     "read the validator errors from `gc.attempt_log` on the validation loop control bead",
 )
@@ -86,7 +86,7 @@ REQUIREMENTS_TARGET_FRAGMENTS = (
     "read the validator errors from `gc.attempt_log` on the validation loop control bead",
     "repair the requirements artifact in place",
     "build artifact must start with yaml front matter",
-    f"gc_bead_id=<claimed-step-id> .gc/scripts/checks/{CHECK_SCRIPT}",
+    'gc_bead_id=<claimed-step-id> gc_rig_root="$gc_rig_root" "<gc.check_path>"',
     "approval metadata alone does not satisfy it",
 )
 
@@ -319,8 +319,8 @@ def status_sentence(artifact: str) -> str:
 class ApplyFindingsFrontMatterTests(unittest.TestCase):
 
     def test_validator_ships_beside_the_check_script(self) -> None:
-        # Prompts call `.gc/scripts/validate_build_artifact.py`; the check lives
-        # at `.gc/scripts/checks/build-artifact-valid.sh`, both from gascity/assets/scripts.
+        # Resolve the validator beside the imported pack-owned check; neither
+        # file needs a launcher-local .gc/scripts installation.
         scripts = REPO_ROOT / "gascity" / "assets" / "scripts"
         self.assertTrue((scripts / "validate_build_artifact.py").is_file())
         self.assertTrue((scripts / "checks" / CHECK_SCRIPT).is_file())
@@ -330,15 +330,41 @@ class ApplyFindingsFrontMatterTests(unittest.TestCase):
             build_path, build_data = load_formula(pack, build)
             exp_path, exp_data = load_formula(pack, find_step(build_data, stage, "steps")["expand"])
             text = prompt_text(exp_path, find_step(exp_data, f"{{target}}.{lane}", "template"))
-            for fragment in APPLY_LANE_FRAGMENTS:
+            for fragment in (
+                "resolve `validator_path` from the same imported gas city pack as the native loop's `gc.check_path`",
+                "require that resolved validator and its pack schemas to exist",
+                "never copy a validator into the rig or select one from a source checkout",
+            ):
+                with self.subTest(pack=pack, lane=lane, fragment=fragment):
+                    self.assertIn(normalize(fragment), text)
+            if stage == "review":
+                fragments = (
+                    "keep this attempt's unaccepted draft artifacts schema-valid",
+                    "identify accepted input artifacts; read them without modifying their bytes, paths, hashes or producer fields",
+                    "an artifact change belongs to the replacement generation declared above",
+                    "distinct generation-specific paths before checks, independent review, result publication and canonical qualification",
+                    "for an unaccepted draft owned by this attempt",
+                    "preserve the yaml mapping shape",
+                    "before closing, validate each new draft with the imported validator",
+                    "read `gc.attempt_log` on the loop control",
+                    "an accepted artifact remains immutable",
+                )
+            else:
+                fragments = APPLY_LANE_FRAGMENTS
+            for fragment in fragments:
                 with self.subTest(pack=pack, lane=lane, fragment=fragment):
                     self.assertIn(normalize(fragment), text)
             for artifact in artifacts:
                 schema_id = f"gc.build.{artifact}.v1"
                 with self.subTest(pack=pack, lane=lane, schema=schema_id):
-                    self.assertIn(f"python3 .gc/scripts/validate_build_artifact.py --schema {schema_id} --path", text)
+                    self.assertIn(f'python3 "$validator_path" --schema {schema_id} --path', text)
                 with self.subTest(pack=pack, lane=lane, schema=schema_id, check="allowed statuses"):
-                    self.assertIn(status_sentence(artifact), text)
+                    if stage == "review":
+                        sentence = re.search(rf"{re.escape(artifact)} status is (.*?)[;.]", text)
+                        self.assertIsNotNone(sentence)
+                        self.assertEqual(re.findall(r"`([a-z_]+)`", sentence.group(1)), allowed_statuses(artifact))
+                    else:
+                        self.assertIn(status_sentence(artifact), text)
 
     def test_plan_review_targets_revalidate_the_plan(self) -> None:
         for pack, build in PLAN_REVIEW_BUILDS:

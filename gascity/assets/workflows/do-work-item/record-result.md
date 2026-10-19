@@ -1,4 +1,5 @@
-This stage runs only for retained `worktree_lifecycle=new`; the legacy graph skips it.
+This stage requires recorded `worktree_lifecycle=new`. Preserve older or
+unclassified runs and their original checkouts for explicit migration.
 
 Run [the native recorder sequence](../workspace-runtime.md) for this shared member.
 Use `gc gc workspace flow record-result` and the actual checkpoint bridge before

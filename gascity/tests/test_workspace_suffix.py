@@ -461,7 +461,8 @@ class InitialSuffixCaptureTests(unittest.TestCase):
              patch.object(workspace_cooked, 'read_cooked_writer_map', side_effect=lambda *a, **k:
                  (self.writer_map, self.store.snapshot(['root-1', 'writer-1']))):
             args = dict(gc='gc', city_root=str(self.root), rig_name='example', workflow_root_id='root-1',
-                entrypoint='plan' if stage == 'prepare-plan' else 'decompose', worktree_lifecycle='new')
+                entrypoint='plan' if stage == 'prepare-plan' else 'decompose', worktree_lifecycle='new',
+                base_ref='@default')
             first = entry.prepare_entry(self.store, self.attempt, **args)
             self.assertEqual(first['receipt']['outcome'], 'committed')
             (self.repo / 'source.txt').write_text('moving branch after capture\n')

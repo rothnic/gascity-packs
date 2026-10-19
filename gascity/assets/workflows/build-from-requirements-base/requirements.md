@@ -1,3 +1,11 @@
+Planning requires the recorded `new` lifecycle. Follow the existing
+[entry contract](../workspace-entry.md) and verify the native run, captured base
+commit and check policy. Inspect that exact commit read-only while authoring or
+reviewing artifacts. Source-plan and workspace admission is required before
+implementation or source edits. Artifact paths, closed tasks, old `work_dir`
+fields and the current checkout cannot select source. Legacy or unclassified
+work stops for explicit migration with the original records and checkout preserved.
+
 This is the `build-from-requirements-base` requirements stage.
 
 Produce or reuse the requirements artifact at `{{requirements_path}}` when

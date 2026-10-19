@@ -87,70 +87,23 @@ done
 case "$ARTIFACT_PATH" in
   /*) ;;
   *)
-    # Formula artifact paths are rig-relative. A producer runs in a disposable
-    # per-bead worktree, so GC_WORK_DIR points at the wrong place whenever the
-    # runtime provides the durable rig root. Agent sessions use GC_RIG_ROOT and
-    # controller checks use GC_BEADS_SCOPE_ROOT on some runtimes. A check
-    # executed from an installed <rig>/.gc/scripts/checks copy (the legacy
-    # launcher-relative formula path some derived packs still use) can derive
-    # the rig root from its own location; a pack-asset or source-tree copy
-    # cannot, so that fallback is limited to the installed layout.
-    ARTIFACT_ROOT="${GC_RIG_ROOT:-${GC_BEADS_SCOPE_ROOT:-${GC_DIR:-}}}"
-    if [ -z "$ARTIFACT_ROOT" ]; then
-      case "$SCRIPT_DIR" in
-        */.gc/scripts/checks)
-          ARTIFACT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
-          ;;
-      esac
-    fi
-    if [ -n "$ARTIFACT_ROOT" ]; then
-      ARTIFACT_PATH="$ARTIFACT_ROOT/$ARTIFACT_PATH"
-    else
-      # Controller-run gates resolved from pack assets (the gascity formulas'
-      # ../assets/scripts/checks paths) get none of the signals above. The
-      # dispatcher always exports GC_STORE_PATH, the durable store root (the
-      # rig root for rig-scoped workflows), and may export GC_WORK_DIR, the
-      # inherited gc.work_dir. Prefer the store root; use the work dir only
-      # when the artifact is not under the store root.
-      RELATIVE_PATH="$ARTIFACT_PATH"
-      ARTIFACT_PATH=""
-      TRIED=""
-      for root in "${GC_STORE_PATH:-}" "${GC_WORK_DIR:-}"; do
-        [ -n "$root" ] || continue
-        TRIED="${TRIED:+$TRIED, }$root/$RELATIVE_PATH"
-        if [ -f "$root/$RELATIVE_PATH" ]; then
-          ARTIFACT_PATH="$root/$RELATIVE_PATH"
-          break
-        fi
-      done
-      [ -n "$TRIED" ] || fail "artifact path $RELATIVE_PATH from $RESOLVED_KEY is relative and no rig-root environment is set"
-      [ -n "$ARTIFACT_PATH" ] || fail "artifact $RELATIVE_PATH from $RESOLVED_KEY does not exist; tried $TRIED"
-    fi
+    # The native controller supplies the selected store root; agent sessions
+    # can provide the registered rig root. Neither path is inferred from CWD.
+    ARTIFACT_ROOT="${GC_RIG_ROOT:-${GC_BEADS_SCOPE_ROOT:-${GC_DIR:-${GC_STORE_PATH:-}}}}"
+    case "$ARTIFACT_ROOT" in
+      /*) ;;
+      *) fail "relative artifact $ARTIFACT_PATH requires an explicit absolute rig/store root; migrate old launcher-relative state" ;;
+    esac
+    [ -d "$ARTIFACT_ROOT" ] || fail "explicit artifact root does not exist: $ARTIFACT_ROOT"
+    ARTIFACT_PATH="$ARTIFACT_ROOT/$ARTIFACT_PATH"
     ;;
 esac
 [ -f "$ARTIFACT_PATH" ] || fail "artifact $ARTIFACT_PATH from $RESOLVED_KEY does not exist"
 
-# Prefer the validator shipped beside this check when the pack's schemas sit
-# beside it too (pack-asset layout: <pack>/assets/scripts/checks next to
-# <pack>/schemas/build), so the gate validates against the schemas of the same
-# pack layer that defined the formula rather than whatever checkout GC_WORK_DIR
-# happens to be. An installed <rig>/.gc/scripts copy has no schemas beside it,
-# so it keeps the historical GC_WORK_DIR source-tree lookup first.
-PACK_VALIDATOR=""
-if [ -d "$SCRIPT_DIR/../../../schemas/build" ]; then
-  PACK_VALIDATOR="$SCRIPT_DIR/../validate_build_artifact.py"
-fi
-VALIDATOR=""
-for candidate in \
-  ${PACK_VALIDATOR:+"$PACK_VALIDATOR"} \
-  ${GC_WORK_DIR:+"$GC_WORK_DIR/gascity/assets/scripts/validate_build_artifact.py"} \
-  "$SCRIPT_DIR/../validate_build_artifact.py"; do
-  if [ -n "$candidate" ] && [ -f "$candidate" ]; then
-    VALIDATOR="$candidate"
-    break
-  fi
-done
-[ -n "$VALIDATOR" ] || fail "validate_build_artifact.py not found beside $SCRIPT_DIR or under GC_WORK_DIR"
+# Formula check and schema must come from the same resolved pack source.
+VALIDATOR="$SCRIPT_DIR/../validate_build_artifact.py"
+[ -d "$SCRIPT_DIR/../../../schemas/build" ] && [ -f "$VALIDATOR" ] \
+  || fail "resolved pack validator and schemas are required beside $SCRIPT_DIR; migrate legacy installed copies"
 
 if OUTPUT="$(python3 "$VALIDATOR" --schema "$SCHEMA" --path "$ARTIFACT_PATH" 2>&1)"; then
   echo "build artifact valid: schema=$SCHEMA path=$ARTIFACT_PATH"

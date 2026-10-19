@@ -13,11 +13,10 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from workspace_records import RecordError
-
-
 SCRIPTS = Path(__file__).resolve().parents[1] / "assets" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
+from workspace_records import RecordError
+
 spec = importlib.util.spec_from_file_location("workspace_run", SCRIPTS / "workspace_run.py")
 run = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(run)
@@ -61,6 +60,18 @@ class RunCaptureTests(unittest.TestCase):
         self.assertEqual(replay, captured)
         self.assertEqual(replay["writer_step_id"], "writer-1")
 
+    def test_missing_selector_and_legacy_refuse_before_git_or_store_access(self):
+        arguments = self.args()
+        arguments.pop("base_ref")
+        with patch.object(run, "repository_identity") as identity:
+            with self.assertRaisesRegex(RecordError, "explicit base ref"):
+                run.capture_payload(**arguments)
+            with self.assertRaisesRegex(RecordError, "explicit migration"):
+                run.capture_payload(**dict(arguments, worktree_lifecycle="legacy"))
+            identity.assert_not_called()
+        captured = run.capture_payload(**self.args())
+        self.assertEqual(run.capture_payload(stored=captured, **arguments), captured)
+
     def test_linked_registered_checkout_selects_its_own_head(self):
         self.git("branch", "linked", self.base)
         (self.repo / "file").write_text("primary later\n")
@@ -71,6 +82,17 @@ class RunCaptureTests(unittest.TestCase):
         self.assertEqual(capture["base_oid"], self.base)
         self.assertEqual(capture["rig_root"], str(linked))
         self.assertEqual(capture["common_git_dir"], str(self.repo / ".git"))
+
+    def test_legacy_cli_refuses_before_registered_repository_or_native_store_reads(self):
+        args = ["read", "--store-ref", "rig:example", "--city-root", str(self.root),
+                "--rig-name", "example", "--workflow-root-id", "root-1", "--input-convoy-id", "convoy-1",
+                "--record-bead-id", "record-1", "--worktree-lifecycle", "legacy"]
+        with patch.object(run, "registered_rig") as rig, patch("workspace_store.WorkspaceStore") as store, \
+             contextlib.redirect_stderr(io.StringIO()) as stderr:
+            self.assertEqual(run.main(args), 1)
+        self.assertIn("explicit migration", stderr.getvalue())
+        rig.assert_not_called()
+        store.assert_not_called()
 
     def test_bare_control_and_bare_root_select_bare_head(self):
         for layout in ("bare-control", "bare-root"):
@@ -355,7 +377,7 @@ class RunStoreTests(unittest.TestCase):
         self.addCleanup(registration.stop)
         self.kwargs = dict(gc="gc", city_root=str(self.root), rig_name="example", workflow_root_id="root-1",
             input_convoy_id="convoy-1", record_bead_id="record-1", authority_id="authority-1",
-            worktree_lifecycle="new", writer_map=self.writer_map)
+            worktree_lifecycle="new", base_ref="@default", writer_map=self.writer_map)
 
     def test_capture_replay_and_read_use_real_adapter_and_one_complete_batch(self):
         captured = run.capture_run(self.store, self.attempt, **self.kwargs)
@@ -366,7 +388,7 @@ class RunStoreTests(unittest.TestCase):
         replay = run.capture_run(self.store, self.attempt, **self.kwargs)
         self.assertEqual(replay["receipt"]["outcome"], "replayed")
         self.assertEqual(replay["record"], captured["record"])
-        kwargs = {key: value for key, value in self.kwargs.items() if key not in ("authority_id", "writer_map")}
+        kwargs = {key: value for key, value in self.kwargs.items() if key not in ("authority_id", "writer_map", "base_ref")}
         self.assertEqual(run.read_run(self.store, **kwargs), captured["record"])
         with self.assertRaises(run.RunError):
             run.read_run(self.store, **dict(kwargs, worktree_lifecycle="legacy"))
@@ -409,7 +431,7 @@ class RunStoreTests(unittest.TestCase):
         execute = self.store.execute
 
         def competing_capture(prepared):
-            payload = run.capture_payload(**self.args(worktree_lifecycle="legacy"))
+            payload = dict(run.capture_payload(**self.args()), worktree_lifecycle="legacy")
             reference = {"kind": "run", "identity": list(run.record_identity("run", payload)), "bead_id": "record-1"}
             competitor = self.store.install_grant(self.attempt,
                 {"workflow_root_id": "root-1", "generation": 1, "writer_scope_id": "root-1", "record_kind": "run"}, "authority-1",
@@ -651,7 +673,7 @@ with patch('workspace_entry.native_json',side_effect=RecordError('native readonl
              patch.object(workspace_cooked, "read_cooked_writer_map", side_effect=lambda *a, **k:
                  (self.writer_map, self.store.snapshot(["root-1", "writer-1"]))):
             result = entry.prepare_entry(self.store, self.attempt, gc="gc", city_root=str(self.root),
-                rig_name="example", workflow_root_id="root-1", entrypoint="build", worktree_lifecycle="new")
+                rig_name="example", workflow_root_id="root-1", entrypoint="build", worktree_lifecycle="new", base_ref="@default")
         self.assertEqual(result["run"]["base_oid"], self.base)
         self.assertEqual(result["receipt"]["outcome"], "committed")
         self.assertEqual(len(created), 2)

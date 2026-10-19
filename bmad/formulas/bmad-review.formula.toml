@@ -11,7 +11,7 @@ mode = "report"
 
 [vars]
 [vars.worktree_checks]
-description = "Canonical JSON required_checks [{id, argv}], required only in new mode and captured once on the native run."
+description = "Canonical JSON required_checks [{id, argv}], captured once on the native run."
 default = ""
 
 [vars.worktree_base_ref]
@@ -34,7 +34,7 @@ enum = ["false", "true"]
 [vars.worktree_lifecycle]
 description = "Retained source lifecycle; new requires composed methodology acceptance."
 default = "new"
-enum = ["legacy", "new"]
+enum = ["new"]
 
 [vars.implementation_target]
 description = "BMAD task implementation role used for review fixes."
@@ -43,7 +43,7 @@ default = "bmad.story-implementer"
 [[steps]]
 id = "validate-workspace-mode"
 title = "Validate methodology review source lifecycle"
-metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}", "gc.lifecycle.compatibility" = "legacy" }
+metadata = { "gc.run_target" = "gc.run-operator", "gc.lifecycle" = "{{worktree_lifecycle}}", "gc.lifecycle.source_modes" = "{\"workflow\":\"new\"}" }
 description_file = "../assets/workflows/workspace-mode/validate.md"
 
 [steps.check]

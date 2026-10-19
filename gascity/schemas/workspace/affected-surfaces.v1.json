@@ -212,7 +212,7 @@
     "gascity/assets/workflows/build-base/prepare.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "eeec595f0293f48afa65d9dd1958695651a56ba7297c61b1ec589ae54b2ac2b9"
+      "sha256": "046ed49a44aebb694c06659a6274ec001b2d7d572bd07c7a7214fea7b34c5787"
     },
     "gascity/assets/workflows/build-base/publish.md": {
       "classification": "new",
@@ -237,7 +237,7 @@
     "gascity/assets/workflows/build-basic/decompose.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "3cd5ffa209c1f1c98a17c654f7579d23e08bd5c24baf2ecec352c74846d65c96"
+      "sha256": "9f9aa493a663f2f4453b09638c823bf31c0a912c3ca4816e3e6c6739376b2236"
     },
     "gascity/assets/workflows/build-basic/finalize.md": {
       "classification": "reference",
@@ -272,7 +272,7 @@
     "gascity/assets/workflows/build-basic/requirements.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "3f50c265a4600d0b259753341b8599a59ed23d0cc24e85ed4ae0713a2950b618"
+      "sha256": "27565ced62b3d51390a404a76f24a1fa37a0a36c2792ce3aebc9ee6642b948da"
     },
     "gascity/assets/workflows/build-basic/review.md": {
       "classification": "new",
@@ -332,7 +332,7 @@
     "gascity/assets/workflows/build-from-convoy-base/prepare-convoy.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "487dcaf46b65f85bcf15ee949f18f506388dcab6f0d9b73c2074b53e2d1869a2"
+      "sha256": "ff436ca6ebeac80d25971467b7fcf27c5f9ed0857358d5b2473ccfcd93cd1a2f"
     },
     "gascity/assets/workflows/build-from-convoy-base/prepare-review.md": {
       "classification": "new",
@@ -347,12 +347,12 @@
     "gascity/assets/workflows/build-from-decompose-base/prepare-convoy.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "ea4808926cda27455db947e992fc4450d6d415c839be25e352f8135a5c8d5563"
+      "sha256": "8d47a9a3aa63aa924c64a3a730a46936d4067273fe3e4bdb4e565b9b129f8534"
     },
     "gascity/assets/workflows/build-from-decompose-base/prepare-decompose.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "795c426362b5578ae917c656b26ff07686b8848c99e44a8cfbf1d994d8af06ce"
+      "sha256": "ea10c02c47d1928274c333d2838b5c7cb9c32735a4213a64d2b7693e4cdad454"
     },
     "gascity/assets/workflows/build-from-plan-base/plan-review.md": {
       "classification": "new",
@@ -367,22 +367,22 @@
     "gascity/assets/workflows/build-from-plan-base/prepare-decompose.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "09d0b6893a6d33424707e8057640695388de9cfd1b12ddd5d646ec6b619d9f5c"
+      "sha256": "e765635925cc1a57bb9ebba2a4f54d6b51f3d4f1d4f92af071fe8bf3d63815f6"
     },
     "gascity/assets/workflows/build-from-plan-base/prepare-plan.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "37212f5d16f3476e8c9fb03a94cac835cebfce92c34258f13f584282e2c62c2e"
+      "sha256": "89d9ad12dc7b0fbfe1b70e33c114eebdde012418db2aea4da809543f9e345d90"
     },
     "gascity/assets/workflows/build-from-requirements-base/prepare-plan.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "514e6ac4098cc95ae1ee02423c78ab37338d813df30d84ca1c7a7ee768c1597c"
+      "sha256": "0d5c80a86f0331b7ceb495a36a3519f13f635ca7b4f9d8fdaea46fdf94a92868"
     },
     "gascity/assets/workflows/build-from-requirements-base/prepare-requirements.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "6290012739d3f82fc17176cba394cddb4cd9e764a4cc4a3b4c7f9ccb01135972"
+      "sha256": "353d274b32b8f2c05263a7d1e673e4d8a59fe6037e8244b3d1c7d5824aab1264"
     },
     "gascity/assets/workflows/build-from-requirements-base/requirements.md": {
       "classification": "new",
@@ -397,7 +397,7 @@
     "gascity/assets/workflows/build-from-review-base/prepare-review.md": {
       "classification": "new",
       "responsibility": "canonical-summary,continuation,review",
-      "sha256": "406890c39f3ca0d90560306a55e51f20919d160edf45280cd36b61b7a2f04048"
+      "sha256": "f02a5ebcb63ab2cef8edd9df69f38e3b29fea3ca598fdfdfc9d0c86447daafbd"
     },
     "gascity/assets/workflows/build-from-review-base/publish.md": {
       "classification": "new",
@@ -457,7 +457,7 @@
     "gascity/assets/workflows/do-work/prepare-worktree.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,workspace-prepare",
-      "sha256": "beb981013e9ef0f257e81002a26f36a2dc2155fde524592ce988b0bd025f752c"
+      "sha256": "da39fc28ada2adf92751763a37892517eaa02b8dccd767fe40b648ca69357c9d"
     },
     "gascity/assets/workflows/do-work-item/implement-item.md": {
       "classification": "new",
@@ -547,7 +547,7 @@
     "gascity/assets/workflows/github-issue-fix-base/snapshot.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "e1f87af410358a59405ecec91971fdc422dfc5544607f1d6115813329b3fdd75"
+      "sha256": "a0c6c801a32f0a8f816e82ce7aaa7623d22d58eb96f12e71545e833a5dbed3c3"
     },
     "gascity/assets/workflows/github-issue-fix-base/triage-gate.md": {
       "classification": "reference",
@@ -667,7 +667,7 @@
     "gascity/assets/workflows/github-pr-review/snapshot.md": {
       "classification": "new",
       "responsibility": "review",
-      "sha256": "e085ddafc0586c817c28fc2143cd6c1cf7611ad49fd370a484eaa41d931c62be"
+      "sha256": "e31ef496fbd267fc8e0584087fdf00d3948b2883776b4338d9262521a4ff84b7"
     },
     "gascity/assets/workflows/implement/drain-same-session.md": {
       "classification": "new",
@@ -682,7 +682,7 @@
     "gascity/assets/workflows/implement/prepare.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "e7e5dff6225266011d04d48c1c6c1eaee93096e8897d628ad683a091e0c00155"
+      "sha256": "1c6da5a705f867e6272225c92455253a80f6ec4641a9f0675a7806dd9e881620"
     },
     "gascity/assets/workflows/implement/publish.md": {
       "classification": "new",
@@ -1982,7 +1982,7 @@
     "gascity/assets/workflows/workspace-entry.md": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "4428c2b7700f30bc0c6922bcaa0dccef3b479c85a31dc6452f50daf51254d71c"
+      "sha256": "a855214886f7bc267cbedc92b3cf5252030a35c82cb8bb2d48154b0ead76ccc7"
     },
     "gascity/assets/workflows/workspace-publication.md": {
       "classification": "new",
@@ -2072,7 +2072,7 @@
     "gascity/assets/workflows/planning-base/repair-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "360a7c20c0b41ae59c5a08faef11ad1e5baaf7e3f989bd5a0f8c3d1f6cc58880"
+      "sha256": "949f8e65b9ca9ba6cabf3689bd032fcbb4d4437915175d4e18ad785aedef4921"
     }
   },
   "source_helpers": {
@@ -2189,12 +2189,12 @@
     "gascity/commands/workspace/run.sh": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "f5be2b05017dea0b9ddccbfec67dfdb698457381393489acf1f9f6fcd40d15da"
+      "sha256": "db27b9a191c20e3333f7aca60b4b9d548c374467e5c12d5fcb9afdc0707d97a8"
     },
     "gascity/commands/workspace/help.md": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "d76454d7bf9c3676f9f252467ee1813c784f5df39827e0950c5e5b345b58eebb"
+      "sha256": "4e09b777c6ad322c658f95b11fea743c1f9a9c451cf94c82029175447ebee0da"
     },
     "gascity/commands/workspace/command.toml": {
       "classification": "new",

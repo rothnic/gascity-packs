@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 import tomllib
 import unittest
 from unittest.mock import patch
@@ -414,6 +415,94 @@ if 'bd' in args and 'list' in args and '--desc-contains' in args:
             with self.assertRaisesRegex(RecordError, "uncertain"):
                 flow._allocation("member-result", "member", "member")
             self.assertEqual(create.call_count, 1)
+
+    def test_overlapping_actual_flow_commands_retain_each_accepted_publication(self):
+        from workspace_records import canonical_bytes, contracts
+        f = self.fixture
+        recorded, output = self.accepted_flow()
+        state_path = f.root / "port.json"
+        before = json.loads(state_path.read_text())
+        for row in before["stores"]["rig:fixture"].values():
+            row["metadata"]["typed-sibling"] = [True, 3, {"x": None}]
+        state_path.write_text(json.dumps(before))
+        wrapper = f.root / "overlapping-flow.py"
+        wrapper.write_text('''import contextlib, pathlib, sys, time
+import workspace_flow, workspace_runtime, workspace_store
+role, directory = sys.argv[1:3]
+directory = pathlib.Path(directory)
+def wait(path):
+    deadline = time.monotonic() + 20
+    while not path.exists():
+        if time.monotonic() >= deadline: raise RuntimeError("missing overlap signal: " + str(path))
+        time.sleep(0.01)
+original_init = workspace_runtime.NativeSourceRuntime.__init__
+def admitted(self, *args, **kwargs):
+    original_init(self, *args, **kwargs)
+    (directory / (role + "-admitted")).touch()
+    if role == "first": wait(directory / "release-first")
+workspace_runtime.NativeSourceRuntime.__init__ = admitted
+original_lock = workspace_store.transition_locks
+@contextlib.contextmanager
+def observed_lock(*args, **kwargs):
+    if role == "second": (directory / "second-lock-attempt").touch()
+    with original_lock(*args, **kwargs): yield
+workspace_store.transition_locks = observed_lock
+workspace_runtime.transition_locks = observed_lock
+raise SystemExit(workspace_flow.main(sys.argv[3:]))
+''')
+        evidence = {}
+        for name, value in (("checks", recorded["result"]["acceptance"]["project_checks"]),
+                            ("review", recorded["result"]["acceptance"]["independent_review"]),
+                            ("artifacts", recorded["result"]["acceptance"]["artifacts"])):
+            path = f.artifacts / ("overlap-" + name + ".json")
+            path.write_bytes(canonical_bytes(value))
+            evidence[name] = str(path)
+        common = ["--gc", str(f.port), "--city-root", str(f.city), "--store-ref", "rig:fixture",
+            "--rig-name", "fixture", "--workflow-root-id", "root", "--claimed-step-id", "recorder",
+            "--generation", "1", "--artifact-root", str(f.artifacts), "--evidence-dir", str(f.diagnostics),
+            "--owner-id", "member"]
+        args = ["record-result", *common, "--member-id", "member", "--output-oid", f.oid,
+            "--checks", evidence["checks"], "--review", evidence["review"], "--artifacts", evidence["artifacts"]]
+        environment = dict(os.environ, PYTHONPATH=str(REPO / "gascity/assets/scripts"))
+        children = []
+        def launch(role, arguments):
+            child = subprocess.Popen([sys.executable, "-B", str(wrapper), role, str(f.root), *arguments],
+                text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment)
+            children.append(child)
+            return child
+        def wait_signal(name):
+            deadline = time.monotonic() + 20
+            while not (f.root / name).exists():
+                self.assertTrue(all(child.poll() is None for child in children), "flow exited before overlap")
+                self.assertLess(time.monotonic(), deadline, "missing overlap signal: " + name)
+                time.sleep(0.01)
+        try:
+            first = launch("first", args)
+            wait_signal("first-admitted")
+            second = launch("second", ["owner-output", *common])
+            wait_signal("second-lock-attempt")
+            (f.root / "release-first").touch()
+            first_out, first_err = first.communicate(timeout=60)
+            second_out, second_err = second.communicate(timeout=60)
+            self.assertEqual(first.returncode, 0, first_err)
+            self.assertEqual(second.returncode, 0, second_err)
+        finally:
+            (f.root / "release-first").touch()
+            for child in children:
+                if child.poll() is None: child.terminate()
+                child.communicate(timeout=10)
+        self.assertEqual(json.loads(first_out)["result"], recorded["result"])
+        self.assertEqual(json.loads(second_out)["output"], output["output"])
+        after = json.loads(state_path.read_text())
+        self.assertEqual(after["allocation_counter"], before["allocation_counter"])
+        self.assertEqual(set(after["stores"]["rig:fixture"]), set(before["stores"]["rig:fixture"]))
+        keys = [definition["metadata_key"] for definition in contracts().values()]
+        for bead_id, row in before["stores"]["rig:fixture"].items():
+            current = after["stores"]["rig:fixture"][bead_id]
+            self.assertEqual(current["metadata"]["typed-sibling"], row["metadata"]["typed-sibling"])
+            for key in keys:
+                self.assertEqual(current["metadata"].get(key), row["metadata"].get(key))
+                self.assertEqual(current["metadata"].get(key + "_ref"), row["metadata"].get(key + "_ref"))
 
 
 if __name__ == "__main__":

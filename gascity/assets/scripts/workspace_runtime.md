@@ -27,6 +27,28 @@ receipts retain the policy hash, physical run ID, run/base and source-plan hashe
 
 ## Callable interface
 
+Use the admission context for native record publication:
+
+```python
+with NativeSourceRuntime.open(
+    store, gc=gc, city_root=city_root, rig_name=rig_name,
+    workflow_root_id=workflow_root_id, claimed_step_id=claimed_step_id,
+    generation=generation, artifact_root=artifact_root, evidence_dir=evidence_dir,
+) as runtime:
+    # Qualify, prepare, submit and resolve the original request in this context.
+    prepared = runtime.prepare_member_result(result, record_id=record_id,
+        authority_id=authority_id, initial_write=initial_write)
+```
+
+For complete result, owner-output, review or publication operations, use
+`WorkspaceFlow.open(store, **arguments)` with the same admission arguments.
+Both contexts hold the repository's root/generation lock from fresh native
+admission through the operation's final readback. A changed run, source plan,
+repository or native root refuses admission. They do not refresh an existing
+runtime's retained rows.
+
+The low-level constructor supports qualification without a publication context:
+
 ```python
 runtime = NativeSourceRuntime(
     store, gc=gc, city_root=city_root, rig_name=rig_name,
@@ -99,6 +121,19 @@ Entry readback resolves the original recorded run in both cases.
 CLI output is JSON. `qualify` emits original revision summaries and opaque
 attempt IDs. Allocate physical record/grant placeholders through
 `workspace_entry.allocate_placeholder`, or use existing exact native references.
+
+`record-result` uses the admission context. Other runtime actions can run project
+checks and collect review evidence without holding the publication lock.
+An acquisition timeout returns exit status 1, no JSON output, and this error:
+
+```text
+native workspace admission lock timeout before retained snapshots; no allocation or write attempted
+```
+
+The store's default lock timeout is 30 seconds, with a supported maximum of 300.
+The CLI's `--timeout` controls project checks; it does not extend lock acquisition.
+See [record access](../../schemas/workspace/access.md#serialize-native-publications) for lock scope
+and request recovery.
 
 `record-result` saves its exact write request in the repository's private,
 store-bound journal before submission. If the reply is lost, the error names

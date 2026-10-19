@@ -443,6 +443,13 @@ supply physical identities and frozen policy. Workers do not construct callbacks
 Native retry and iteration steps retain their compiled writer responsibilities;
 control steps cannot write lifecycle records. See [guarded record access](schemas/workspace/access.md#bind-the-writer).
 
+Flow operations and runtime result publication serialize native admission and
+readback for the same repository, workflow root and generation. Programmatic
+writers use [`WorkspaceFlow.open` or `NativeSourceRuntime.open`](assets/scripts/workspace_runtime.md#callable-interface)
+so each operation retains its native rows after acquiring the lock. Contention
+refuses before allocation or submission; an unresolved write still requires its
+original request.
+
 For a blocked first preparation, use the dependency helper's
 [recovery decision](schemas/workspace/source-inputs.md#retry-first-preparation).
 The retry retains the captured source and recorded workspace layout.

@@ -14,7 +14,8 @@ Construct `WorkspaceStore` with explicit local context:
 - **`store_ref`:** the configured `city:<name>` or `rig:<name>` store.
 - **`common_git_dir`:** the canonical common Git directory for the recorded run.
 - **`gc`:** the native binary that supports guarded metadata batches.
-- **`timeout`:** the command and lock timeout, in seconds. The default is 30.
+- **`timeout`:** the command and lock timeout, in seconds. The default is 30;
+  local lock acquisition requires a positive value of at most 300.
 
 The adapter removes inherited city, rig and remote routing variables from native
 commands. Physical record IDs come from native Beads creation. Every transaction
@@ -208,11 +209,28 @@ Grant replacement supports these cases:
 
 The adapter rejects altered membership, sibling expansions and role assertions.
 
-`transition_locks(common_git_dir, scope)` holds the owner lock before the root
-lock. Hold the context around Git work and the guarded record publication.
-Nested calls for the same owner reuse the held lock. Lock contention fails at
-the configured timeout. Lock files remain in the common
-Git directory so Git maintenance does not remove their inodes.
+## Serialize native publications
+
+Use [`NativeSourceRuntime.open`](../../assets/scripts/workspace_runtime.md#callable-interface)
+for a native record publication, or `WorkspaceFlow.open` for a complete flow
+operation. These contexts acquire the local root lock before retaining native
+rows and hold it through publication and readback. Discovery pins the run,
+source plan, repository, root and generation; a changed binding refuses admission.
+Another operation on the same root and generation must acquire the lock before
+retaining its own rows. Existing runtimes keep their original snapshots.
+
+`transition_locks(common_git_dir, scope)` acquires the owner lock before the root
+lock. Nested calls reuse a held lock for the same common Git directory, root and
+generation, including calls for another owner. This avoids waiting for an owner
+whose operation is waiting for that root. Other roots and generations acquire
+their own locks.
+
+Lock contention fails at the configured timeout. An admission timeout occurs
+before allocation, write-intent retention or submission. After the competing
+operation finishes, a caller may start a fresh invocation within its existing
+deadline. An unknown write outcome requires resolution of its original request.
+Lock files remain in the common Git directory so Git maintenance does not remove
+their inodes.
 
 ## Runtime boundaries
 

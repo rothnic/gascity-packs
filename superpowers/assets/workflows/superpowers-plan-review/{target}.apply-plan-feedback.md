@@ -35,6 +35,11 @@ Markdown build artifacts, so any edit you make to one must leave it valid:
 - The plan artifact at workflow root metadata `gc.build.plan_path`, schema `gc.build.plan.v1`:
   front-matter `status` must be one of `draft`, `questions`, `approved`, `changes_required`, `blocked`, or `superseded`.
 
+Resolve `<gc-scripts-dir>` as the canonical imported `gc` pack's `assets/scripts`
+directory through native formula provenance. Keep the validator beside that
+pack's schemas, as described in the
+[workspace entry contract](../../../../gascity/assets/workflows/workspace-entry.md).
+
 When you edit one of them:
 
 - Edit it in place and preserve its YAML front matter: keep `schema`,
@@ -45,8 +50,8 @@ When you edit one of them:
   metadata, not in the artifact's front matter.
 - Before closing with `gc.outcome=pass`, from `$GC_RIG_ROOT`, re-run the
   validator on every build artifact you edited and fix every reported error:
-  `python3 .gc/scripts/validate_build_artifact.py --schema gc.build.requirements.v1 --path "<requirements path>"`.
-  `python3 .gc/scripts/validate_build_artifact.py --schema gc.build.plan.v1 --path "<plan path>"`.
+  `python3 "<gc-scripts-dir>/validate_build_artifact.py" --schema gc.build.requirements.v1 --path "<requirements path>"`.
+  `python3 "<gc-scripts-dir>/validate_build_artifact.py" --schema gc.build.plan.v1 --path "<plan path>"`.
 - On a repeated attempt (`gc.attempt` greater than 1), first read the validator
   errors from `gc.attempt_log` on the loop control bead and repair the
   artifact in place.

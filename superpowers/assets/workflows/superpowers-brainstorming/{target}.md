@@ -6,7 +6,7 @@ preserve the normalized requirements path and approval metadata for the
 downstream planning lane.
 
 Artifact validation: this step is gated by
-`.gc/scripts/checks/build-artifact-valid.sh`, which validates the artifact
+the script recorded as `gc.check_path` on the validation loop control bead, which validates the artifact
 recorded at `gc.build.requirements_path` (fallback `gc.var.requirements_path`)
 against schema `gc.build.requirements.v1`. Approval metadata alone does not
 satisfy it; the artifact itself must be valid.
@@ -22,8 +22,8 @@ satisfy it; the artifact itself must be valid.
   content, and add a matching Markdown coverage table and any missing required
   section.
 - On every attempt, from `$GC_RIG_ROOT`, run the artifact validator with the
-  claimed bead id and fix any error before setting `gc.outcome=pass`:
-  `GC_BEAD_ID=<claimed-step-id> .gc/scripts/checks/build-artifact-valid.sh`.
+  validation loop control bead id and fix any error before setting `gc.outcome=pass`:
+  `GC_BEAD_ID=<control-bead-id> GC_RIG_ROOT=<launcher-rig-root> "<gc.check_path>"`.
 - Do not close by re-verifying root metadata or approval stamps alone; the
   attempt passes only when the validator passes on the artifact file.
 

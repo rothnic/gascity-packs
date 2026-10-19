@@ -483,8 +483,9 @@ class DerivedPackCompatibilityTests(unittest.TestCase):
                         check = step["check"]["check"]
                         self.assertEqual(check["mode"], "exec")
                         self.assertEqual(check["timeout"], "5m")
-                        # A derived step may either inherit the gascity
-                        # formula's pack-relative asset or replace the whole
+                        # Superpowers uses the native asset path throughout.
+                        # Retained derived steps may either inherit gascity's
+                        # pack-relative asset or replace the whole
                         # step with its existing launcher-compatibility path.
                         self.assertIn(
                             check["path"],
@@ -493,6 +494,11 @@ class DerivedPackCompatibilityTests(unittest.TestCase):
                                 base_contract.GASCITY_BUILD_ARTIFACT_CHECK_SCRIPT,
                             },
                         )
+                        if pack_name == "superpowers":
+                            self.assertEqual(
+                                check["path"],
+                                base_contract.GASCITY_BUILD_ARTIFACT_CHECK_SCRIPT,
+                            )
                         self.assertEqual(
                             step["metadata"]["gc.build.artifact_schema"], schema
                         )

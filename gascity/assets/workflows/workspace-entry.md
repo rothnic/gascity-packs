@@ -18,6 +18,22 @@ Verify these values against native claim, root and `gc rig list --json`
 readbacks. Do not infer them from the current directory, artifacts or
 `gc.work_dir`. Use the same explicit city and store for every command.
 
+Run the imported pack's helpers through `gc gc workspace entry` (and
+`dependency`, `checkout`, `runtime`, or `flow` for the other helpers). The first
+`gc` is the CLI and the second is the import binding. Its existing command
+dispatcher keeps helpers beside their pack schemas. An explicit invocation
+must use the canonical imported `gc` pack's `assets/scripts` path, resolved from
+native formula provenance, rather than a rig-local copy. Workspace helpers
+load `schemas/workspace/records.v1.json` relative to that pack layout.
+
+Formula validators use the native validation control's absolute `gc.check_path`.
+Keep that control's actual bead identity when self-running its check, rather
+than the claimed child step id. For direct schema validation, use
+`assets/scripts/validate_build_artifact.py` in the canonical imported `gc` pack,
+beside that pack's schemas. A higher-layer check override does not relocate
+this helper. A rig does not need a
+`.gc/scripts` copy of the pack helpers or validators.
+
 Run `workspace_entry.py gate` before creating implementation work or handing
 off to another suffix. Pass the entrypoint named in the stage instructions.
 The helper reads `gc.var.worktree_lifecycle` and the optional

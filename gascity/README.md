@@ -431,6 +431,9 @@ checks do not establish native worker execution or installation acceptance.
   and [qualified outputs](assets/scripts/workspace_outputs.md).
 - **Source and behavior checks:** [closed inventory](schemas/workspace/discovery.md)
   and [acceptance fixture](tests/fixtures/workspace-acceptance/README.md).
+- **Imported helpers:** [workspace entry contract](assets/workflows/workspace-entry.md).
+  Use `gc gc workspace` for lifecycle helpers and native `gc.check_path` for gates,
+  keeping helpers with their pack schemas.
 
 The city-scoped command `gc gc workspace` exposes the entry, dependency,
 checkout, runtime and flow helpers from the installed pack. Native qualifiers

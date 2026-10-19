@@ -305,6 +305,8 @@ compatibility and emits a warning. New mode uses the imported native entry,
 checkout, runtime and record helpers. Configure its fixed base and required
 checks through the [worktree guide](../gascity/docs/worktree-dependencies.md).
 Native worker execution and installation require separate matched-pair validation.
+Use the imported `gc gc workspace` commands for lifecycle helpers and the native
+validation control's `gc.check_path` for gates; helpers stay with their pack schemas.
 
 Use the shared [layout settings](../gascity/docs/worktree-dependencies.md#configure-layout)
 for a custom parent, directory prefix, or explicit external-parent permission.

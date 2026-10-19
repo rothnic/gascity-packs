@@ -83,9 +83,9 @@ write, so publish the review report explicitly before closing:
   `gc bd update "<workflow-root-id>" --set-metadata "gc.build.review_report_path=<absolute path>"`.
   Do not use `gc bd update --metadata 'key=value'`; `--metadata` only accepts
   a JSON object.
-- From `$GC_RIG_ROOT`, run the artifact validator with the claimed bead id and
+- From `$GC_RIG_ROOT`, run the artifact validator with the validation loop control bead id and
   fix any error before setting `gc.outcome=pass`:
-  `GC_BEAD_ID=<claimed-step-id> .gc/scripts/checks/build-artifact-valid.sh`.
+  `GC_BEAD_ID=<control-bead-id> GC_RIG_ROOT=<launcher-rig-root> "<gc.check_path>"`.
 - On repair attempts (`gc.attempt` greater than 1), first read the validator
   errors from `gc.attempt_log` on the validation loop control bead (the
   dependent of this step bead) and fix every listed error in place.

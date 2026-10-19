@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -16,6 +17,7 @@ from unittest.mock import patch
 from test_formula_assets import resolve_formula_from_dirs
 
 REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "gascity/assets/scripts"))
 PACKS = ("gascity", "compound-engineering", "superpowers", "bmad", "gstack")
 DIRECTORIES = [REPO / name / "formulas" for name in PACKS]
 POLICY_VARS = ("worktree_lifecycle", "worktree_base_ref", "worktree_checks")
@@ -94,6 +96,66 @@ class ComposedFormulaTests(unittest.TestCase):
         bad = subprocess.run([str(command), "../foreign"], text=True, capture_output=True,
                              env=dict(os.environ, GC_PACK_DIR=str(REPO / "gascity")), timeout=10)
         self.assertEqual(bad.returncode, 2)
+
+    def test_superpowers_setup_uses_installed_helpers_with_their_pack_schemas(self):
+        from test_workspace_entry import EntryTests
+        fixture = EntryTests("runTest")
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        store, _, _ = fixture.native_snapshot_store()
+        port = Path(store.gc)
+        registration = dict(city_path=str(fixture.root),
+                            rigs=[dict(name="example", path=str(fixture.repo))])
+        text = port.read_text().replace("assert args[:4]",
+            "if args == ['--city', str(root), 'rig', 'list', '--json']:\n"
+            " print(" + repr(json.dumps(registration)) + "); sys.exit(0)\n"
+            "assert args[:4]")
+        port.write_text(text)
+        arguments = ["entry", "read", "--gc", str(port), "--city-root", str(fixture.root),
+            "--store-ref", "rig:example", "--rig", "example", "--workflow-root", "root-1",
+            "--claimed-step", "step-1", "--worktree-lifecycle", "new"]
+        copied = fixture.repo / ".gc/scripts"
+        shutil.copytree(REPO / "gascity/assets/scripts", copied)
+        before = (fixture.root / "native-rows.json").read_bytes()
+        relocated = subprocess.run([sys.executable, "-B", str(copied / "workspace_entry.py"),
+            *arguments[1:]], cwd=fixture.repo, text=True, capture_output=True, timeout=15)
+        self.assertEqual(relocated.returncode, 1)
+        self.assertIn(str(fixture.repo / "schemas/workspace/records.v1.json"), relocated.stderr)
+        installed = subprocess.run([str(REPO / "gascity/commands/workspace/run.sh"), *arguments],
+            cwd=fixture.repo, env=dict(os.environ, GC_PACK_DIR=str(REPO / "gascity"),
+                PATH=str(Path(sys.executable).parent) + os.pathsep + os.environ["PATH"]),
+            text=True, capture_output=True, timeout=15)
+        self.assertEqual(installed.returncode, 0, installed.stderr)
+        self.assertEqual(json.loads(installed.stdout)["run"], fixture.record)
+        self.assertEqual((fixture.root / "native-rows.json").read_bytes(), before)
+        for stage in ("brainstorming", "plan-review"):
+            setup = (REPO / "superpowers/assets/workflows" / ("superpowers-" + stage)
+                     / ("{target}.setup-superpowers-" + stage + ".md")).read_text()
+            with self.subTest(stage=stage):
+                self.assertIn("gc.check_path", setup)
+                self.assertNotIn(".gc/scripts", setup)
+        contract = (REPO / "gascity/assets/workflows/workspace-entry.md").read_text()
+        self.assertIn("gc gc workspace entry", contract)
+        self.assertIn("schemas/workspace/records.v1.json", contract)
+
+    def test_superpowers_callers_keep_native_control_identity_and_imported_validators(self):
+        assets = REPO / "superpowers/assets/workflows"
+        for path in assets.rglob("*.md"):
+            with self.subTest(asset=path.relative_to(assets)):
+                self.assertNotIn(".gc/scripts", path.read_text())
+        for stage in ("brainstorming", "code-review"):
+            text = (assets / ("superpowers-" + stage) / "{target}.md").read_text()
+            with self.subTest(stage=stage):
+                self.assertIn('GC_BEAD_ID=<control-bead-id> GC_RIG_ROOT=<launcher-rig-root> "<gc.check_path>"', text)
+                self.assertNotIn("GC_BEAD_ID=<claimed-step-id>", text)
+        for stage, feedback in (("brainstorming", "spec"), ("plan-review", "plan")):
+            text = (assets / ("superpowers-" + stage)
+                    / ("{target}.apply-" + feedback + "-feedback.md")).read_text()
+            with self.subTest(stage=stage):
+                self.assertIn("canonical imported `gc` pack's `assets/scripts`", text)
+                self.assertIn('python3 "<gc-scripts-dir>/validate_build_artifact.py" --schema gc.build.requirements.v1', text)
+                if stage == "plan-review":
+                    self.assertIn('python3 "<gc-scripts-dir>/validate_build_artifact.py" --schema gc.build.plan.v1', text)
 
     def test_compiled_fix_planner_keeps_its_actual_source_writer_role(self):
         from workspace_store import _kinds

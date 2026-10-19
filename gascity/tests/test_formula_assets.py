@@ -226,9 +226,8 @@ MODE_VAR_DEFAULTS = {
     "github-pr-review": {"interaction_mode": "interactive", "review_mode": "report"},
 }
 
-# Derived packs still use the launcher-installed compatibility path in their
-# explicit step overrides. The base gascity pack owns and resolves its script
-# from the sibling asset tree.
+# Retained derived packs use launcher compatibility paths. Gas City and
+# Superpowers resolve checks from the imported pack asset tree.
 BUILD_ARTIFACT_CHECK_SCRIPT = ".gc/scripts/checks/build-artifact-valid.sh"
 GASCITY_BUILD_ARTIFACT_CHECK_SCRIPT = "../assets/scripts/checks/build-artifact-valid.sh"
 
@@ -3263,7 +3262,7 @@ class FormulaAssetTests(unittest.TestCase):
             design_loop["check"]["check"],
             {
                 "mode": "exec",
-                "path": ".gc/scripts/checks/design-review-approved.sh",
+                "path": "../assets/scripts/checks/design-review-approved.sh",
                 "timeout": "10m",
             },
         )
@@ -3283,7 +3282,7 @@ class FormulaAssetTests(unittest.TestCase):
             spec_loop["check"]["check"],
             {
                 "mode": "exec",
-                "path": ".gc/scripts/checks/design-review-approved.sh",
+                "path": "../assets/scripts/checks/design-review-approved.sh",
                 "timeout": "10m",
             },
         )
@@ -3373,7 +3372,7 @@ class FormulaAssetTests(unittest.TestCase):
         self.assertIn("waiting-human", spec_approval)
         self.assertIn("silence", spec_approval)
         self.assertIn("spec revision summary", spec_approval)
-        self.assertIn("Do not run `.gc/scripts/checks/design-review-approved.sh`", spec_approval)
+        self.assertIn("Do not run the design-approval control's recorded `gc.check_path`", spec_approval)
         self.assertIn("Do not use\n`gc bd update --metadata`", spec_approval)
         self.assertIn("--metadata-field gc.step_id=requirements.review-written-spec", spec_approval)
         self.assertIn("--metadata-field gc.step_id=requirements.apply-spec-feedback", spec_approval)

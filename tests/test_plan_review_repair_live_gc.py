@@ -1,5 +1,6 @@
 """Compile the actual default author/reviewer route with the native CLI."""
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -64,3 +65,67 @@ def test_native_default_review_joins_distinct_author_and_reviewer(
     assert {author["id"], reviewer["id"]} <= ancestors(scope["id"])
     assert scope["id"] in ancestors(logical["id"])
     assert not any(step["id"].startswith(prefix + ".iteration.2") for step in recipe["steps"])
+
+
+@pytest.mark.parametrize("formula,expected", (
+    ("superpowers-build", {
+        "design-review-approved.sh": ("requirements.superpowers-design-approval-loop",
+                                      "requirements.superpowers-written-spec-loop",
+                                      "plan-review.superpowers-plan-review-loop"),
+        "implementation-review-approved.sh": ("review.superpowers-code-review-loop",),
+        "build-artifact-valid.sh": ("requirements", "plan", "decompose", "review", "finalize"),
+    }),
+    ("superpowers-planning", {
+        "design-review-approved.sh": ("requirements.superpowers-design-approval-loop",
+                                      "requirements.superpowers-written-spec-loop",
+                                      "plan-review.superpowers-plan-review-loop"),
+        "build-artifact-valid.sh": ("requirements", "plan"),
+    }),
+    ("superpowers-decomposition", {"build-artifact-valid.sh": ("decompose",)}),
+    ("superpowers-development", {
+        "build-artifact-valid.sh": ("implement",),
+        "implementation-review-approved.sh": ("task-review.superpowers-task-review-loop",),
+    }),
+    ("superpowers-development-item", {
+        "build-artifact-valid.sh": ("implement-item",),
+        "implementation-review-approved.sh": ("task-review.superpowers-task-review-loop",),
+    }),
+    ("superpowers-review", {
+        "build-artifact-valid.sh": ("write-report",),
+        "implementation-review-approved.sh": ("write-report.superpowers-code-review-loop",),
+    }),
+))
+def test_native_superpowers_checks_resolve_imported_assets_and_control_identity(
+    gc_test_bin: Path, tmp_path, formula, expected, record_property  # noqa: F811
+):
+    city = write_city(tmp_path, {"gc": REPO_ROOT / "gascity",
+                                 "superpowers": REPO_ROOT / "superpowers"})
+    assert not (city.rig_dir / ".gc/scripts").exists()
+    command = run_gc(gc_test_bin, city, "gc", "workspace", "entry", "--help")
+    assert command.returncode == 0, command.stdout + command.stderr
+    assert "# Managed workspaces" in command.stdout
+    assert "gc <binding> workspace <helper> <action> [arguments]" in command.stdout
+    result = run_gc(gc_test_bin, city, "formula", "show", formula, "--json")
+    assert result.returncode == 0, result.stdout + result.stderr
+    recipe = json.loads(result.stdout)
+    assert recipe["ok"] is True and recipe["name"] == formula
+    record_property("native_recipe", json.dumps(recipe, sort_keys=True))
+    steps = {step["id"]: step for step in recipe["steps"]}
+    for script, controls in expected.items():
+        for control_ref in controls:
+            control = steps[formula + "." + control_ref]
+            meta = control["metadata"]
+            assert meta["gc.kind"] == "ralph"
+            check = Path(meta["gc.check_path"])
+            assert check.is_absolute()
+            assert check == (REPO_ROOT / "gascity/assets/scripts/checks" / script).resolve()
+            assert os.access(check, os.X_OK)
+            artifact = script == "build-artifact-valid.sh"
+            assert meta["gc.max_attempts"] == ("3" if artifact else "6")
+            assert meta["gc.check_timeout"] == ("5m" if artifact else "10m")
+            iteration = steps[control["id"] + ".iteration.1"]
+            assert iteration["id"] != control["id"]
+            assert iteration["metadata"]["gc.control_for"] == meta["gc.step_id"] == control_ref
+            if artifact:
+                assert meta["gc.build.artifact_schema"].startswith("gc.build.")
+                assert meta["gc.build.artifact_path_keys"]

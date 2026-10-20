@@ -58,7 +58,7 @@ class MethodologyWorkspaceTests(unittest.TestCase):
             with self.subTest(formula=name):
                 formula = resolve_formula_from_dirs(DIRS, name)
                 prepare = next(step for step in formula["steps"] if step["id"] == "prepare")
-                text = " ".join(body(name, prepare).split())
+                text = " ".join(body(name, prepare, context_path="/contexts/request.json").split())
                 self.assertIn("successful `recorded` result allows requirements, planning and decomposition", text)
                 self.assertIn("`committed` or `replayed` receipt", text)
                 self.assertIn("source plan is not required at this stage", text)
@@ -66,6 +66,12 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                 self.assertIn("Implementation still requires the original recorded run, source plan and admitted workspace", text)
                 self.assertIn("nonzero exit, unknown receipt or refused read blocks handoff", text)
                 self.assertIn("preserve the original request", text)
+                self.assertIn("Resolve relative `items[].path` values from the directory containing `context_path`", text)
+                self.assertIn("not from the worker's current directory", text)
+                self.assertIn("validate_context_bundle.py", text)
+                self.assertIn('PACK_SCRIPTS=$(gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace scripts-path)', text)
+                self.assertIn('python3 "$PACK_SCRIPTS/validate_context_bundle.py" "/contexts/request.json"', text)
+                self.assertIn("A failed lookup from the worker directory does not show that a declared input is missing", text)
 
     def test_effective_canonical_summary_retains_member_path_hash_and_provenance(self):
         for name in ("build-basic", "compound-build", "superpowers-build", "bmad-build", "gstack-build"):

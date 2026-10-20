@@ -85,7 +85,7 @@ title = "Superpowers brainstorm requirements"
 needs = ["prepare"]
 metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "superpowers.brainstorming", "gc.build.artifact_schema" = "gc.build.requirements.v1", "gc.build.artifact_path_keys" = "gc.build.requirements_path,gc.var.requirements_path" }
 expand = "superpowers-brainstorming"
-expand_vars = { failure_scope = "build-body", brainstorming_approval_mode = "{{brainstorming_approval_mode}}", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { failure_scope = "build-body", brainstorming_approval_mode = "{{brainstorming_approval_mode}}", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/superpowers-build/requirements.md"
 
 [[steps]]
@@ -109,7 +109,7 @@ title = "Superpowers plan review"
 needs = ["plan"]
 metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "superpowers.plan-reviewer", "gc.build.plan_review_required" = "true" }
 expand = "superpowers-plan-review"
-expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/superpowers-build/plan-review.md"
 
 [[steps]]
@@ -163,7 +163,7 @@ title = "Superpowers request code review"
 needs = ["summarize-implementation"]
 metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "superpowers.code-reviewer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
 expand = "superpowers-code-review"
-expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}", artifact_path_keys = "gc.build.review_report_path", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}", artifact_path_keys = "gc.build.review_report_path", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/superpowers-build/review.md"
 
 [[steps]]

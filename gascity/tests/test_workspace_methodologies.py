@@ -257,6 +257,24 @@ class MethodologyWorkspaceTests(unittest.TestCase):
                         self.assertEqual(node["expand_vars"]["worktree_lifecycle"], "{{worktree_lifecycle}}")
                         self.assertIn("gc.run_target", node["metadata"])
 
+    def test_expansion_callers_forward_configured_workspace_layout(self):
+        layout = ("worktree_parent", "worktree_name_prefix", "worktree_allow_external_parent")
+        for directory in (BASE / "formulas", *[REPO / pack / "formulas" for pack in PACKS]):
+            for path in directory.glob("*.formula.toml"):
+                formula = load_formula_from_dirs(DIRS, path.name.removesuffix(".formula.toml"))
+                if not set(layout).issubset(formula.get("vars", {})):
+                    continue
+                for node in nodes(formula):
+                    target = node.get("expand")
+                    if not target:
+                        continue
+                    expanded = load_formula_from_dirs(DIRS, target)
+                    if not set(layout).issubset(expanded.get("vars", {})):
+                        continue
+                    with self.subTest(formula=formula["formula"], step=node["id"], target=target):
+                        for key in layout:
+                            self.assertEqual(node.get("expand_vars", {}).get(key), "{{" + key + "}}")
+
     def test_separate_and_shared_drains_keep_member_access_and_single_lane(self):
         builds = ("compound-build", "superpowers-build", "bmad-build", "gstack-build")
         entries = ("compound-implementation", "superpowers-implementation", "bmad-implementation", "gstack-implementation")

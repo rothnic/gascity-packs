@@ -312,6 +312,8 @@ validation control's `gc.check_path` for gates; helpers stay with their pack sch
 Use the shared [layout settings](../gascity/docs/worktree-dependencies.md#configure-layout)
 for a custom parent, directory prefix, or explicit external-parent permission.
 Resumes and shared members retain the recorded owner layout.
+Superpowers build and development entries pass these settings into nested
+requirements, plan-review, code-review and task-review formulas.
 
 The managed contract retains the run base, source-plan, workspace owner and
 accepted input for each task. Separate tasks use their declared source.

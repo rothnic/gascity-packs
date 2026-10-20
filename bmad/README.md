@@ -249,6 +249,8 @@ Native worker execution and installation require separate matched-pair validatio
 Use the shared [layout settings](../gascity/docs/worktree-dependencies.md#configure-layout)
 for a custom parent, directory prefix, or explicit external-parent permission.
 Resumes and shared members retain the recorded owner layout.
+BMAD build and review entries pass these settings into their nested code-review
+formula.
 
 The managed contract retains one run base and a source-plan for the story
 graph. Separate stories use their declared inputs. Shared stories consume the

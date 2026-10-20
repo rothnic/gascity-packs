@@ -184,6 +184,8 @@ Custom parent and prefix settings are recorded per workspace. See
 [layout configuration](docs/worktree-dependencies.md#configure-layout).
 Explicit implementation, review, and fix launches must pass these three settings
 from the original native workflow root; child defaults do not replace them.
+The base build and issue-fix workflows carry them into their nested review
+formulas as well.
 
 When variables are not enough, every stage prompt can be replaced by dropping
 a Markdown file at the same relative path in a higher-priority layer, and

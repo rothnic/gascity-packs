@@ -71,5 +71,5 @@ title = "Run gstack review"
 needs = ["validate-context"]
 metadata = { "gc.run_target" = "gstack.review-synthesizer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path,gc.var.report_path" }
 expand = "gstack-code-review"
-expand_vars = { worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/gstack-review/write-report.md"

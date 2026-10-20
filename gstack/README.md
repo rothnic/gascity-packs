@@ -208,6 +208,8 @@ Native worker execution and installation require separate matched-pair validatio
 Use the shared [layout settings](../gascity/docs/worktree-dependencies.md#configure-layout)
 for a custom parent, directory prefix, or explicit external-parent permission.
 Resumes and shared members retain the recorded owner layout.
+Gstack build and review entries pass these settings into their nested planning,
+code-review, QA and release-readiness formulas.
 
 The managed contract retains the run base, declared source predecessors,
 workspace owner and accepted member input. Separate items use their declared

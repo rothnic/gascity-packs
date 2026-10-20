@@ -119,7 +119,7 @@ title = "gstack plan review fanout"
 needs = ["plan"]
 metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gstack.review-synthesizer", "gc.build.plan_review_required" = "true" }
 expand = "gstack-plan-review"
-expand_vars = { failure_scope = "build-body", implementation_target = "{{implementation_target}}", interaction_mode = "{{interaction_mode}}", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { failure_scope = "build-body", implementation_target = "{{implementation_target}}", interaction_mode = "{{interaction_mode}}", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/gstack-build/plan-review.md"
 
 [[steps]]
@@ -173,7 +173,7 @@ title = "gstack review fanout"
 needs = ["summarize-implementation"]
 metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gstack.review-synthesizer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
 expand = "gstack-code-review"
-expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}", artifact_path_keys = "gc.build.review_report_path", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", review_mode = "{{review_mode}}", artifact_path_keys = "gc.build.review_report_path", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/gstack-build/review.md"
 
 [[steps]]
@@ -204,7 +204,7 @@ title = "gstack QA fanout"
 needs = ["review"]
 metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gstack.qa-lead" }
 expand = "gstack-qa-review"
-expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", interaction_mode = "{{interaction_mode}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", interaction_mode = "{{interaction_mode}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/gstack-build/qa.md"
 
 [[steps]]
@@ -213,7 +213,7 @@ title = "gstack release readiness fanout"
 needs = ["qa"]
 metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gstack.release-engineer" }
 expand = "gstack-release-readiness"
-expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", review_mode = "{{review_mode}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { failure_scope = "build-body", worktree_lifecycle = "{{worktree_lifecycle}}", review_mode = "{{review_mode}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/gstack-build/release-readiness.md"
 
 [[steps]]

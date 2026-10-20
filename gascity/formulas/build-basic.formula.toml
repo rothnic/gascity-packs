@@ -158,7 +158,7 @@ title = "Run starter implementation review"
 needs = ["summarize-implementation"]
 metadata = { "gc.scope_ref" = "build-body", "gc.scope_role" = "member", "gc.on_fail" = "abort_scope", "gc.run_target" = "gc.implementation-reviewer", "gc.build.artifact_schema" = "gc.build.review.v1", "gc.build.artifact_path_keys" = "gc.build.review_report_path" }
 expand = "build-basic-review"
-expand_vars = { failure_scope = "build-body", implementation_target = "{{implementation_target}}", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { failure_scope = "build-body", implementation_target = "{{implementation_target}}", worktree_lifecycle = "{{worktree_lifecycle}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/build-basic/review.md"
 
 [[steps]]

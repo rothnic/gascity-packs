@@ -1997,6 +1997,9 @@ class FormulaAssetTests(unittest.TestCase):
                 "worktree_lifecycle": "{{worktree_lifecycle}}",
                 "worktree_base_ref": "{{worktree_base_ref}}",
                 "worktree_checks": "{{worktree_checks}}",
+                "worktree_parent": "{{worktree_parent}}",
+                "worktree_name_prefix": "{{worktree_name_prefix}}",
+                "worktree_allow_external_parent": "{{worktree_allow_external_parent}}",
             },
         )
         self.assertEqual(review_step["needs"], ["summarize-implementation"])
@@ -2443,6 +2446,7 @@ class FormulaAssetTests(unittest.TestCase):
                     "artifact_path_keys": "gc.build.review_report_path",
                 }
                 expected_review_expand_vars.update({key: "{{" + key + "}}" for key in ("worktree_lifecycle", "worktree_base_ref", "worktree_checks")})
+                expected_review_expand_vars.update({key: "{{" + key + "}}" for key in ("worktree_parent", "worktree_name_prefix", "worktree_allow_external_parent")})
                 expected_review_expand_vars.update(expected.get("review_expand_vars", {}))
                 self.assertEqual(
                     review_step["expand_vars"],
@@ -2783,6 +2787,7 @@ class FormulaAssetTests(unittest.TestCase):
                     "review_mode": "{{review_mode}}",
                 }
                 expected_review_expand_vars.update({key: "{{" + key + "}}" for key in ("worktree_lifecycle", "worktree_base_ref", "worktree_checks")})
+                expected_review_expand_vars.update({key: "{{" + key + "}}" for key in ("worktree_parent", "worktree_name_prefix", "worktree_allow_external_parent")})
                 expected_review_expand_vars.update(
                     expected.get(
                         "code_review_entry_expand_vars",

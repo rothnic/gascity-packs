@@ -182,6 +182,9 @@ mode = "{{mode}}"
 worktree_lifecycle = "{{worktree_lifecycle}}"
 worktree_base_ref = "{{worktree_base_ref}}"
 worktree_checks = "{{worktree_checks}}"
+worktree_parent = "{{worktree_parent}}"
+worktree_name_prefix = "{{worktree_name_prefix}}"
+worktree_allow_external_parent = "{{worktree_allow_external_parent}}"
 
 [[steps]]
 id = "create-beads"

@@ -105,7 +105,7 @@ title = "Run Superpowers task fanout review"
 needs = ["verify-test-passes"]
 metadata = { "gc.run_target" = "superpowers.code-quality-reviewer" }
 expand = "superpowers-task-review"
-expand_vars = { worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}" }
+expand_vars = { worktree_lifecycle = "{{worktree_lifecycle}}", implementation_target = "{{implementation_target}}", worktree_base_ref = "{{worktree_base_ref}}", worktree_checks = "{{worktree_checks}}", worktree_parent = "{{worktree_parent}}", worktree_name_prefix = "{{worktree_name_prefix}}", worktree_allow_external_parent = "{{worktree_allow_external_parent}}" }
 description_file = "../assets/workflows/superpowers-development/task-review.md"
 
 [[steps]]

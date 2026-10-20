@@ -212,7 +212,7 @@
     "gascity/assets/workflows/build-base/prepare.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "b486d1d0bb7c06ed274777479f38f5f1bbb555670fac032996330bf39f0500ce"
+      "sha256": "b11aee15dc1506e3dbe58d75a79ef75cbc66cd1e19e81cde1b9160d679fd51b9"
     },
     "gascity/assets/workflows/build-base/publish.md": {
       "classification": "new",
@@ -2189,12 +2189,12 @@
     "gascity/commands/workspace/run.sh": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "f5be2b05017dea0b9ddccbfec67dfdb698457381393489acf1f9f6fcd40d15da"
+      "sha256": "db27b9a191c20e3333f7aca60b4b9d548c374467e5c12d5fcb9afdc0707d97a8"
     },
     "gascity/commands/workspace/help.md": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "c4a090b7ca324146b32ee670e578eda6bf2c560389a053415e027b5f23b58b4a"
+      "sha256": "3aca58025a35e60ffe8e1acbf89a9135b096710093ebc4a673201ca25538b9b5"
     },
     "gascity/commands/workspace/command.toml": {
       "classification": "new",

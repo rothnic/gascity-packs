@@ -36,6 +36,33 @@ class ContextBundleValidatorTests(unittest.TestCase):
             self.assertEqual([item.name for item in result.items], ["Requirements"])
             self.assertEqual(result.items[0].resolved_path, subject.resolve())
 
+    def test_context_bundle_resolves_relative_items_from_bundle_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            bundle_dir = root / "contexts"
+            input_file = bundle_dir / "fixtures" / "request.md"
+            input_file.parent.mkdir(parents=True)
+            input_file.write_text("# Request\n", encoding="utf-8")
+            bundle = bundle_dir / "context.json"
+            bundle.write_text(
+                '{"items":[{"name":"Request","path":"fixtures/request.md",'
+                '"description":"User request."}]}',
+                encoding="utf-8",
+            )
+            working_dir = root / "worktree"
+            working_dir.mkdir()
+            (working_dir / "fixtures").mkdir()
+
+            previous = pathlib.Path.cwd()
+            try:
+                os.chdir(working_dir)
+                result = context_validator.validate_bundle(bundle)
+            finally:
+                os.chdir(previous)
+
+            self.assertEqual(result.items[0].resolved_path, input_file.resolve())
+            self.assertEqual(result.items[0].resolved_path.read_text(encoding="utf-8"), "# Request\n")
+
     def test_context_bundle_rejects_unknown_item_fields(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

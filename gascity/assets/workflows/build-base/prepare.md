@@ -41,6 +41,11 @@ is missing:
    source, but it neither selects the source nor adds a required edge.
 3. Read the complete original task or convoy description. Read the supplied
    `context_path` bundle in full and each declared request and behavior input.
+   Resolve relative `items[].path` values from the directory containing
+   `context_path`, not from the worker's current directory. Validate the bundle
+   with the imported `validate_context_bundle.py` helper, then open each exact
+   resolved path. A failed lookup from the worker directory does not show that
+   a declared input is missing.
    Compare a materialized request with its original native source; do not guess
    input paths from the working directory or an earlier workflow.
 4. Blank `requirements_path`, `plan_path`, and `decomposition_path` are valid
@@ -54,6 +59,18 @@ step. They do not replace the mandatory workspace entry and selected-mode
 checks below. If a required input is actually missing, unreadable, foreign,
 ambiguous, or inconsistent, retain the failing read or helper diagnostic and
 use the blocked outcome below; never manufacture input or infer success.
+
+When `context_path` is set, use the selected city and registered rig verified
+from the native claim and workflow root to find the imported pack's validator
+before opening bundle items:
+
+```sh
+PACK_SCRIPTS=$(gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace scripts-path) || exit "$?"
+python3 "$PACK_SCRIPTS/validate_context_bundle.py" "{{context_path}}" || exit "$?"
+```
+
+If validation fails, retain its exact diagnostic and use the blocked outcome
+above.
 
 Validate the target, artifact root, and optional context inputs. Record the normalized artifact paths on the workflow root bead so later stages can reuse them without inventing new locations.
 

@@ -53,6 +53,19 @@ def body(formula_name, node, **values):
 
 
 class MethodologyWorkspaceTests(unittest.TestCase):
+    def test_effective_build_prepare_resolves_context_items_from_bundle_directory(self):
+        for name in ("build-basic", "compound-build", "superpowers-build", "bmad-build", "gstack-build"):
+            with self.subTest(formula=name):
+                formula = resolve_formula_from_dirs(DIRS, name)
+                prepare = next(step for step in formula["steps"] if step["id"] == "prepare")
+                text = " ".join(body(name, prepare, context_path="/contexts/request.json").split())
+                self.assertIn("Resolve relative `items[].path` values from the directory containing `context_path`", text)
+                self.assertIn("not from the worker's current directory", text)
+                self.assertIn("validate_context_bundle.py", text)
+                self.assertIn('PACK_SCRIPTS=$(gc --city "$CITY_ROOT" --rig "$RIG_NAME" gc workspace scripts-path)', text)
+                self.assertIn('python3 "$PACK_SCRIPTS/validate_context_bundle.py" "/contexts/request.json"', text)
+                self.assertIn("A failed lookup from the worker directory does not show that a declared input is missing", text)
+
     def test_direct_items_declare_new_with_explicit_legacy_compatibility(self):
         records = records_module()
         for separate, shared, _, _ in ITEMS.values():

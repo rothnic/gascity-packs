@@ -997,17 +997,17 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.apply-plan-findings.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "ddb217d3702d03fe08294e77ba545779ada72ce58f4aa259170b0bc636d7b54e"
+      "sha256": "7797cbede1fe668b134e84002c73571e164b9ad23c68ab6e9228f128081283cb"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.architecture-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "b0762eb6ccf77d0a70362f3d64dedb69706e316a859d0d67bb3989de9f5d8075"
+      "sha256": "f05cabb5d9e16f125dd9f4e304d7640a78ab30c22c3fece9c2ef81f5293e09c1"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.coherence-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "a948aa3ca3ee847d79a7d2e3267a19bf2dd39890baac0b4a2443a77d4635129a"
+      "sha256": "35afba1fa5bf400b109e3848e1fe7241bc277da77e9fa067570b4ee52c5cb81f"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.compound-plan-review-loop.md": {
       "classification": "reference",
@@ -1017,7 +1017,7 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.feasibility-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "19a8962304eef73e0b15a361a6e393b8f203dbbc46dca11b55e9661a9971a0cf"
+      "sha256": "648ecb1b1dffe0d1787da525788370b6fbf6844efeccfc88f638ab8553b343fb"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.md": {
       "classification": "reference",
@@ -1027,7 +1027,7 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.scope-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "74b258e3ececf7bd12db040ac0a4b8c6fd4d8bb1c59e4fdd6c14c7001929590f"
+      "sha256": "ca5985a5894810b7bd85484d28524b0ab7ae3d6ca193d88d9bc52e1c4952641c"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.setup-compound-plan-review.md": {
       "classification": "reference",
@@ -1037,7 +1037,7 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.synthesize-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "326d803e529684d20d323fa324d143d266a36cb804faedd27fcf96eda10f5f89"
+      "sha256": "e4c75427f900e81b4b2c320d23211ed842fa52d06c1f782cec1b228a60ea7abd"
     },
     "compound-engineering/assets/workflows/compound-planning/plan-review.md": {
       "classification": "reference",

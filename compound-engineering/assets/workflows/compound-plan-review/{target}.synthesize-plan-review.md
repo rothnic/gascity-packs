@@ -8,9 +8,14 @@ synthesized report to `gc.build.plan_review_report_path`, which should be
 
 Use the imported Gas City [plan-review acceptance contract](../../../../gascity/docs/plan-review-acceptance.md).
 Review the current native-recorded plan and requirements, not just the context
-copy. Require all four lane reports to name this workflow and the same plan
-and upstream paths and SHA-256 hashes. Missing, stale, or required findings
-mean `iterate`; preserve each finding and its lane attribution.
+copy. Require all four lane reports to agree on the canonical subject returned
+by the imported `validate_plan_review.py subject` command: this workflow root,
+the exact current plan path and hash, and exactly the current
+`plan.trace.upstream` paths and hashes. Additional valid/current references
+in a lane's rationale are supplementary evidence, not canonical subject
+members; those citations may differ across lanes. A missing, conflicting, or
+stale canonical subject or required finding means `iterate`; preserve each
+finding and its lane attribution.
 
 Write `gc.verdict-report.v1`, kind `review`, to the recorded report path.
 Only an approved current plan with no unresolved findings may receive

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -108,6 +109,91 @@ class SpecializedPlanReviewAcceptanceTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
                 self.assertIn(error, result.stderr)
+
+    def test_compound_apply_keeps_author_and_review_statuses_coherent(self):
+        prompt = (ROOT / "compound-engineering" / "assets" / "workflows" /
+                  "compound-plan-review" / "{target}.apply-plan-findings.md").read_text()
+        prompt_text = " ".join(prompt.split())
+        self.assertIn("workflow root from the current native claim's `gc.root_bead_id`", prompt_text)
+        self.assertIn("write both `gc.build.*` status fields to that root bead, not to this claimed apply child", prompt_text)
+        self.assertIn("front-matter `status: approved` and `gc.build.plan_status=approved`", prompt_text)
+        self.assertIn("`gc.build.plan_review_status=draft`", prompt_text)
+        self.assertIn("leave the already-approved `gc.build.plan_status` aligned with the plan's approved front matter", prompt_text)
+        self.assertNotIn("Only then set `gc.build.plan_status=approved`", prompt_text)
+        self.assertIn("`design_review.verdict=iterate`", prompt_text)
+        self.assertIn("front-matter status and `gc.build.plan_status` at `draft`", prompt_text)
+        self.assertIn("report-only mode or missing repair authority prevents an edit", prompt_text)
+        self.assertIn("Do not reset an approved, unchanged plan to `draft`", prompt_text)
+        self.assertIn("`validate_plan_review.py native-check` succeeds", prompt_text)
+
+        self.prepare("compound-engineering", "compound")
+        self.plan.write_text(self.plan_text("compound-engineering", "compound", status="draft"))
+        refused_draft = self.run_gate("compound-engineering", "compound")
+        self.assertEqual(refused_draft.returncode, 1, refused_draft.stdout + refused_draft.stderr)
+
+        # Completing the author repair makes the plan ready, but the previous
+        # report still cannot approve the changed subject.
+        self.plan.write_text(self.plan_text("compound-engineering", "compound")
+                             + "\nThe required procedure is now complete.\n")
+        refused_stale_subject = self.run_gate("compound-engineering", "compound")
+        self.assertEqual(refused_stale_subject.returncode, 1,
+                         refused_stale_subject.stdout + refused_stale_subject.stderr)
+
+        current = review.current_subject(self.plan, workflow_root_id="workflow-1", artifact_root=self.root)
+        self.write_report(subject=current)
+        accepted_current_subject = self.run_gate("compound-engineering", "compound")
+        self.assertEqual(accepted_current_subject.returncode, 0,
+                         accepted_current_subject.stdout + accepted_current_subject.stderr)
+        self.assertEqual(json.loads(accepted_current_subject.stdout), current)
+
+    def test_compound_review_subject_excludes_supplemental_citations(self):
+        workflow_dir = (ROOT / "compound-engineering" / "assets" / "workflows" /
+                        "compound-plan-review")
+        canonical_rule = ("The canonical review subject is the workflow root plus the current plan and "
+                          "exact `plan.trace.upstream` paths and hashes.")
+        supplementary_rule = ("those citations are not part of the canonical subject and need not "
+                              "match across personas")
+        for lane in ("coherence-review", "feasibility-review", "scope-review", "architecture-review"):
+            prompt = (workflow_dir / f"{{target}}.{lane}.md").read_text()
+            prompt_text = " ".join(prompt.split())
+            self.assertIn(canonical_rule, prompt_text)
+            self.assertIn(supplementary_rule, prompt_text)
+        synthesizer = (workflow_dir / "{target}.synthesize-plan-review.md").read_text()
+        synth_text = " ".join(synthesizer.split())
+        self.assertIn("canonical subject returned by the imported `validate_plan_review.py subject` command", synth_text)
+        self.assertIn("exactly the current `plan.trace.upstream` paths and hashes", synth_text)
+        self.assertIn("those citations may differ across lanes", synth_text)
+
+        self.prepare("compound-engineering", "compound")
+        citations = []
+        for lane in ("coherence", "feasibility", "scope", "architecture"):
+            cited = self.root / f"{lane}-support.md"
+            contents = f"Current supplementary evidence for the {lane} lane.\n"
+            cited.write_text(contents, encoding="utf-8")
+            digest = hashlib.sha256(contents.encode()).hexdigest()
+            citations.append(f"{lane}: {cited.resolve()} sha256={digest}")
+        self.report.write_text(
+            self.report.read_text(encoding="utf-8")
+            + "\nSupplementary references cited by the four lanes:\n"
+            + "\n".join(citations) + "\n",
+            encoding="utf-8",
+        )
+        for citation, lane in zip(citations, ("coherence", "feasibility", "scope", "architecture")):
+            cited = self.root / f"{lane}-support.md"
+            self.assertTrue(cited.is_file())
+            self.assertIn(hashlib.sha256(cited.read_bytes()).hexdigest(), citation)
+        accepted = self.run_gate("compound-engineering", "compound")
+        self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
+        self.assertEqual(json.loads(accepted.stdout), self.subject)
+
+        # A different canonical upstream path remains a refusal even when it is
+        # one of the valid, current files cited as supplementary evidence.
+        different_subject = copy.deepcopy(self.subject)
+        different_subject["upstream"][0]["path"] = str(self.root / "coherence-support.md")
+        self.write_report(subject=different_subject)
+        refused_changed_subject = self.run_gate("compound-engineering", "compound")
+        self.assertEqual(refused_changed_subject.returncode, 1,
+                         refused_changed_subject.stdout + refused_changed_subject.stderr)
 
     def plan_text(self, pack: str, prefix: str, **kwargs) -> str:
         # Reuse the production-schema fixture used by the shared helper tests.

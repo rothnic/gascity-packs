@@ -51,10 +51,14 @@ subject:
 Describe the review and why the current plan is ready for decomposition.
 ```
 
-A blocked report instead uses `verdict: fail`, a non-`none` severity, and
-structured findings with `id`, `severity`, `title`, `evidence`, and
-`required_fix`. Retain the actual findings. Never turn a blocked report into a
-passing report just to make a stage close.
+A finding uses `minor`, `major`, or `blocker`. A report uses `none`, `minor`,
+`major`, or `blocker` for `severity`. A failing report's severity must equal its
+highest finding severity.
+
+A blocked report uses `verdict: fail`, a non-`none` severity, and structured
+findings with `id`, `severity`, `title`, `evidence`, and `required_fix`. Retain
+the actual findings. Never turn a blocked report into a passing report just to
+make a stage close.
 
 **Repair identity.** A malformed upstream path or hash can prevent the helper
 from constructing a complete approval `subject`. The independent native

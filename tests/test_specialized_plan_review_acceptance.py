@@ -63,6 +63,52 @@ class SpecializedPlanReviewAcceptanceTests(unittest.TestCase):
         ]))
         gc.chmod(0o755)
 
+    def test_compound_synthesizer_uses_and_validates_verdict_severity_contract(self):
+        contract = (ROOT / "gascity" / "docs" / "plan-review-acceptance.md").read_text()
+        contract_text = " ".join(contract.split())
+        prompt = (ROOT / "compound-engineering" / "assets" / "workflows" /
+                  "compound-plan-review" / "{target}.synthesize-plan-review.md").read_text()
+        self.assertIn("`minor`, `major`, or `blocker`", contract_text)
+        self.assertIn("`none`, `minor`, `major`, or `blocker`", contract_text)
+        self.assertIn("highest finding severity", contract_text)
+        self.assertIn("finding severities `minor`, `major`, or `blocker`", prompt)
+        self.assertIn("report severities\n`none`, `minor`, `major`, or `blocker`", prompt)
+        self.assertIn("highest finding severity", prompt)
+        self.assertIn("validate_verdict_report.py <report-path> --kind review", prompt)
+
+        validator = ROOT / "gascity" / "assets" / "scripts" / "validate_verdict_report.py"
+        report = self.root / "synthesized-review.md"
+        invalid_reports = (
+            ("medium", "major", "severity must be one of"),
+            ("major", "blocker", "maximum finding severity"),
+        )
+        for report_severity, finding_severity, error in invalid_reports:
+            with self.subTest(report_severity=report_severity, finding_severity=finding_severity):
+                report.write_text(
+                    "---\n"
+                    "schema: gc.verdict-report.v1\n"
+                    "kind: review\n"
+                    "verdict: fail\n"
+                    f"severity: {report_severity}\n"
+                    "findings:\n"
+                    "  - id: PLAN-1\n"
+                    f"    severity: {finding_severity}\n"
+                    "    title: Required plan change\n"
+                    "    evidence: The plan omits a required procedure.\n"
+                    "    required_fix: Add and review the procedure.\n"
+                    "---\n",
+                    encoding="utf-8",
+                )
+                result = subprocess.run(
+                    [sys.executable, str(validator), str(report), "--kind", "review"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=15,
+                )
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertIn(error, result.stderr)
+
     def plan_text(self, pack: str, prefix: str, **kwargs) -> str:
         # Reuse the production-schema fixture used by the shared helper tests.
         return (plan_text(self.root, **kwargs).replace("build-basic", f"{prefix}-build")

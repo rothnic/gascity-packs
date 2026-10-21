@@ -21,6 +21,18 @@ rewrite the plan while synthesizing. If its status still needs approval,
 record that required change for the apply lane; the changed bytes need another
 review. A report or recommendation alone does not authorize decomposition.
 
+Use finding severities `minor`, `major`, or `blocker`. Use report severities
+`none`, `minor`, `major`, or `blocker`. The report severity must equal the
+highest finding severity. Before closing, validate the report with the imported
+`validate_verdict_report.py` from the same Gas City scripts directory:
+
+```sh
+python3 <pack-scripts>/validate_verdict_report.py <report-path> --kind review
+```
+
+Resolve `<pack-scripts>` from the imported pack assets, not the worker's current
+directory. Fix report-format errors without dropping or weakening findings.
+
 Close with `gc.outcome=pass`,
 `design_review.review_verdict=approve|iterate`, and
 `design_review.review_report_path=<synthesized report path>`. Do not set

@@ -272,12 +272,15 @@ preparation, the [shared recipe](assets/workflows/do-work/prepare-worktree.md)
 runs `workspace_entry.py read --require-plan` to discover the original run and
 the plan's producer through the native drain relationship. A source-plan
 reference need not be stored on the item root or original workflow root.
+The recipe reads the generation from the exact drain member (or current input
+convoy for a non-drain claim) before invoking that strict entry check.
 The recipe retains that entry JSON and reads the exact claimed native row, then
 runs the dependency helper with the returned logical root, physical unit convoy,
-generation, store and uniquely declared member/owner. Run its two shell blocks in
-one shell with the native claim context and existing external artifact/evidence
-directories. Do not substitute example IDs or the synthetic unit convoy for the
-source member. Preparation refuses missing or stale predecessor acceptance before
+generation, store and uniquely declared member/owner. Run the source-row
+derivation, entry read and dependency preparation in one shell with the native
+claim context and existing external artifact/evidence directories. Do not
+substitute example IDs or the synthetic unit convoy for the source member.
+Preparation refuses missing or stale predecessor acceptance before
 record or checkout allocation; an independent member starts at the captured base.
 
 If the initial and continuation reads disagree, entry still refuses. A bounded

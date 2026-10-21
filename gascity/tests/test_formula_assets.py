@@ -896,6 +896,75 @@ class FormulaAssetTests(unittest.TestCase):
         item_path = (root / "formulas" / item_step["description_file"]).resolve()
         self.assertEqual((item_path.parent / link).resolve().read_text(encoding="utf-8"), recipe)
 
+    def test_prepare_worktree_derives_generation_from_exact_native_source_row(self) -> None:
+        root = pathlib.Path(__file__).resolve().parents[1]
+        formula = resolve_formula(root, "do-work")
+        step = next(item for item in formula["steps"] if item["id"] == "prepare-worktree")
+        recipe = node_description(root, step)
+        source_marker = "SOURCE_ROW_ID=$(python3 -c '"
+        marker = "SOURCE_GENERATION=$(python3 -c '"
+        self.assertIn(source_marker, recipe)
+        self.assertIn(marker, recipe)
+        source_id_code = recipe.split(source_marker, 1)[1].split("') || exit \"$?\"", 1)[0]
+        code = recipe.split(marker, 1)[1].split("') || exit \"$?\"", 1)[0]
+        self.assertLess(recipe.index(marker), recipe.index("WORKSPACE_ENTRY_JSON=$"))
+        self.assertLess(recipe.index('bd show "$CLAIMED_ROOT_BEAD_ID"'), recipe.index(marker))
+        self.assertLess(recipe.index('bd show "$SOURCE_ROW_ID"'), recipe.index(marker))
+        self.assertIn('metadata.get("gc.drain_member_id") or metadata.get("gc.input_convoy_id")', recipe)
+        self.assertIn('metadata.get("gc.drain_control_id", "")', recipe)
+        self.assertIn('metadata.get("gc.root_store_ref") == os.environ["ROOT_STORE_REF"]', code)
+        self.assertIn('metadata.get("gc.source_root_id") == expected_root', code)
+        self.assertIn('re.fullmatch(r"[1-9][0-9]*", generation)', code)
+
+        def resolve(root_row, source_row, *, control=None):
+            env = os.environ.copy()
+            env.update({
+                "CLAIMED_ROOT_JSON": json.dumps(root_row),
+                "CLAIMED_ROOT_BEAD_ID": root_row["id"],
+                "SOURCE_ROW_JSON": json.dumps(source_row),
+                "DRAIN_CONTROL_ID": control["id"] if control else "",
+                "ROOT_STORE_REF": "rig:fixture",
+            })
+            if control:
+                env["DRAIN_CONTROL_JSON"] = json.dumps(control)
+            source_id = subprocess.run(
+                ["python3", "-c", source_id_code], env=env, capture_output=True, text=True
+            )
+            if source_id.returncode:
+                return source_id
+            env["SOURCE_ROW_ID"] = source_id.stdout.strip()
+            return subprocess.run(
+                ["python3", "-c", code], env=env, capture_output=True, text=True
+            )
+
+        drain_root = {"id": "child", "metadata": {
+            "gc.root_store_ref": "rig:fixture",
+            "gc.drain_member_id": "member", "gc.drain_control_id": "control",
+            "gc.input_convoy_id": "unit"}}
+        drain_control = {"id": "control", "metadata": {
+            "gc.root_bead_id": "root", "gc.root_store_ref": "rig:fixture"}}
+        drain_member = {"id": "member", "metadata": {
+            "gc.root_store_ref": "rig:fixture", "gc.source_root_id": "root",
+            "gc.source_generation": "7"}}
+        self.assertEqual(resolve(drain_root, drain_member, control=drain_control).stdout.strip(), "7")
+
+        plain_root = {"id": "root", "metadata": {
+            "gc.root_store_ref": "rig:fixture", "gc.input_convoy_id": "convoy"}}
+        convoy = {"id": "convoy", "metadata": {
+            "gc.root_store_ref": "rig:fixture", "gc.source_root_id": "root",
+            "gc.source_generation": "3"}}
+        self.assertEqual(resolve(plain_root, convoy).stdout.strip(), "3")
+
+        for changed in (
+            {**drain_member, "id": "other"},
+            {"id": "member", "metadata": {**drain_member["metadata"], "gc.root_store_ref": "rig:other"}},
+            {"id": "member", "metadata": {**drain_member["metadata"], "gc.source_root_id": "other-root"}},
+            {"id": "member", "metadata": {**drain_member["metadata"], "gc.source_generation": "02"}},
+        ):
+            self.assertNotEqual(resolve(drain_root, changed, control=drain_control).returncode, 0)
+        empty_source_root = {"id": "empty", "metadata": {"gc.root_store_ref": "rig:fixture"}}
+        self.assertNotEqual(resolve(empty_source_root, {"id": "", "metadata": {}}).returncode, 0)
+
     def test_city_claim_command_verifies_and_normalizes_claim(self) -> None:
         root = pathlib.Path(__file__).resolve().parents[1]
         command = root / "commands" / "claim" / "run.sh"

@@ -908,8 +908,8 @@ class FormulaAssetTests(unittest.TestCase):
         source_id_code = recipe.split(source_marker, 1)[1].split("') || exit \"$?\"", 1)[0]
         code = recipe.split(marker, 1)[1].split("') || exit \"$?\"", 1)[0]
         self.assertLess(recipe.index(marker), recipe.index("WORKSPACE_ENTRY_JSON=$"))
-        self.assertLess(recipe.index('bd show "$CLAIMED_ROOT_BEAD_ID"'), recipe.index(marker))
-        self.assertLess(recipe.index('bd show "$SOURCE_ROW_ID"'), recipe.index(marker))
+        self.assertLess(recipe.index('bd ' 'show "$CLAIMED_ROOT_BEAD_ID"'), recipe.index(marker))
+        self.assertLess(recipe.index('bd ' 'show "$SOURCE_ROW_ID"'), recipe.index(marker))
         self.assertIn('metadata.get("gc.drain_member_id") or metadata.get("gc.input_convoy_id")', recipe)
         self.assertIn('metadata.get("gc.drain_control_id", "")', recipe)
         self.assertIn('metadata.get("gc.root_store_ref") == os.environ["ROOT_STORE_REF"]', code)

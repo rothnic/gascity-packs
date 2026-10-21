@@ -133,3 +133,17 @@ Methodology-specific review expansions retain their native verdict and repair
 loops, then apply the same exact-subject approval check before decomposition.
 Their authored review requirements also reach the first-allocation check;
 overriding a stage is not approval by itself.
+
+## Compound Engineering status fields
+
+Compound Engineering tracks author readiness separately from independent
+review. The plan front matter and workflow-root `gc.build.plan_status` describe
+whether the author considers the current plan ready. Keep both values aligned.
+When an authorized repair leaves required findings unresolved, keep both at
+`draft`. When a repair resolves those findings, set both to `approved` and
+return the changed plan to review with `gc.build.plan_review_status=draft`. An
+approved plan can remain approved while independent review is pending.
+
+Set workflow-root `gc.build.plan_review_status=approved` only after the
+independent lanes approve the current bytes and the native exact-subject check
+passes. Keep the apply child’s `design_review.*` fields on that child.

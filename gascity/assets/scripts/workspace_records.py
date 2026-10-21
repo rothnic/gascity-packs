@@ -99,6 +99,15 @@ def canonical_bytes(record: Any) -> bytes:
         raise RecordError(f"invalid canonical JSON: {exc}") from exc
 
 
+def formula_variable_text(value: Any) -> str:
+    """Read Beads scalar metadata as formula text without changing guarded rows."""
+    if isinstance(value, str):
+        return value
+    if type(value) not in (bool, int, float):
+        raise RecordError("native formula variable must be a string, boolean or number")
+    return canonical_bytes(value).decode("utf-8")
+
+
 def record_sha256(record: dict[str, Any]) -> str:
     return hashlib.sha256(canonical_bytes(record)).hexdigest()
 

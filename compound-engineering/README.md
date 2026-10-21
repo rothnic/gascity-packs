@@ -270,6 +270,12 @@ Every repair, including a status change, returns through review; unresolved
 required findings block decomposition. The task creator repeats this check
 before its first allocation. See the shared
 [plan-review acceptance contract](../gascity/docs/plan-review-acceptance.md).
+Compound Engineering uses plan status for author readiness and
+`gc.build.plan_review_status` for independent review. The apply step records
+plan readiness and review-pending status on the workflow root. The finalizer
+records review approval after the exact-subject check. The apply child keeps
+its `design_review.*` fields. See
+[Compound Engineering status fields](../gascity/docs/plan-review-acceptance.md#compound-engineering-status-fields).
 
 ## Customization
 

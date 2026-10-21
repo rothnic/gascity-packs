@@ -16,6 +16,78 @@ fall through to the legacy preparation below after a failure or missing input:
 - Retain the actual claimed preparation step, its physical workflow root and
   native session incarnation. Resolve the selected native executable and
   registered city/rig/store from this runtime, not the caller's directory.
+  Derive `SOURCE_GENERATION` from the exact native source row before running
+  the read-only entry bridge. Read `CLAIMED_ROOT_BEAD_ID` with the selected
+  `$GC_BIN`, city and rig. If that row has `gc.drain_member_id`, read that exact
+  member row; otherwise read the row named by its current `gc.input_convoy_id`.
+  Require each returned row's `id` to match the requested ID, its
+  `gc.root_store_ref` to match `ROOT_STORE_REF`, and its `gc.source_root_id` to
+  identify the expected source root. Take `gc.source_generation` from that
+  exact member or convoy row, require a canonical positive integer, and export
+  it as `SOURCE_GENERATION`. Do not expect it in the process environment or
+  infer it from a plan filename. The entry bridge below independently checks
+  the complete native root, drain, convoy, store and plan relationship; a
+  missing, stale or conflicting row must stop preparation before allocation.
+
+  ```sh
+  : "${CLAIMED_ROOT_BEAD_ID:?native claim has no exact workflow root}"
+  : "${ROOT_STORE_REF:?native runtime has no selected root store}"
+  export CLAIMED_ROOT_BEAD_ID ROOT_STORE_REF
+  CLAIMED_ROOT_JSON=$("$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" bd show "$CLAIMED_ROOT_BEAD_ID" --json) || exit "$?"
+  export CLAIMED_ROOT_JSON
+  SOURCE_ROW_ID=$(python3 -c 'import json, os
+root = json.loads(os.environ["CLAIMED_ROOT_JSON"])
+if isinstance(root, list):
+    assert len(root) == 1, "expected the one claimed workflow root"
+    root = root[0]
+assert root["id"] == os.environ["CLAIMED_ROOT_BEAD_ID"], "claimed workflow root changed"
+metadata = root["metadata"]
+source_id = metadata.get("gc.drain_member_id") or metadata.get("gc.input_convoy_id")
+assert isinstance(source_id, str) and bool(source_id) and source_id.strip() == source_id, "workflow root has no exact source row"
+print(source_id)') || exit "$?"
+  DRAIN_CONTROL_ID=$(python3 -c 'import json, os
+root = json.loads(os.environ["CLAIMED_ROOT_JSON"])
+if isinstance(root, list): root = root[0]
+metadata = root["metadata"]
+print(metadata.get("gc.drain_control_id", "") if metadata.get("gc.drain_member_id") else "")') || exit "$?"
+  export SOURCE_ROW_ID DRAIN_CONTROL_ID
+  SOURCE_ROW_JSON=$("$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" bd show "$SOURCE_ROW_ID" --json) || exit "$?"
+  export SOURCE_ROW_JSON
+  if [ -n "$DRAIN_CONTROL_ID" ]; then
+    DRAIN_CONTROL_JSON=$("$GC_BIN" --city "$CITY_ROOT" --rig "$RIG_NAME" bd show "$DRAIN_CONTROL_ID" --json) || exit "$?"
+    export DRAIN_CONTROL_JSON
+  fi
+  SOURCE_GENERATION=$(python3 -c 'import json, os, re
+root = json.loads(os.environ["CLAIMED_ROOT_JSON"])
+if isinstance(root, list): root = root[0]
+row = json.loads(os.environ["SOURCE_ROW_JSON"])
+if isinstance(row, list):
+    assert len(row) == 1, "expected the one exact source row"
+    row = row[0]
+assert row["id"] == os.environ["SOURCE_ROW_ID"], "native source row changed"
+root_metadata = root["metadata"]
+metadata = row["metadata"]
+assert root_metadata.get("gc.root_store_ref") == os.environ["ROOT_STORE_REF"], "claimed workflow root belongs to another native store"
+assert metadata.get("gc.root_store_ref") == os.environ["ROOT_STORE_REF"], "source row belongs to another native store"
+if os.environ["DRAIN_CONTROL_ID"]:
+    control = json.loads(os.environ["DRAIN_CONTROL_JSON"])
+    if isinstance(control, list):
+        assert len(control) == 1, "expected the one native drain control"
+        control = control[0]
+    assert control["id"] == os.environ["DRAIN_CONTROL_ID"], "native drain control changed"
+    control_metadata = control["metadata"]
+    assert control_metadata.get("gc.root_store_ref") == os.environ["ROOT_STORE_REF"], "drain control belongs to another native store"
+    expected_root = control_metadata.get("gc.root_bead_id")
+else:
+    expected_root = root["id"]
+assert isinstance(expected_root, str) and expected_root, "native source root is missing"
+assert metadata.get("gc.source_root_id") == expected_root, "source row belongs to another source root"
+generation = metadata.get("gc.source_generation")
+assert isinstance(generation, str) and re.fullmatch(r"[1-9][0-9]*", generation), "source row has no canonical positive generation"
+print(generation)') || exit "$?"
+  export SOURCE_GENERATION
+  ```
+
   Use the retained source generation and run the read-only entry bridge before
   deciding whether the run or source plan exists:
 
@@ -29,7 +101,7 @@ fall through to the legacy preparation below after a failure or missing input:
   printf '%s\n' "$WORKSPACE_ENTRY_JSON"
   ```
 
-  Run both blocks in the same shell. Supply `ARTIFACT_ROOT` and
+  Keep these commands in the same shell. Supply `ARTIFACT_ROOT` and
   `WORKSPACE_EVIDENCE_DIR` as existing admitted directories outside the repository
   and all worktrees. `CLAIMED_BEAD_ID` must be exported for the native-row check.
   Resolve `PACK_ROOT` from this installed prompt's pack. Keep the actual command,

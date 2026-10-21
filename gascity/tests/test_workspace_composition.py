@@ -24,6 +24,54 @@ DIRECTORIES = [REPO / name / "formulas" for name in PACKS]
 POLICY_VARS = ("worktree_lifecycle", "worktree_base_ref", "worktree_checks")
 
 
+class PublicationLaunchFlagTests(unittest.TestCase):
+    def flow(self, metadata):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        rows = {'root': {'metadata': metadata}, 'publisher': {'metadata': {}}}
+        store = SimpleNamespace(snapshot=lambda ids: {key: rows[key] for key in ids})
+        return SimpleNamespace(
+            approved_subject=lambda owner: ({}, {}, {'output_oid': 'a' * 40}, {}),
+            run={'workflow_root_id': 'root'}, store=store,
+            attempt=SimpleNamespace(claimed_bead_id='publisher'),
+            runtime=SimpleNamespace(_fence=store, _fresh=Mock(), artifact_root='/artifacts'))
+
+    def test_typed_false_disables_publication_without_reading_authority(self):
+        from workspace_flow import WorkspaceFlow
+        for push, open_pr in ((False, False), (False, 'false'), ('false', False)):
+            with self.subTest(push=push, open_pr=open_pr), \
+                 patch('workspace_flow.outputs.read_artifact') as read:
+                metadata = {'gc.var.push': push, 'gc.var.open_pr': open_pr}
+                flow = self.flow(metadata)
+                result = WorkspaceFlow.publication(flow, 'reviewer', None)
+                self.assertEqual('disabled', result['status'])
+                flow.runtime._fresh.assert_called_once()
+                read.assert_not_called()
+                self.assertEqual({'gc.var.push': push, 'gc.var.open_pr': open_pr}, metadata)
+
+    def test_typed_true_requires_each_explicit_publication_permission(self):
+        from workspace_flow import WorkspaceFlow
+        from workspace_records import RecordError
+        for action in ('push', 'open_pr'):
+            for allowed in (False, True):
+                with self.subTest(action=action, allowed=allowed):
+                    metadata = {'gc.var.push': True, 'gc.var.open_pr': True}
+                    metadata['gc.var.' + action] = allowed
+                    decision = dict(push=action == 'push', open_pr=action == 'open_pr',
+                                    remote='origin', ref='refs/heads/topic')
+                    with patch('workspace_flow.outputs.artifact', return_value={'path': 'decision', 'sha256': 'b' * 64}), \
+                         patch('workspace_flow.outputs.read_artifact', return_value=decision), \
+                         patch('workspace_flow.publish.publication_intent', side_effect=RuntimeError('intent boundary')) as intent:
+                        if allowed:
+                            with self.assertRaisesRegex(RuntimeError, 'intent boundary'):
+                                WorkspaceFlow.publication(self.flow(metadata), 'reviewer', 'decision')
+                            self.assertEqual(allowed, intent.call_args.kwargs['authorization'][action])
+                        else:
+                            with self.assertRaisesRegex(RecordError, 'native launch did not authorize'):
+                                WorkspaceFlow.publication(self.flow(metadata), 'reviewer', 'decision')
+                            intent.assert_not_called()
+
+
 class ComposedFormulaTests(unittest.TestCase):
     def resolve(self, name):
         return resolve_formula_from_dirs(DIRECTORIES, name)

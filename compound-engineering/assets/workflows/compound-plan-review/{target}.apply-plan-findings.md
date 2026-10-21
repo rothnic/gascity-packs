@@ -6,20 +6,45 @@ Read the synthesized report from `gc.build.plan_review_report_path`. Write the
 apply summary to `gc.build.plan_review_apply_summary_path`, which should be
 `<artifact_root>/plan-review/apply-summary.md`.
 
+Treat plan author readiness and independent review status as separate state:
+the plan artifact's front-matter status and `gc.build.plan_status` describe
+whether the author considers the current plan ready, while
+`gc.build.plan_review_status` and `design_review.verdict` describe whether the
+current bytes have passed independent review. Resolve the build workflow root
+from the current native claim's `gc.root_bead_id`; write both `gc.build.*`
+status fields to that root bead, not to this claimed apply child. Keep this
+child's `design_review.*` verdict and output fields on the child.
+
 Respect `review_mode`: report-only work records findings without editing;
-agent or interactive work applies only authorized repairs. Any change to the
-plan or upstream artifacts, including setting the plan status to `approved`,
-requires `design_review.verdict=iterate` so the review lanes inspect the new
+agent or interactive work applies only authorized repairs. If a permitted
+repair resolves the required findings, set the plan artifact's front-matter
+`status: approved` and `gc.build.plan_status=approved` before returning the
+changed bytes to the four review lanes. Keep
+`gc.build.plan_review_status=draft` and close with
+`design_review.verdict=iterate`, because the reviewers must inspect those new
 bytes. Preserve the report that caused the repair; do not replace its subject
-or manufacture a passing report in this apply lane.
+or manufacture a passing report in this apply lane. Do not reset an approved,
+unchanged plan to `draft` solely because a fresh independent review is pending.
+
+If report-only mode or missing repair authority prevents an edit, preserve the
+plan bytes and their current `gc.build.plan_status`; keep
+`gc.build.plan_review_status=draft` and record the unresolved finding in the
+apply summary. In agent or interactive mode, when an authorized repair leaves
+required substantive findings unresolved, keep the plan artifact's front-matter
+status and `gc.build.plan_status` at `draft`, keep
+`gc.build.plan_review_status=draft`, and close with
+`design_review.verdict=iterate`. Do not mark an unresolved plan approved to
+satisfy the native gate or edit outside the existing repair authority.
 
 Set `design_review.verdict=done` only for a no-op after all four lanes approve,
 the structured report has no unresolved findings, and the imported
 `validate_plan_review.py native-check` succeeds with the current claim and
-durable rig root. This rechecks the exact native-recorded plan, report,
-workflow, and upstream files. Then set `gc.build.plan_review_status=approved`.
-If anything remains unresolved or the subject is stale, keep
-`gc.build.plan_review_status=draft` and `design_review.verdict=iterate`.
+durable rig root. The check revalidates the exact native-recorded plan,
+report, workflow, and upstream files. Only then set
+`gc.build.plan_review_status=approved`; leave the already-approved
+`gc.build.plan_status` aligned with the plan's approved front matter.
+If the plan changed, its subject is stale, or a required finding remains,
+return it through review with `design_review.verdict=iterate`.
 
 Always close with `gc.outcome=pass`,
 `design_review.report_path=<apply summary path>`, and

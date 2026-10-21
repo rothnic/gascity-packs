@@ -51,10 +51,14 @@ subject:
 Describe the review and why the current plan is ready for decomposition.
 ```
 
-A blocked report instead uses `verdict: fail`, a non-`none` severity, and
-structured findings with `id`, `severity`, `title`, `evidence`, and
-`required_fix`. Retain the actual findings. Never turn a blocked report into a
-passing report just to make a stage close.
+A finding uses `minor`, `major`, or `blocker`. A report uses `none`, `minor`,
+`major`, or `blocker` for `severity`. A failing report's severity must equal its
+highest finding severity.
+
+A blocked report uses `verdict: fail`, a non-`none` severity, and structured
+findings with `id`, `severity`, `title`, `evidence`, and `required_fix`. Retain
+the actual findings. Never turn a blocked report into a passing report just to
+make a stage close.
 
 **Repair identity.** A malformed upstream path or hash can prevent the helper
 from constructing a complete approval `subject`. The independent native
@@ -129,3 +133,17 @@ Methodology-specific review expansions retain their native verdict and repair
 loops, then apply the same exact-subject approval check before decomposition.
 Their authored review requirements also reach the first-allocation check;
 overriding a stage is not approval by itself.
+
+## Compound Engineering status fields
+
+Compound Engineering tracks author readiness separately from independent
+review. The plan front matter and workflow-root `gc.build.plan_status` describe
+whether the author considers the current plan ready. Keep both values aligned.
+When an authorized repair leaves required findings unresolved, keep both at
+`draft`. When a repair resolves those findings, set both to `approved` and
+return the changed plan to review with `gc.build.plan_review_status=draft`. An
+approved plan can remain approved while independent review is pending.
+
+Set workflow-root `gc.build.plan_review_status=approved` only after the
+independent lanes approve the current bytes and the native exact-subject check
+passes. Keep the apply child’s `design_review.*` fields on that child.

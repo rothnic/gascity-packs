@@ -158,6 +158,25 @@ class LayoutNativeCompositionTests(unittest.TestCase):
         self.assertEqual(dict(parent=str(f.repo / "worktrees"), name_prefix="", allow_external_parent=False),
                          result["workspace"]["layout"])
 
+    def test_native_boolean_external_permission_keeps_original_layout_and_override_guard(self):
+        from workspace_checkout import CheckoutError, select_workspace_layout
+        f = self.fixture
+        before = self.configure(worktree_allow_external_parent=False)
+        metadata = before['stores']['rig:fixture']['root']['metadata']
+        original = copy.deepcopy(metadata)
+        layout, _ = select_workspace_layout(f.run, 'C', 1, metadata, evidence_dir=f.diagnostics)
+        self.assertIs(layout['allow_external_parent'], False)
+        with self.assertRaises(CheckoutError):
+            select_workspace_layout(f.run, 'C', 1, metadata, allow_external_parent=True,
+                                    evidence_dir=f.diagnostics)
+        self.assertEqual(original, metadata)
+        metadata.update({'gc.var.worktree_allow_external_parent': True,
+                         'gc.var.worktree_parent': str(f.work.parent)})
+        original = copy.deepcopy(metadata)
+        layout, _ = select_workspace_layout(f.run, 'C', 1, metadata, evidence_dir=f.diagnostics)
+        self.assertIs(layout['allow_external_parent'], True)
+        self.assertEqual(original, metadata)
+
     def assert_default_override_refuses(self, *flags):
         f = self.fixture
         before = self.configure()

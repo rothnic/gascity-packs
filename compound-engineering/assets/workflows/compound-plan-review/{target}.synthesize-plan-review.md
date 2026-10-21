@@ -8,9 +8,14 @@ synthesized report to `gc.build.plan_review_report_path`, which should be
 
 Use the imported Gas City [plan-review acceptance contract](../../../../gascity/docs/plan-review-acceptance.md).
 Review the current native-recorded plan and requirements, not just the context
-copy. Require all four lane reports to name this workflow and the same plan
-and upstream paths and SHA-256 hashes. Missing, stale, or required findings
-mean `iterate`; preserve each finding and its lane attribution.
+copy. Require all four lane reports to agree on the canonical subject returned
+by the imported `validate_plan_review.py subject` command: this workflow root,
+the exact current plan path and hash, and exactly the current
+`plan.trace.upstream` paths and hashes. Additional valid/current references
+in a lane's rationale are supplementary evidence, not canonical subject
+members; those citations may differ across lanes. A missing, conflicting, or
+stale canonical subject or required finding means `iterate`; preserve each
+finding and its lane attribution.
 
 Write `gc.verdict-report.v1`, kind `review`, to the recorded report path.
 Only an approved current plan with no unresolved findings may receive
@@ -20,6 +25,18 @@ bytes, capture its exact `subject` with the imported
 rewrite the plan while synthesizing. If its status still needs approval,
 record that required change for the apply lane; the changed bytes need another
 review. A report or recommendation alone does not authorize decomposition.
+
+Use finding severities `minor`, `major`, or `blocker`. Use report severities
+`none`, `minor`, `major`, or `blocker`. The report severity must equal the
+highest finding severity. Before closing, validate the report with the imported
+`validate_verdict_report.py` from the same Gas City scripts directory:
+
+```sh
+python3 <pack-scripts>/validate_verdict_report.py <report-path> --kind review
+```
+
+Resolve `<pack-scripts>` from the imported pack assets, not the worker's current
+directory. Fix report-format errors without dropping or weakening findings.
 
 Close with `gc.outcome=pass`,
 `design_review.review_verdict=approve|iterate`, and

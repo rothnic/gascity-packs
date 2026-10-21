@@ -9,6 +9,12 @@ absolute paths, and SHA-256 hashes of the reviewed plan and every upstream
 file. If those bytes change before completion, use `iterate` and retain the
 finding instead of approving a different subject.
 
+The canonical review subject is the workflow root plus the current plan and
+exact `plan.trace.upstream` paths and hashes. Cite additional valid/current
+files as supplementary support; those citations are not part of the canonical
+subject and need not match across personas. Missing, stale, or changed
+canonical inputs still require `iterate`.
+
 Read the review context from workflow root metadata
 `gc.build.plan_review_context_path`. Write this lane's report to
 `<artifact_root>/plan-review/architecture-review.md` and close with

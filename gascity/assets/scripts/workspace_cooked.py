@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from workspace_records import RecordError, canonical_bytes
+from workspace_records import RecordError, canonical_bytes, formula_variable_text
 from workspace_attempts import discover_attempts, physical_attempt_edges
 from workspace_run import native_json
 from workspace_store import (CookedWriterMap, MAX_COOKED_CONTEXT_ROWS, TOPOLOGY,
@@ -165,7 +165,7 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
     variables = {}
     for key, value in expansion["metadata"].items():
         if key.startswith("gc.var."):
-            require(isinstance(value, str), "cooked formula variable is not a native string")
+            value = formula_variable_text(value)
             variable = key.removeprefix("gc.var.")
             variables[variable] = value
             arguments += ["--var", variable + "=" + value]

@@ -457,7 +457,7 @@
     "gascity/assets/workflows/do-work/prepare-worktree.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,workspace-prepare",
-      "sha256": "72d317f0efe14e5c2a30c692a3b79d2b7b7887fcca1b21618726d5be6bdb6035"
+      "sha256": "f52131009a39ce7445f534ea846628ce05b3a84d9f8f5d2c6628dc9d63e8f9da"
     },
     "gascity/assets/workflows/do-work-item/implement-item.md": {
       "classification": "new",
@@ -997,17 +997,17 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.apply-plan-findings.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "9bc49ebcaf081549594dbb59d674243436e730af8e40962d4560abe71f1faef9"
+      "sha256": "860fe172e43ae3f2d37ca1f770a4e1f8a875028f8ab149a5dca8bf422d52a833"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.architecture-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "b0762eb6ccf77d0a70362f3d64dedb69706e316a859d0d67bb3989de9f5d8075"
+      "sha256": "f05cabb5d9e16f125dd9f4e304d7640a78ab30c22c3fece9c2ef81f5293e09c1"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.coherence-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "a948aa3ca3ee847d79a7d2e3267a19bf2dd39890baac0b4a2443a77d4635129a"
+      "sha256": "35afba1fa5bf400b109e3848e1fe7241bc277da77e9fa067570b4ee52c5cb81f"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.compound-plan-review-loop.md": {
       "classification": "reference",
@@ -1017,7 +1017,7 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.feasibility-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "19a8962304eef73e0b15a361a6e393b8f203dbbc46dca11b55e9661a9971a0cf"
+      "sha256": "648ecb1b1dffe0d1787da525788370b6fbf6844efeccfc88f638ab8553b343fb"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.md": {
       "classification": "reference",
@@ -1027,7 +1027,7 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.scope-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "74b258e3ececf7bd12db040ac0a4b8c6fd4d8bb1c59e4fdd6c14c7001929590f"
+      "sha256": "ca5985a5894810b7bd85484d28524b0ab7ae3d6ca193d88d9bc52e1c4952641c"
     },
     "compound-engineering/assets/workflows/compound-plan-review/{target}.setup-compound-plan-review.md": {
       "classification": "reference",
@@ -1037,7 +1037,7 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.synthesize-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "c9ca260fd65a3529b198898dc31ef57423663a92b4ee3356a7cc71162738ee15"
+      "sha256": "00368419cec822ec5dec7a4a8b42854e3ee1b74b8ad6c3ff6fbac79f12ca6c5b"
     },
     "compound-engineering/assets/workflows/compound-planning/plan-review.md": {
       "classification": "reference",
@@ -2089,7 +2089,7 @@
     "gascity/assets/scripts/workspace_records.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "81cc7c5e8faf20755d893c54914fb97783f4d1d48d0a281326c06303d428f0da"
+      "sha256": "02365e5997d56c693d58ab6779b7e385a5ee77a29efd9b6327e14638d471c9ef"
     },
     "gascity/assets/scripts/workspace_review.py": {
       "classification": "new",
@@ -2124,7 +2124,7 @@
     "gascity/assets/scripts/workspace_cooked.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "56cec278214d5a140c47a06bea6fd8b9d4175b3674dba3a876f6db4a29a0c469"
+      "sha256": "390542b5fbc768d8e90a66c6dfcdd430760f0d82453ffcbe46f14d06f30730c1"
     },
     "gascity/assets/scripts/workspace_source_plan.py": {
       "classification": "new",
@@ -2149,7 +2149,7 @@
     "gascity/assets/scripts/workspace_flow.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "59e2bc1d08f2e65343f815a1d15ef9236b32ede65433c9eced8d7f464160f15b"
+      "sha256": "86fc84e7c1a8af0a5e2b253ecf6de8dbbd16d9a47af3dd6282d443e47a6a9136"
     },
     "gascity/assets/scripts/workspace_acceptance_fixture.py": {
       "classification": "new",
@@ -2204,7 +2204,7 @@
     "gascity/assets/scripts/workspace_checkout.py": {
       "classification": "new",
       "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "8bb089ba5f9e5ca469cc3477303917b74c249e1a736d0e025024daf9c400301a"
+      "sha256": "3d16d23e0f52c1d838df0198140e9f1413f3215880a85e684792e0c9390a8b32"
     },
     "gascity/assets/scripts/workspace_dependency.py": {
       "classification": "new",
@@ -2229,7 +2229,7 @@
     "gascity/assets/scripts/workspace_suffix.py": {
       "classification": "new",
       "responsibility": "native standalone suffix source and original-run continuation admission",
-      "sha256": "2658ab97521621911818b7108dd63f8f03f78c4056c18a5bd577ea0a81447613"
+      "sha256": "481c0d90f4c4d1a2f77ee1515255fb7715192d3443d61aeb5cb4a4208a6a3cff"
     },
     "gascity/assets/scripts/validate_plan_review.py": {
       "classification": "new",

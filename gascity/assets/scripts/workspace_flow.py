@@ -10,7 +10,7 @@ import os
 import secrets
 from pathlib import Path
 
-from workspace_records import RecordError, canonical_bytes, contracts, parse_record, record_sha256
+from workspace_records import RecordError, canonical_bytes, contracts, formula_variable_text, parse_record, record_sha256
 from workspace_entry import allocate_placeholder, native_json, reference
 from workspace_store import (GRANT_REFS_KEY, GRANT_KEY, MISSING, WorkspaceStore, validate_cooked_writer_map, validate_grant_index,
                              NativeSourceClose, RecordWrite, ReferenceWrite, SuccessorRelation, record_reference)
@@ -340,17 +340,19 @@ class WorkspaceFlow:
         canonical, approval, result, context = self.approved_subject(review_owner_id)
         root = self.runtime._fence.snapshot([self.run["workflow_root_id"]])[self.run["workflow_root_id"]]
         metadata = root["metadata"]
-        if (metadata.get("gc.var.push", "false") == "false"
-                and metadata.get("gc.var.open_pr", "false") == "false"
+        push = formula_variable_text(metadata.get("gc.var.push", "false"))
+        open_pr = formula_variable_text(metadata.get("gc.var.open_pr", "false"))
+        if (push == "false"
+                and open_pr == "false"
                 and metadata.get("gc.var.pr_mode", "none") == "none"):
             self.runtime._fresh()
             return dict(status="disabled", output_oid=result["output_oid"], canonical_sha256=record_sha256(canonical))
         outputs.require(decision_path, "authorized publication requires its existing exact authority decision")
         decision_ref = outputs.artifact(decision_path, self.runtime.artifact_root)
         decision = outputs.read_artifact(decision_ref, self.runtime.artifact_root)
-        outputs.require(not decision.get("push") or metadata.get("gc.var.push") == "true",
+        outputs.require(not decision.get("push") or push == "true",
                         "native launch did not authorize pushing")
-        outputs.require(not decision.get("open_pr") or metadata.get("gc.var.open_pr") == "true"
+        outputs.require(not decision.get("open_pr") or open_pr == "true"
                         or metadata.get("gc.var.pr_mode") in ("draft", "ready"),
                         "native launch did not authorize PR creation")
         publish_id = self.attempt.claimed_bead_id

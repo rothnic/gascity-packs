@@ -14,7 +14,7 @@ import sys
 import tempfile
 from typing import Any
 
-from workspace_records import (RecordError, canonical_bytes, parse_record,
+from workspace_records import (RecordError, canonical_bytes, formula_variable_text, parse_record,
                                record_identity, validate_record, verify_replay)
 
 ID = re.compile(r'[A-Za-z0-9][A-Za-z0-9._-]*\Z')
@@ -150,6 +150,8 @@ def select_workspace_layout(run, owner_id, generation, metadata, *, workspace=No
         # Native graph creation omits empty formula values. Absence still
         # selects the original root's default; it is not override authority.
         value = metadata.get(native, 'false' if key == 'allow_external_parent' else '')
+        if key == 'allow_external_parent' and type(value) is bool:
+            value = formula_variable_text(value)
         require(isinstance(value, str), variable + ' must be a formula string')
         if key == 'allow_external_parent':
             require(value in ('true', 'false'), variable + ' must be true or false')

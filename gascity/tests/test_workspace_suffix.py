@@ -144,6 +144,27 @@ class SuffixEntryTests(unittest.TestCase):
         self.assertEqual(result['native_continuation']['version'], 2)
         self.assertEqual(self.rows, before)
 
+    def test_suffix_boolean_layout_matches_text_without_changing_guarded_rows(self):
+        self.suffix()
+        self.rows['root-1']['metadata']['gc.var.worktree_allow_external_parent'] = False
+        self.rows['suffix-1']['metadata']['gc.var.worktree_allow_external_parent'] = 'false'
+        before = copy.deepcopy(self.rows)
+        result = self.read(workflow_root_id='suffix-1', require_plan=True,
+                           input_convoy_id='implementation-1')
+        self.assertEqual(result['run'], self.record)
+        self.assertEqual(self.rows, before)
+        self.rows['suffix-1']['metadata']['gc.var.worktree_allow_external_parent'] = True
+        with self.assertRaises(entry.EntryError):
+            self.read(workflow_root_id='suffix-1', require_plan=True,
+                      input_convoy_id='implementation-1')
+        for value in (0, 1, None, [], {}):
+            with self.subTest(value=value):
+                for root in ('root-1', 'suffix-1'):
+                    self.rows[root]['metadata']['gc.var.worktree_allow_external_parent'] = value
+                with self.assertRaises(entry.EntryError):
+                    self.read(workflow_root_id='suffix-1', require_plan=True,
+                              input_convoy_id='implementation-1')
+
     def test_selector_locates_only_and_foreign_native_input_refuses(self):
         self.suffix()
         self.rows['suffix-1']['metadata']['gc.input_convoy_id'] = 'foreign-1'

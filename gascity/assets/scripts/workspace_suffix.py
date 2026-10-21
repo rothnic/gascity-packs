@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 
-from workspace_records import canonical_bytes, contracts, parse_record, record_identity, record_sha256, validate_record
+from workspace_records import canonical_bytes, contracts, formula_variable_text, parse_record, record_identity, record_sha256, validate_record
 
 
 FIELDS = {'version', 'workflow_root_id', 'store_ref', 'generation', 'child_root_id',
@@ -207,8 +207,13 @@ def validate(continuation, rows, *, store_ref, workflow_root_id, claimed_step_id
         for key, default in (('worktree_parent', ''), ('worktree_name_prefix', ''),
                              ('worktree_allow_external_parent', 'false')):
             configured = 'gc.var.' + key
-            require(row['metadata'].get(configured, root['metadata'].get(configured, default))
-                    == root['metadata'].get(configured, default), 'suffix changed the recorded workspace layout')
+            original = root['metadata'].get(configured, default)
+            selected = row['metadata'].get(configured, original)
+            if key == 'worktree_allow_external_parent':
+                original, selected = formula_variable_text(original), formula_variable_text(selected)
+                require(original in ('true', 'false') and selected in ('true', 'false'),
+                        'external parent selection must be true or false')
+            require(selected == original, 'suffix changed the recorded workspace layout')
     run_ref = reference(root['metadata'].get('gc.implementation_run_ref'), 'run')
     run_row = rows[data['run_ref']['bead_id']]
     WorkspaceStore._dedicated(run_row)

@@ -20,6 +20,8 @@ from the rows guarded by each write. Formula metadata uses the expansion's saved
 variables and formula defaults; unresolved or changed writer designations refuse
 admission. Checkout validates retained source rows before following their references
 and advances them only after confirming its own write.
+Boolean and numeric formula variables use JSON text when read from Beads metadata.
+Guarded writes retain the original metadata types and values.
 Changed repeated rows still refuse admission; bounded private diagnostics retain the
 conflicting rows, revisions, hashes and changed JSON paths without refreshing them.
 Controller-created retry attempts and Ralph iterations join their exact original

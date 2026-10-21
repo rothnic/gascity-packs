@@ -211,6 +211,37 @@ class CookedReaderTests(unittest.TestCase):
         with self.assertRaisesRegex(RecordError, "writer designation"):
             self.read()
 
+    def test_native_typed_formula_scalars_reach_preview_without_changing_guard_rows(self):
+        values = {"max_iterations": 10, "push": False, "open_pr": False,
+                  "worktree_allow_external_parent": False, "enabled": True,
+                  "ratio": 1.25, "large": 9007199254740993, "literal": "1e3",
+                  "empty": "", "worktree_checks": '{"required_checks":[]}'}
+        self.rows["attach-1"]["metadata"].update({"gc.var." + key: value for key, value in values.items()})
+        original = copy.deepcopy(self.rows)
+        with patch.object(cooked, "native_json", return_value=self.formula) as native, \
+             patch.object(cooked, "_native_list", return_value=list(self.rows)[3:]):
+            _, rows = cooked.read_cooked_writer_map(self.store, workflow_root_id="root-1",
+                                                    claimed_step_id="prepare-worktree")
+        arguments = native.call_args.args[2]
+        for expected in ("max_iterations=10", "push=false", "open_pr=false", "enabled=true",
+                         "worktree_allow_external_parent=false", "ratio=1.25", "large=9007199254740993",
+                         "literal=1e3", "empty=", 'worktree_checks={"required_checks":[]}'):
+            self.assertIn(expected, arguments)
+        self.assertEqual(original, self.rows)
+        self.assertEqual(original["attach-1"], rows["attach-1"])
+        self.assertIs(rows["attach-1"]["metadata"]["gc.var.push"], False)
+
+    def test_native_formula_nonscalars_refuse_before_preview(self):
+        for value in (None, [], {}, float("nan"), float("inf")):
+            with self.subTest(value=value), \
+                 patch.object(cooked, "native_json") as native, \
+                 patch.object(cooked, "_native_list", return_value=list(self.rows)[3:]):
+                self.rows["attach-1"]["metadata"]["gc.var.push"] = value
+                with self.assertRaises(RecordError):
+                    cooked.read_cooked_writer_map(self.store, workflow_root_id="root-1",
+                                                 claimed_step_id="prepare-worktree")
+                native.assert_not_called()
+
     def test_native_preview_unknown_or_changed_metadata_cannot_admit_a_writer(self):
         self.formula["steps"][1]["metadata"]["gc.run_target"] = "{{target}}"
         with self.assertRaisesRegex(RecordError, "unresolved variables"):

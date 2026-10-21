@@ -30,14 +30,52 @@ func withTimeout(t *testing.T, d time.Duration) (context.Context, context.Cancel
 // surface — the bridge-mail Text either carries the preamble or
 // doesn't, depending on the cache state.
 
-// withSlackAPIStub installs a slackAPIBase override pointing at the
-// supplied test server and returns a restore closure. Pattern matches
-// what other slack-API tests in this package do.
-func withSlackAPIStub(t *testing.T, srv *httptest.Server) {
+// slackAPITestServer serves the Slack calls made by processSlackEvent and
+// records completion of its asynchronous reactions.add requests. Tests wait
+// for those requests before withSlackAPIStub restores slackAPIBase.
+type slackAPITestServer struct {
+	server         *httptest.Server
+	reactionsAdded chan struct{}
+}
+
+func newSlackAPITestServer(t *testing.T, handler http.Handler) *slackAPITestServer {
+	t.Helper()
+	stub := &slackAPITestServer{reactionsAdded: make(chan struct{}, 16)}
+	stub.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/reactions.add" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(slackReactionsAddResp{OK: true})
+			stub.reactionsAdded <- struct{}{}
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
+	t.Cleanup(stub.server.Close)
+	return stub
+}
+
+// withSlackAPIStub installs a slackAPIBase override and waits for the exact
+// number of reactions started by this test before restoring the global URL.
+// The wait cleanup runs first (cleanups are LIFO), while the stub is still
+// listening and slackAPIBase still points at it.
+func withSlackAPIStub(t *testing.T, stub *slackAPITestServer, expectedReactions int) {
 	t.Helper()
 	prev := slackAPIBase
-	slackAPIBase = srv.URL
+	slackAPIBase = stub.server.URL
 	t.Cleanup(func() { slackAPIBase = prev })
+	t.Cleanup(func() {
+		ctx, cancel := withTimeout(t, 5*time.Second)
+		defer cancel()
+		received := 0
+		for received < expectedReactions {
+			select {
+			case <-stub.reactionsAdded:
+				received++
+			case <-ctx.Done():
+				t.Fatalf("received %d/%d reactions before restoring slackAPIBase: %v", received, expectedReactions, ctx.Err())
+			}
+		}
+	})
 }
 
 // inboundCapture is a thin gc-stub that records each posted inbound
@@ -71,13 +109,14 @@ func (c *inboundCapture) snapshot() []externalInboundMessage {
 	return out
 }
 
-// fakeSlackRepliesServer returns an httptest server that replies to
+// fakeSlackRepliesServer returns a Slack API stub that replies to
 // /conversations.replies with the supplied messages, counting how
-// many times it was called.
-func fakeSlackRepliesServer(t *testing.T, messages []slackThreadMessage) (*httptest.Server, *int32) {
+// many times it was called. newSlackAPITestServer handles and signals
+// reactions.add separately.
+func fakeSlackRepliesServer(t *testing.T, messages []slackThreadMessage) (*slackAPITestServer, *int32) {
 	t.Helper()
 	var calls int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	stub := newSlackAPITestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/conversations.replies") {
 			http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
 			return
@@ -87,8 +126,7 @@ func fakeSlackRepliesServer(t *testing.T, messages []slackThreadMessage) (*httpt
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	t.Cleanup(srv.Close)
-	return srv, &calls
+	return stub, &calls
 }
 
 func TestThreadContext_BotRootIncludedOnFirstReply(t *testing.T) {
@@ -97,7 +135,7 @@ func TestThreadContext_BotRootIncludedOnFirstReply(t *testing.T) {
 	slackStub, _ := fakeSlackRepliesServer(t, []slackThreadMessage{
 		{BotID: "B_AGENT", Text: rootText, TS: rootTS},
 	})
-	withSlackAPIStub(t, slackStub)
+	withSlackAPIStub(t, slackStub, 1)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -140,7 +178,7 @@ func TestThreadContext_BotRootIncludedAfterSinceTS(t *testing.T) {
 	slackStub, _ := fakeSlackRepliesServer(t, []slackThreadMessage{
 		{BotID: "B_AGENT", Text: rootText, TS: rootTS},
 	})
-	withSlackAPIStub(t, slackStub)
+	withSlackAPIStub(t, slackStub, 2)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -179,11 +217,10 @@ func TestThreadContext_BotRootIncludedAfterSinceTS(t *testing.T) {
 
 func TestThreadContext_FetchFailureMarksThread(t *testing.T) {
 	const rootTS = "97.000001"
-	failingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	failingSrv := newSlackAPITestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	}))
-	t.Cleanup(failingSrv.Close)
-	withSlackAPIStub(t, failingSrv)
+	withSlackAPIStub(t, failingSrv, 1)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -223,7 +260,7 @@ func TestThreadContext_FirstMentionPrependsPreamble(t *testing.T) {
 		{User: "U_BOB", Text: "lgtm — open the PR", TS: "100.000002"},
 	}
 	slackStub, calls := fakeSlackRepliesServer(t, prior)
-	withSlackAPIStub(t, slackStub)
+	withSlackAPIStub(t, slackStub, 1)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -291,9 +328,9 @@ func TestThreadContext_SecondMentionRepeatsRootWithoutNewActivity(t *testing.T) 
 		{User: "U_ALICE", Text: "context line", TS: "200.000001"},
 	}
 	var calls int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only count conversations.replies; the adapter's eyes-react
-		// path posts to /reactions.add and is out of scope here.
+	stub := newSlackAPITestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Count conversations.replies separately; reactions.add is handled by the
+		// wrapper and awaited before this test restores slackAPIBase.
 		if strings.HasSuffix(r.URL.Path, "/conversations.replies") {
 			atomic.AddInt32(&calls, 1)
 		}
@@ -302,10 +339,7 @@ func TestThreadContext_SecondMentionRepeatsRootWithoutNewActivity(t *testing.T) 
 		serverMu.Unlock()
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	t.Cleanup(srv.Close)
-	prev := slackAPIBase
-	slackAPIBase = srv.URL
-	t.Cleanup(func() { slackAPIBase = prev })
+	withSlackAPIStub(t, stub, 2)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -364,7 +398,7 @@ func TestThreadContext_SecondMentionRepeatsRootWithoutNewActivity(t *testing.T) 
 
 func TestThreadContext_NonThreadInboundSkipsFetch(t *testing.T) {
 	slackStub, calls := fakeSlackRepliesServer(t, nil)
-	withSlackAPIStub(t, slackStub)
+	withSlackAPIStub(t, slackStub, 0)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -407,7 +441,7 @@ func TestThreadContext_NonThreadInboundSkipsFetch(t *testing.T) {
 func TestThreadContext_ThreadParentSkipsFetch(t *testing.T) {
 	// thread_ts == ts: this IS the thread parent. No priors exist.
 	slackStub, calls := fakeSlackRepliesServer(t, nil)
-	withSlackAPIStub(t, slackStub)
+	withSlackAPIStub(t, slackStub, 0)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -461,7 +495,7 @@ func TestThreadContext_NoPriorsAfterFilteringEmitsNoPreamble(t *testing.T) {
 	// not "prior" (it's the current one). Other entries are bot or
 	// later. So preamble should NOT be emitted.
 	slackStub, calls := fakeSlackRepliesServer(t, prior)
-	withSlackAPIStub(t, slackStub)
+	withSlackAPIStub(t, slackStub, 1)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -512,16 +546,15 @@ func TestThreadContext_NoPriorsAfterFilteringEmitsNoPreamble(t *testing.T) {
 // log line per inbound; that's the right operator signal.
 func TestThreadContext_FetchFailureRetriesNextInbound(t *testing.T) {
 	var calls int32
-	failingSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only count conversations.replies; the adapter's eyes-react
-		// path posts to /reactions.add and is out of scope here.
+	failingSrv := newSlackAPITestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Count conversations.replies separately; reactions.add is handled by the
+		// wrapper and awaited before this test restores slackAPIBase.
 		if strings.HasSuffix(r.URL.Path, "/conversations.replies") {
 			atomic.AddInt32(&calls, 1)
 		}
 		http.Error(w, "boom", http.StatusInternalServerError)
 	}))
-	t.Cleanup(failingSrv.Close)
-	withSlackAPIStub(t, failingSrv)
+	withSlackAPIStub(t, failingSrv, 2)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -588,9 +621,9 @@ func TestThreadContext_CrossAgentDeltaVisibility(t *testing.T) {
 		{User: "U_ALICE", Text: "should we ship?", TS: "700.000001"},
 	}
 	var calls int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Only count conversations.replies; the adapter's eyes-react
-		// path posts to /reactions.add and is out of scope here.
+	stub := newSlackAPITestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Count conversations.replies separately; reactions.add is handled by the
+		// wrapper and awaited before this test restores slackAPIBase.
 		if strings.HasSuffix(r.URL.Path, "/conversations.replies") {
 			atomic.AddInt32(&calls, 1)
 		}
@@ -599,10 +632,7 @@ func TestThreadContext_CrossAgentDeltaVisibility(t *testing.T) {
 		serverMu.Unlock()
 		_ = json.NewEncoder(w).Encode(resp)
 	}))
-	t.Cleanup(srv.Close)
-	prev := slackAPIBase
-	slackAPIBase = srv.URL
-	t.Cleanup(func() { slackAPIBase = prev })
+	withSlackAPIStub(t, stub, 3)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())
@@ -709,7 +739,7 @@ func TestThreadContext_IsolationAcrossThreads(t *testing.T) {
 		{User: "U_ALICE", Text: "thread-A-only", TS: "800.000001"},
 	}
 	slackStub, _ := fakeSlackRepliesServer(t, prior)
-	withSlackAPIStub(t, slackStub)
+	withSlackAPIStub(t, slackStub, 2)
 
 	capture := &inboundCapture{}
 	gcStub := httptest.NewServer(capture.handler())

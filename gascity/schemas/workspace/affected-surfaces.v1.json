@@ -457,7 +457,7 @@
     "gascity/assets/workflows/do-work/prepare-worktree.md": {
       "classification": "new",
       "responsibility": "implementation-flow,path-reader,workspace-prepare",
-      "sha256": "da39fc28ada2adf92751763a37892517eaa02b8dccd767fe40b648ca69357c9d"
+      "sha256": "76029be74f3934ce332526bd896022f590a932f4abce7067b652a7af0e5e10ac"
     },
     "gascity/assets/workflows/do-work-item/implement-item.md": {
       "classification": "new",
@@ -1037,7 +1037,7 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.synthesize-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "9c04ced33b397d199afa9b5518d4c0ffc18da558e560bba3d6fdeeb1ce3a81bd"
+      "sha256": "326d803e529684d20d323fa324d143d266a36cb804faedd27fcf96eda10f5f89"
     },
     "compound-engineering/assets/workflows/compound-planning/plan-review.md": {
       "classification": "reference",

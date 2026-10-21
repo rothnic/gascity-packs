@@ -2214,7 +2214,7 @@
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",
       "responsibility": "native claim/session and exact-commit project check, review and accepted-output qualification",
-      "sha256": "829a6e31be455a97670920153af572b8b2922cb7804f5c5735a07d00413c060d"
+      "sha256": "ac03946a383d5c1418b19964393096c7344a17e1a51b2feb0159dd85d163a2a3"
     },
     "gascity/assets/scripts/workspace_requests.py": {
       "classification": "new",

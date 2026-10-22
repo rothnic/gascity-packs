@@ -190,6 +190,11 @@ def assert_clean_worker_render(prompt: str, persona_heading: str) -> None:
     assert "CLAIMED_BEAD_ID" in prompt
     assert "CLAIMED_ROOT_BEAD_ID" in prompt
     assert "CLAIMED_CONTINUATION_GROUP" in prompt
+    assert "The `bead` field is the full record for `bead_id`" in prompt
+    assert "Use that record's own" in prompt
+    assert "`root_bead_id` and dependency" in prompt
+    assert "any external prompt or description file it names" in prompt
+    assert "before claiming again or ending the turn" in prompt
     assert 'gc bd update "$CLAIMED_BEAD_ID"' in prompt
     assert "An empty continuation group is a hard session boundary" in prompt
     assert "Never merge a pull request yourself unless the bead explicitly" in prompt
@@ -197,6 +202,8 @@ def assert_clean_worker_render(prompt: str, persona_heading: str) -> None:
     assert "gc mail send mayor" not in prompt
     assert "## Workflow root delivery" in prompt
     assert "gc.workflow_expanded=true" in prompt
+    assert "returned `bead` record for `bead_id` itself" in prompt
+    assert "A `root_bead_id` pointing to such a root does not" in prompt
     assert "do not loop or drain-ack the held root" in prompt
     assert "`gc.kind=workflow` and `gc.kind=scope`: latch beads" not in prompt
 

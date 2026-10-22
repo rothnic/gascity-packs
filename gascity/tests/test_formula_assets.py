@@ -799,6 +799,12 @@ class FormulaAssetTests(unittest.TestCase):
             "CLAIMED_BEAD_ID",
             "CLAIMED_ROOT_BEAD_ID",
             "CLAIMED_CONTINUATION_GROUP",
+            "The `bead` field is the full record for `bead_id`",
+            "Use that record's own",
+            "`root_bead_id` and dependency",
+            "any external prompt or description file it names",
+            "complete its result contract",
+            "before claiming again or ending the turn",
             "gc runtime drain-ack",
             "An empty continuation group is a hard session boundary",
             "Never ask a human whether to proceed after a successful claim",
@@ -854,6 +860,8 @@ class FormulaAssetTests(unittest.TestCase):
         for contract in ("gc gc claim", "native workflow", "next claim's returned",
                          "leave it unchanged", "do not loop or drain-ack the held root"):
             self.assertIn(contract, handoff)
+        self.assertIn("returned `bead` record for `bead_id` itself", handoff)
+        self.assertIn("A `root_bead_id` pointing to such a root does not", handoff)
         self.assertNotIn("`gc.kind=workflow` and `gc.kind=scope`: latch beads", text)
 
     def test_winning_item_preparation_executes_native_entry_discovery_before_dependency(self) -> None:

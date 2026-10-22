@@ -2234,7 +2234,7 @@
     "gascity/assets/scripts/validate_plan_review.py": {
       "classification": "new",
       "responsibility": "read-only current native plan and upstream approval gate before task allocation",
-      "sha256": "a2733f3cd27e672b4906887109a854380aefd45420023baad87784502e351849"
+      "sha256": "a8ffaf0c0e4559703fe709864d4650a7dc3687d5ce1c1d8a41a0702329f82abb"
     },
     "gascity/assets/scripts/checks/plan-review-approved.py": {
       "classification": "new",

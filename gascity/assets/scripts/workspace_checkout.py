@@ -833,18 +833,27 @@ def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
                                    writer_map=writer_map, guards=guards,
                                    expected_rows=merge_cooked_context(writer_rows, rows))
     path, pending = retain_request(store, prepared)
+    receipt = None
     try:
         receipt = store.execute(prepared)
         resolved = store.resolve(prepared)
     except (RecordError, OSError) as exc:
+        diagnostic = _retain_submission_diagnostic(path, prepared,
+            receipt if receipt is not None else {'outcome': 'not_returned', 'error': str(exc)},
+            {'outcome': 'unknown', 'error': str(exc)})
+        diagnostic_note = '; private submission diagnostic=' + diagnostic if diagnostic else ''
         raise CheckoutError('guarded workspace publication is unresolved; original request=' + str(path)
-                            + '; request_sha256=' + prepared.sha256 + '; resolve the original request without repeating effects',
+                            + '; request_sha256=' + prepared.sha256 + diagnostic_note
+                            + '; resolve the original request without repeating effects',
                             str(path), str(path)) from exc
     if (resolved.get('outcome') not in ('committed', 'replayed')
             or resolved.get('request_sha256') != prepared.sha256):
+        diagnostic = _retain_submission_diagnostic(path, prepared, receipt, resolved)
+        diagnostic_note = '; private submission diagnostic=' + diagnostic if diagnostic else ''
         raise CheckoutError('guarded workspace publication is unknown; request_sha256=' + prepared.sha256
                             + '; readback=' + str(resolved.get('outcome')) + '; original request=' + str(path)
-                            + '; resolve the original request without repeating effects', str(path), str(path))
+                            + diagnostic_note + '; resolve the original request without repeating effects',
+                            str(path), str(path))
     # Native grants contain instance tokens; public results contain only the digest/outcome.
     try:
         merge_cooked_context(writer_rows, parse_record(prepared.before_bytes.decode()))
@@ -862,6 +871,29 @@ def _publish(store, attempt, *, workspace: dict, authority_id: str, rows: dict,
         pending.unlink()
     return {'outcome': resolved['outcome'], 'request_sha256': prepared.sha256,
             'write_outcome': receipt.get('outcome')}
+
+
+def _retain_submission_diagnostic(path, prepared, submitted, resolved):
+    """Keep private native error details beside the frozen request, never in CLI output."""
+    from workspace_outputs import immutable_json
+
+    def field(packet, key):
+        value = packet.get(key) if isinstance(packet, dict) else None
+        return value if isinstance(value, str) else None
+
+    packet = dict(schema='gc.workspace-publication-diagnostic.v1',
+        request_sha256=prepared.sha256,
+        submission_outcome=field(submitted, 'outcome'),
+        submission_error=field(submitted, 'error'),
+        resolution_outcome=field(resolved, 'outcome'),
+        resolution_request_sha256=field(resolved, 'request_sha256'),
+        resolution_error=field(resolved, 'error'),
+        retry_allowed=False)
+    target = Path(path).with_name(prepared.sha256 + '.submission-diagnostic.json')
+    try:
+        return immutable_json(target, packet)['path']
+    except (RecordError, OSError):
+        return None
 
 
 def _writer(workspace: dict, attempt) -> dict:

@@ -14,6 +14,7 @@ from typing import Any
 
 import validate_build_artifact as build
 import validate_verdict_report as verdict
+import artifacts as artifact_paths
 
 
 REQUIRED_KEY = "gc.build.plan_review_required"
@@ -204,6 +205,35 @@ def durable_root(environment: dict[str, str]) -> Path:
     return root.resolve(strict=True)
 
 
+def recorded_artifact_root(metadata: dict[str, Any], *, rig_root: Path | None = None,
+                           environment: dict[str, str] | None = None) -> Path:
+    """Use the formula's recorded root, keeping the existing rig fallback."""
+    declared = "gc.var.artifact_root" in metadata
+    override = metadata.get("gc.var.artifact_root")
+    if declared:
+        require(isinstance(override, str), "native artifact root override must be a string")
+        if override.strip():
+            try:
+                root = artifact_paths.resolve_artifact_root(override)
+            except (artifact_paths.ArtifactError, OSError, ValueError) as exc:
+                raise ReviewError(f"native artifact root is malformed: {exc}") from exc
+            require(root.is_dir(), f"native artifact root is unavailable: {root}")
+            return root.resolve(strict=True)
+    if rig_root is None:
+        require(environment is not None, "durable native artifact root is required")
+        rig_root = durable_root(environment)
+    fallback = rig_root.resolve(strict=True)
+    require(fallback.is_dir(), "durable native rig root is required")
+    if not declared:
+        return fallback
+    try:
+        root = artifact_paths.resolve_artifact_root(override, rig_root=str(fallback))
+    except (artifact_paths.ArtifactError, OSError, ValueError) as exc:
+        raise ReviewError(f"native artifact root is malformed: {exc}") from exc
+    require(root.is_dir(), f"native artifact root is unavailable: {root}")
+    return root.resolve(strict=True)
+
+
 def show(bead_id: str) -> dict[str, Any]:
     result = subprocess.run(["gc", "bd", "show", bead_id, "--json"], check=True,
                             capture_output=True, text=True, timeout=30)
@@ -229,7 +259,9 @@ def check_creator_review(workspace: dict[str, Any] | None, *, bd_command: list[s
             return
         claim = workspace["writer_rows"][workspace["attempt"].claimed_bead_id]
         root = workspace["writer_rows"][native_root(claim)]
-        artifact_root = Path(workspace["state"]["run"]["rig_root"])
+        require(isinstance(root.get("metadata"), dict), "native workflow metadata is missing")
+        rig_root = Path(workspace["state"]["run"]["rig_root"])
+        artifact_root = recorded_artifact_root(root["metadata"], rig_root=rig_root)
     else:
         bead_id = os.environ.get("GC_BEAD_ID")
         if not bead_id:
@@ -254,7 +286,8 @@ def check_creator_review(workspace: dict[str, Any] | None, *, bd_command: list[s
         if isinstance(root, list) and len(root) == 1:
             root = root[0]
         require(isinstance(root, dict) and root.get("id") == root_id, "native workflow root changed")
-        artifact_root = durable_root(os.environ)
+        require(isinstance(root.get("metadata"), dict), "native workflow metadata is missing")
+        artifact_root = recorded_artifact_root(root["metadata"], environment=os.environ)
     validate_recorded_review(root, artifact_root=artifact_root)
 
 
@@ -279,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
             claim = show(bead_id)
             root = show(native_root(claim))
             require(isinstance(root.get("metadata"), dict), "native workflow metadata is missing")
-            artifact_root = durable_root(os.environ)
+            artifact_root = recorded_artifact_root(root["metadata"], environment=os.environ)
             if args.mode == "native-repair-subject":
                 require(claim.get("status") == "in_progress", "repair subject requires a claimed native reviewer")
                 requirements = recorded_path(root["metadata"], REQUIREMENTS_KEYS, optional=True)

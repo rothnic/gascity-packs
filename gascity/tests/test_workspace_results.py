@@ -57,7 +57,7 @@ class ResultFixture(unittest.TestCase):
                                                    branch="task", store_ref="rig:fixture")
         self.binding = outputs.result_binding(self.run, self.plan, self.workspace, store_ref="rig:fixture",
                                                member_id="task", output_oid=self.oid)
-        self.requirements = [dict(id="REQ-42", argv=[sys.executable, "-c", "import feature; assert feature.VALUE == 42"])]
+        self.requirements = [dict(id="REQ-42", argv=[sys.executable, "-B", "-c", "import feature; assert feature.VALUE == 42"])]
         self.producer = dict(step_id="producer", session_id="producer-session", attempt_id="producer-attempt")
         self.reviewer = dict(step_id="reviewer", session_id="reviewer-session", attempt_id="reviewer-attempt")
         self.summary = self.artifacts / "summary.md"

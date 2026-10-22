@@ -24,6 +24,12 @@ Read its single JSON result:
   - `bead_id` as `CLAIMED_BEAD_ID`
   - `root_bead_id` as `CLAIMED_ROOT_BEAD_ID`
   - `continuation_group` as `CLAIMED_CONTINUATION_GROUP`
+  The `bead` field is the full record for `bead_id`. Use that record's own
+  `metadata` to identify the claimed bead; `root_bead_id` and dependency
+  metadata describe lineage and never change the claimed bead's kind. If the
+  record is not the expanded workflow root described below, read its
+  description and any external prompt or description file it names, then
+  complete its result contract before claiming again or ending the turn.
 - `action=drain`: already drain-acked. Exit now.
 - Non-zero exit or malformed result: report failure. Do not search, hand-repair
   assignment, or retry forever. Do not drain or mutate claim state; the command
@@ -40,12 +46,13 @@ the bead's failure contract and close it instead of idling.
 
 ## Workflow root delivery
 
-A claimed `gc.kind=workflow` with `gc.formula_contract=graph.v2` and
-`gc.workflow_expanded=true` is a native launch or continuation anchor. Read its
-description and retain the claim. Its kind is not a failure, and its launch
-inputs are not a completed implementation result. Do not set `gc.outcome`,
-fail, or close that root merely to reach its children; native workflow
-finalization owns its completion.
+This handoff applies only when the returned `bead` record for `bead_id` itself
+has `gc.kind=workflow`, `gc.formula_contract=graph.v2`, and
+`gc.workflow_expanded=true`. A `root_bead_id` pointing to such a root does not
+make the claimed bead an anchor. Read the root's description and retain the
+claim. Its kind is not a failure, and its launch inputs are not a completed
+implementation result. Do not set `gc.outcome`, fail, or close that root merely
+to reach its children; native workflow finalization owns its completion.
 
 Run `gc gc claim` again to receive the next executable step. This launch
 handoff precedes the close and continuation-group rules below, including when

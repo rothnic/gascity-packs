@@ -269,8 +269,14 @@ selection so `gc.run-operator` resolves to rig-local role.
 
 The claim command can deliver an expanded workflow root as a launch anchor.
 Workers keep that root open and use the same claim command for its next native
-step; they do not fail or close it because its kind is `workflow`. During item
-preparation, the [shared recipe](assets/workflows/do-work/prepare-worktree.md)
+step; they do not fail or close it because its kind is `workflow`.
+
+The anchor handoff applies only when the claimed bead's own record has the
+expanded-workflow metadata. A `root_bead_id` on an ordinary task records its
+lineage, not its kind. For ordinary claimed tasks, workers read the description
+and any external prompt it names before claiming again.
+
+During item preparation, the [shared recipe](assets/workflows/do-work/prepare-worktree.md)
 runs `workspace_entry.py read --require-plan` to discover the original run and
 the plan's producer through the native drain relationship. A source-plan
 reference need not be stored on the item root or original workflow root.

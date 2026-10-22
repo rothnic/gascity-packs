@@ -239,11 +239,11 @@ class PlanReviewAcceptanceTests(unittest.TestCase):
             "gc.root_bead_id": "workflow-1", review.REQUIRED_KEY: "true"}}
 
         def bd_output(args):
-            if args[1:4] == ["show", "review-1", "--json"]:
+            if args[2:5] == ["show", "review-1", "--json"]:
                 return [step]
-            if args[1:3] == ["list", "--metadata-field"]:
+            if args[2:4] == ["list", "--metadata-field"]:
                 return [step]
-            if args[1:3] == ["show", "workflow-1"]:
+            if args[2:4] == ["show", "workflow-1"]:
                 return [root]
             raise AssertionError(args)
 
@@ -252,7 +252,7 @@ class PlanReviewAcceptanceTests(unittest.TestCase):
 
         with patch.dict(os.environ, {"GC_BEAD_ID": "review-1", "GC_RIG_ROOT": str(rig_root)}), \
              patch.object(review.subprocess, "run", side_effect=run):
-            review.check_creator_review(None, bd_command=["bd"])
+            review.check_creator_review(None, bd_command=["gc", "bd"])
 
         workspace = {
             "writer_map": SimpleNamespace(declaration={"steps": [{"bead_id": "review-1"}]}),
@@ -260,7 +260,7 @@ class PlanReviewAcceptanceTests(unittest.TestCase):
             "attempt": type("Attempt", (), {"claimed_bead_id": "review-1"})(),
             "state": {"run": {"rig_root": str(rig_root)}},
         }
-        review.check_creator_review(workspace, bd_command=["bd"])
+        review.check_creator_review(workspace, bd_command=["gc", "bd"])
 
     def test_creator_review_refuses_workflow_root_without_metadata_before_allocation(self):
         step = {"id": "review-1", "issue_type": "task", "metadata": {
@@ -268,11 +268,11 @@ class PlanReviewAcceptanceTests(unittest.TestCase):
         root = {"id": "workflow-1", "metadata": None}
 
         def bd_output(args):
-            if args[1:4] == ["show", "review-1", "--json"]:
+            if args[2:5] == ["show", "review-1", "--json"]:
                 return [step]
-            if args[1:3] == ["list", "--metadata-field"]:
+            if args[2:4] == ["list", "--metadata-field"]:
                 return [step]
-            if args[1:3] == ["show", "workflow-1"]:
+            if args[2:4] == ["show", "workflow-1"]:
                 return [root]
             raise AssertionError(args)
 
@@ -282,7 +282,7 @@ class PlanReviewAcceptanceTests(unittest.TestCase):
         with patch.dict(os.environ, {"GC_BEAD_ID": "review-1"}), \
              patch.object(review.subprocess, "run", side_effect=run) as run_bd:
             with self.assertRaisesRegex(review.ReviewError, "native workflow metadata is missing"):
-                review.check_creator_review(None, bd_command=["bd"])
+                review.check_creator_review(None, bd_command=["gc", "bd"])
         self.assertEqual(run_bd.call_count, 3)
 
     def test_git_upstream_requires_immutable_revision_and_exact_current_file(self):

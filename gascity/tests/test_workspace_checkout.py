@@ -8,6 +8,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import tempfile
@@ -744,6 +745,33 @@ print(json.dumps(receipt))
         resumed = self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
             launch_step_ids=['producer-1'], **kwargs)
         self.assertEqual(resumed['head'], self.base)
+
+    def test_uncommitted_publication_retains_submit_error_only_in_private_receipt(self):
+        store, attempt, kwargs = self.managed_context(inherited=True)
+        store.admitted = False
+        before = copy.deepcopy(store.rows)
+        transactions_before = len(store.transactions)
+        with self.assertRaisesRegex(self.mod.CheckoutError, 'private submission diagnostic') as refusal:
+            self.mod.manage_workspace(store, attempt, action='prepare', authority_id='authority-1',
+                launch_step_ids=['producer-1'], **kwargs)
+
+        request_path = Path(refusal.exception.evidence_path)
+        diagnostic_path = request_path.with_name(request_path.stem + '.submission-diagnostic.json')
+        diagnostic = json.loads(diagnostic_path.read_text())
+        self.assertEqual(diagnostic['schema'], 'gc.workspace-publication-diagnostic.v1')
+        self.assertEqual(diagnostic['request_sha256'], request_path.stem)
+        self.assertEqual(diagnostic['submission_outcome'], 'unknown')
+        self.assertIn('retained writer grant is stale', diagnostic['submission_error'])
+        self.assertEqual(diagnostic['resolution_outcome'], 'not_committed')
+        self.assertEqual(diagnostic['resolution_request_sha256'], request_path.stem)
+        self.assertFalse(diagnostic['retry_allowed'])
+        self.assertNotIn('retained writer grant is stale', str(refusal.exception))
+        self.assertNotIn(attempt.instance_token, str(refusal.exception))
+        self.assertEqual(stat.S_IMODE(diagnostic_path.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(diagnostic_path.parent.stat().st_mode), 0o700)
+        self.assertEqual(store.rows, before)
+        self.assertEqual(len(store.transactions) - transactions_before, 1)
+        self.assertEqual(len(list(request_path.parent.glob('*.pending'))), 1)
 
     def test_failed_exact_write_acknowledgement_preserves_request_without_blocker_or_git_effects(self):
         store, attempt, kwargs = self.managed_context(inherited=True)

@@ -59,26 +59,34 @@ class PlanReviewRepairTests(unittest.TestCase):
             return {"id": bead_id, "status": status, "issue_type": "task", "metadata": {
                 "gc.root_bead_id": root, "gc.ralph_step_id": "plan-review", "gc.kind": "task",
                 "gc.step_id": step, "gc.attempt": attempt, "gc.outcome": "fail"}}
-        rows = {root: {"id": root, "metadata": {"gc.build.plan_path": str(self.plan),
-                    "gc.build.requirements_path": str(self.requirements),
-                    "gc.build.plan_review_report_path": str(self.report)}},
+        rows = {root: {"id": root, "metadata": {"gc.build.plan_path": self.plan.name,
+                    "gc.build.requirements_path": self.requirements.name,
+                    "gc.build.plan_review_report_path": self.report.name}},
                 "author-2": child("author-2", "author-repair", "2", "in_progress"),
                 "review-1": child("review-1", "plan-review-verdict", "1", "closed")}
         # First cooked reviewers are plain task rows; later attempts stamp gc.kind.
         del rows["review-1"]["metadata"]["gc.kind"]
         return rows
 
-    def native(self, mode, *, rows=None, claim="author-2", report_sha256=None):
+    def native(self, mode, *, rows=None, claim="author-2", report_sha256=None, rig_root=None):
         rows = self.native_rows() if rows is None else rows
         output, error = io.StringIO(), io.StringIO()
         argv = [mode]
         if mode == "native-repair-check":
             argv += ["--report-sha256", report_sha256 or hashlib.sha256(self.report.read_bytes()).hexdigest()]
         with patch.object(acceptance.review, "show", side_effect=lambda key: rows[key]), \
-             patch.dict(os.environ, GC_BEAD_ID=claim, GC_RIG_ROOT=str(self.root)), \
+             patch.dict(os.environ, GC_BEAD_ID=claim, GC_RIG_ROOT=str(rig_root or self.root)), \
              redirect_stdout(output), redirect_stderr(error):
             rc = acceptance.review.main(argv)
         return subprocess.CompletedProcess(argv, rc, output.getvalue(), error.getvalue())
+
+    def test_native_repair_uses_recorded_artifact_root_instead_of_rig_root(self):
+        rig_root = self.root / "rig"
+        rig_root.mkdir()
+        rows = self.native_rows()
+        rows["workflow-1"]["metadata"]["gc.var.artifact_root"] = str(self.root)
+        result = self.native("native-repair-check", rows=rows, rig_root=rig_root)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def guard(self, *, root="workflow-1", rows=None, report_sha256=None):
         self.assertIn('native-repair-check --report-sha256 "$REPORT_SHA256"', PROMPT.read_text())

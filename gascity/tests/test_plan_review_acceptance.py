@@ -12,6 +12,7 @@ import tempfile
 import tomllib
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "assets" / "scripts"))
@@ -38,6 +39,23 @@ def plan_text(root: Path, *, workflow: str = "workflow-1", status: str = "approv
         "## Non-Goals", "Unrelated behavior remains outside this change.",
         "## Verification", "Run the documented project check.",
         "| ID | Status |", "| --- | --- |", "| REQ-1 | covered |", ""])
+
+
+def relative_native_fixture(artifact_dir: Path, artifact_root: object) -> dict:
+    artifact_dir.mkdir(parents=True)
+    requirements = artifact_dir / "requirements.md"
+    requirements.write_text("# Requirements\nREQ-1: implement the requested behavior.\n")
+    plan = artifact_dir / "plan.md"
+    plan.write_text(plan_text(artifact_dir).replace(str(requirements), "requirements.md"))
+    subject = review.current_subject(Path("plan.md"), workflow_root_id="workflow-1",
+                                     artifact_root=artifact_dir)
+    report_data = {"schema": "gc.verdict-report.v1", "kind": "review", "verdict": "pass",
+                   "severity": "none", "subject": subject, "findings": []}
+    (artifact_dir / "review.md").write_text("---\n" + review.build.yaml.safe_dump(report_data, sort_keys=False)
+                                             + "---\n# Plan review\nExact current subject.\n")
+    return {"id": "workflow-1", "metadata": {
+        "gc.build.plan_path": "plan.md", "gc.build.requirements_path": "requirements.md",
+        "gc.build.plan_review_report_path": "review.md", "gc.var.artifact_root": artifact_root}}
 
 
 class PlanReviewAcceptanceTests(unittest.TestCase):
@@ -157,6 +175,115 @@ class PlanReviewAcceptanceTests(unittest.TestCase):
         with patch.dict(os.environ, {"GC_BEAD_ID": "review-1", "GC_RIG_ROOT": str(self.root)}), \
              patch.object(review, "show", side_effect=[step, self.native_root]), redirect_stderr(io.StringIO()):
             self.assertEqual(review.main(["native-check"]), 1)
+
+    def test_native_gate_uses_recorded_artifact_root_instead_of_rig_root(self):
+        rig_root = self.root / "rig"
+        rig_root.mkdir()
+        root = relative_native_fixture(self.root / "artifacts", str(self.root / "artifacts"))
+        step = {"id": "review-1", "metadata": {"gc.root_bead_id": "workflow-1"}}
+        with patch.dict(os.environ, {"GC_BEAD_ID": "review-1", "GC_RIG_ROOT": str(rig_root)}), \
+             patch.object(review, "show", side_effect=[step, root]), redirect_stdout(io.StringIO()):
+            self.assertEqual(review.main(["native-check"]), 0)
+
+    def test_explicit_artifact_root_does_not_require_an_environment_rig_root(self):
+        root = relative_native_fixture(self.root / "artifacts", str(self.root / "artifacts"))
+        step = {"id": "review-1", "metadata": {"gc.root_bead_id": "workflow-1"}}
+        with patch.dict(os.environ, {"GC_BEAD_ID": "review-1"}, clear=True), \
+             patch.object(review, "durable_root", side_effect=AssertionError("unexpected fallback")), \
+             patch.object(review, "show", side_effect=[step, root]), redirect_stdout(io.StringIO()):
+            self.assertEqual(review.main(["native-check"]), 0)
+
+    def test_declared_missing_artifact_root_does_not_fall_back_to_rig_root(self):
+        rig_root = self.root / "rig"
+        root = relative_native_fixture(rig_root, str(self.root / "missing"))
+        step = {"id": "review-1", "metadata": {"gc.root_bead_id": "workflow-1"}}
+        with patch.dict(os.environ, {"GC_BEAD_ID": "review-1", "GC_RIG_ROOT": str(rig_root)}), \
+             patch.object(review, "show", side_effect=[step, root]), redirect_stderr(io.StringIO()):
+            self.assertEqual(review.main(["native-check"]), 1)
+
+    def test_malformed_declared_artifact_root_is_rejected(self):
+        rig_root = self.root / "rig"
+        root = relative_native_fixture(rig_root, False)
+        step = {"id": "review-1", "metadata": {"gc.root_bead_id": "workflow-1"}}
+        with patch.dict(os.environ, {"GC_BEAD_ID": "review-1", "GC_RIG_ROOT": str(rig_root)}), \
+             patch.object(review, "show", side_effect=[step, root]), redirect_stderr(io.StringIO()):
+            self.assertEqual(review.main(["native-check"]), 1)
+
+    def test_recorded_relative_artifact_root_matches_existing_setup_resolution(self):
+        rig_root = self.root / "rig"
+        rig_root.mkdir()
+        configured = self.root / "configured-artifacts"
+        configured.mkdir()
+        previous_cwd = Path.cwd()
+        try:
+            os.chdir(self.root)
+            resolved = review.recorded_artifact_root(
+                {"gc.var.artifact_root": "configured-artifacts"}, rig_root=rig_root)
+            self.assertEqual(resolved, configured.resolve())
+        finally:
+            os.chdir(previous_cwd)
+
+    def test_empty_recorded_artifact_root_uses_the_existing_rig_default(self):
+        rig_root = self.root / "rig"
+        root = relative_native_fixture(rig_root / "plans", "")
+        step = {"id": "review-1", "metadata": {"gc.root_bead_id": "workflow-1"}}
+        with patch.dict(os.environ, {"GC_BEAD_ID": "review-1", "GC_RIG_ROOT": str(rig_root)}), \
+             patch.object(review, "show", side_effect=[step, root]), redirect_stdout(io.StringIO()):
+            self.assertEqual(review.main(["native-check"]), 0)
+
+    def test_creator_review_uses_recorded_artifact_root_in_both_call_paths(self):
+        # An explicit artifact root must not depend on an old rig path still existing.
+        rig_root = self.root / "missing-rig"
+        root = relative_native_fixture(self.root / "artifacts", str(self.root / "artifacts"))
+        step = {"id": "review-1", "issue_type": "task", "metadata": {
+            "gc.root_bead_id": "workflow-1", review.REQUIRED_KEY: "true"}}
+
+        def bd_output(args):
+            if args[1:4] == ["show", "review-1", "--json"]:
+                return [step]
+            if args[1:3] == ["list", "--metadata-field"]:
+                return [step]
+            if args[1:3] == ["show", "workflow-1"]:
+                return [root]
+            raise AssertionError(args)
+
+        def run(args, **kwargs):
+            return subprocess.CompletedProcess(args, 0, json.dumps(bd_output(args)), "")
+
+        with patch.dict(os.environ, {"GC_BEAD_ID": "review-1", "GC_RIG_ROOT": str(rig_root)}), \
+             patch.object(review.subprocess, "run", side_effect=run):
+            review.check_creator_review(None, bd_command=["bd"])
+
+        workspace = {
+            "writer_map": SimpleNamespace(declaration={"steps": [{"bead_id": "review-1"}]}),
+            "writer_rows": {"review-1": step, "workflow-1": root},
+            "attempt": type("Attempt", (), {"claimed_bead_id": "review-1"})(),
+            "state": {"run": {"rig_root": str(rig_root)}},
+        }
+        review.check_creator_review(workspace, bd_command=["bd"])
+
+    def test_creator_review_refuses_workflow_root_without_metadata_before_allocation(self):
+        step = {"id": "review-1", "issue_type": "task", "metadata": {
+            "gc.root_bead_id": "workflow-1", review.REQUIRED_KEY: "true"}}
+        root = {"id": "workflow-1", "metadata": None}
+
+        def bd_output(args):
+            if args[1:4] == ["show", "review-1", "--json"]:
+                return [step]
+            if args[1:3] == ["list", "--metadata-field"]:
+                return [step]
+            if args[1:3] == ["show", "workflow-1"]:
+                return [root]
+            raise AssertionError(args)
+
+        def run(args, **kwargs):
+            return subprocess.CompletedProcess(args, 0, json.dumps(bd_output(args)), "")
+
+        with patch.dict(os.environ, {"GC_BEAD_ID": "review-1"}), \
+             patch.object(review.subprocess, "run", side_effect=run) as run_bd:
+            with self.assertRaisesRegex(review.ReviewError, "native workflow metadata is missing"):
+                review.check_creator_review(None, bd_command=["bd"])
+        self.assertEqual(run_bd.call_count, 3)
 
     def test_git_upstream_requires_immutable_revision_and_exact_current_file(self):
         def git(*args):

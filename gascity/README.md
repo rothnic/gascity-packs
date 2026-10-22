@@ -163,7 +163,7 @@ launch or pin them in a rig's `formula_vars`:
 
 | Variable | Default | What it changes |
 | -------- | ------- | --------------- |
-| `artifact_root` | (required) | Directory under the rig where all build artifacts land. |
+| `artifact_root` | (required) | Where build artifacts land. Relative overrides resolve from the command's working directory; absolute paths are used directly. |
 | `interaction_mode` | `interactive` | `interactive` keeps blocking questions and approval menus; `autonomous` decides and records evidence; `headless` never prompts. |
 | `review_mode` | `agent` | `report` is read-only findings; `agent` is a structured fix handoff; `interactive` may apply safe fixes directly. |
 | `drain_policy` | `separate` | `separate` runs implementation beads in parallel worker sessions; `same-session` runs them serially in one shared session. |

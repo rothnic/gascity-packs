@@ -6,11 +6,20 @@ findings never authorizes decomposition. The native check allows three attempts;
 it records validation errors on the control's `gc.attempt_log` for repair.
 
 Read the native workflow root to locate `gc.build.plan_path` (fallback
-`gc.var.plan_path`) and the current requirements path. Resolve relative paths
-against the durable rig root, not a disposable worker directory. Locate the
+`gc.var.plan_path`), the current requirements path, and the configured
+`gc.var.artifact_root`. When that formula variable is recorded, resolve it with
+the same rules as `assets/scripts/artifacts.py`: an absolute override is used
+directly, a relative override is resolved from the command's working directory,
+and an empty override selects the default artifact directory under the rig.
+Only when the variable is absent does the native check use the selected or
+captured rig root. An environment rig root must not replace an explicit formula
+override. Resolve relative artifact file paths against this selected artifact
+root, not a disposable worker directory. Locate the
 helper relative to the real pack `description_file`: it is
 `gascity/assets/scripts/validate_plan_review.py` in a source checkout or the
 corresponding installed pack asset. Do not guess a path under the worker's cwd.
+The native review and repair checks and both task-creator paths share this root
+selection before accepting or allocating work.
 
 Review the original request, plan, and every upstream artifact. The plan must
 validate as `gc.build.plan.v1`, belong to this native workflow, and have
@@ -19,12 +28,14 @@ validate as `gc.build.plan.v1`, belong to this native workflow, and have
 matches the current file. Unknown hash schemes, moving Git refs, unavailable
 files, and a missing current requirements artifact refuse acceptance.
 
-After reviewing those bytes, obtain their subject without changing them:
+After reviewing those bytes, obtain their subject without changing them. Pass
+the selected artifact root from the native workflow metadata; use the rig root
+only when `gc.var.artifact_root` is absent.
 
 ```sh
 python3 <pack-scripts>/validate_plan_review.py subject \
   --plan <native-recorded-plan-path> \
-  --workflow-root <native-workflow-root-id> --artifact-root <durable-rig-root>
+  --workflow-root <native-workflow-root-id> --artifact-root <selected-artifact-root>
 ```
 
 Copy that JSON object as the YAML `subject` value in the review report. JSON is
@@ -113,7 +124,7 @@ gc bd update <native-workflow-root-id> \
   --set-metadata gc.build.plan_review_report_path=<absolute-report-path>
 python3 <pack-scripts>/validate_plan_review.py check \
   --plan <native-recorded-plan-path> --report <absolute-report-path> \
-  --workflow-root <native-workflow-root-id> --artifact-root <durable-rig-root>
+  --workflow-root <native-workflow-root-id> --artifact-root <selected-artifact-root>
 ```
 
 Only a successful current-subject check permits `gc.outcome=pass` on the

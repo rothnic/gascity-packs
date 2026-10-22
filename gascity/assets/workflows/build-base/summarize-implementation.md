@@ -22,10 +22,12 @@ worktrees. This stage converts that implementation evidence into the root
 workflow artifact recorded as `gc.build.implementation_summary_path`, normally
 `implementation-summary.md` under the build artifact root.
 
-Resolve the workflow root bead and artifact root from root metadata. If
+Resolve the workflow root bead and artifact root from root metadata. Use the
+recorded `gc.var.artifact_root` when present, following the same override rules
+as `artifacts.py`; otherwise use the selected rig root. If
 `gc.build.implementation_summary_path` is empty, derive an absolute path under
-`gc.var.artifact_root` or `gc.build.artifact_root` as
-`implementation-summary.md`, then record it on the workflow root:
+that selected artifact root as `implementation-summary.md`, then record it on
+the workflow root:
 
 `gc bd update "<workflow-root-id>" --set-metadata "gc.build.implementation_summary_path=<absolute path>"`
 

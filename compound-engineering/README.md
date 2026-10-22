@@ -263,6 +263,13 @@ while each member receives a Compound `ce-work` item formula.
 
 ## Plan acceptance
 
+Compound plans follow the shared
+[`gc.build.plan.v1` schema](../gascity/schemas/build/plan.v1.yaml), including its
+front matter, upstream trace, matching coverage table, and required sections:
+`## Summary`, `## Current System`, `## Proposed Implementation`, `## Non-Goals`,
+and `## Verification`.
+Compound traceability and stage handoff details remain part of that structure.
+
 The four persona lanes and the plan author's repair lane retain their separate
 roles. Their final native gate accepts only an approved plan and a passing
 review bound to the exact native workflow, plan, and current upstream bytes.

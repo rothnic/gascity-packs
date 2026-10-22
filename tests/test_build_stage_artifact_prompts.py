@@ -242,6 +242,52 @@ class CompoundFinalReportContractTests(unittest.TestCase):
         assert_prompt_example_validates(self, raw_prompt(self.exp_path, self.target), "gc.build.final-report.v1")
 
 
+class CompoundPlanFormatContractTests(unittest.TestCase):
+
+    def test_selected_plan_prompt_preserves_the_shared_artifact_format(self) -> None:
+        build_path, build_data = load_formula("compound-engineering", "compound-build")
+        plan_step = find_step(build_data, "plan", "steps")
+        self.assertEqual(
+            plan_step["description_file"],
+            "../assets/workflows/compound-build/plan.md",
+        )
+        raw = raw_prompt(build_path, plan_step)
+        text = normalize(raw)
+        schema = VALIDATOR.load_schema("gc.build.plan.v1")
+        assert_prompt_example_validates(self, raw, schema["schema_id"])
+        frontmatter_match = YAML_BLOCK_RE.search(raw)
+        self.assertIsNotNone(frontmatter_match)
+        _, example, _ = VALIDATOR.parse_front_matter(frontmatter_match.group("body"))
+        self.assertEqual(example["schema"], schema["schema_id"])
+        self.assertEqual(example["workflow"]["formula"], "compound-build")
+        self.assertEqual(example["methodology"]["pack"], "compound-engineering")
+        self.assertEqual(example["methodology"]["name"], "plan")
+        self.assertEqual(example["producer"]["formula"], "compound-build")
+        self.assertEqual(example["producer"]["stage"], "plan")
+        upstream = example["trace"]["upstream"]
+        coverage = example["trace"]["coverage"]
+        upstream_ids = [identifier for entry in upstream for identifier in entry.get("ids", [])]
+        coverage_ids = [entry["id"] for entry in coverage]
+        self.assertEqual(sorted(upstream_ids), sorted(coverage_ids))
+        self.assertEqual(
+            VALIDATOR.parse_markdown_coverage(raw),
+            {entry["id"]: entry["status"] for entry in coverage},
+        )
+        self.assertIn("beads/<id>", text)
+        self.assertIn("bead:", text)
+
+        for status in schema["allowed_statuses"] + schema["coverage_statuses"]:
+            with self.subTest(status=status):
+                self.assertIn(status, text)
+        lines = raw.splitlines()
+        heading_positions = [
+            next((index for index, line in enumerate(lines) if line.strip() == f"## {section}"), -1)
+            for section in schema["required_sections"]
+        ]
+        self.assertTrue(all(position >= 0 for position in heading_positions))
+        self.assertEqual(heading_positions, sorted(heading_positions))
+
+
 class SuperpowersRequirementsContractTests(unittest.TestCase):
 
     def setUp(self) -> None:

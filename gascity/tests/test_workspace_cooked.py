@@ -526,6 +526,11 @@ class NativeScopedAttemptTests(unittest.TestCase):
     def read(self, claimed=None, read_only=False):
         def native(gc, cwd, argv, rig, **options):
             if argv[:2] == ["bd", "show"]:
+                if argv[2:5] == ["--exact-store", "--json", "--"]:
+                    self.assertFalse(options.get("unwrap_singleton", False))
+                    self.assertTrue(options["require_array"])
+                    ids = argv[5:]
+                    return [copy.deepcopy(self.details[bead_id]) for bead_id in reversed(ids)]
                 self.assertTrue(options["unwrap_singleton"] and options["require_array"])
                 return copy.deepcopy(self.details[argv[2]])
             return copy.deepcopy(self.formula)
@@ -544,20 +549,27 @@ class NativeScopedAttemptTests(unittest.TestCase):
         def observed_snapshot(ids):
             events.append(("snapshot", tuple(ids)))
             rows = snapshot(ids)
-            if ids == [self.check] and shows.get(self.check) == 1 and change_row:
+            if self.check in ids and shows.get(self.check, 0) >= 1 and change_row:
                 change_row(rows[self.check])
             return rows
         def native(gc, cwd, argv, rig, **options):
             if argv[:2] != ["bd", "show"]:
                 return copy.deepcopy(self.formula)
-            self.assertTrue(options["unwrap_singleton"] and options["require_array"])
-            bead_id = argv[2]
-            events.append(("show", (bead_id,)))
-            shows[bead_id] = shows.get(bead_id, 0) + 1
-            detail = copy.deepcopy(self.details[bead_id])
-            if bead_id == self.check and shows[bead_id] == 2 and change_show:
-                change_show(detail)
-            return detail
+            if argv[2:5] != ["--exact-store", "--json", "--"]:
+                self.assertTrue(options["unwrap_singleton"] and options["require_array"])
+                return copy.deepcopy(self.details[argv[2]])
+            self.assertFalse(options.get("unwrap_singleton", False))
+            self.assertTrue(options["require_array"])
+            ids = argv[5:]
+            events.append(("show", tuple(ids)))
+            result = []
+            for bead_id in reversed(ids):
+                shows[bead_id] = shows.get(bead_id, 0) + 1
+                detail = copy.deepcopy(self.details[bead_id])
+                if bead_id == self.check and shows[bead_id] == 2 and change_show:
+                    change_show(detail)
+                result.append(detail)
+            return result
         with patch.object(self.store, "snapshot", side_effect=observed_snapshot), \
              patch.object(cooked, "_native_list", return_value=list(self.rows)), \
              patch.object(cooked, "native_json", side_effect=native):
@@ -583,9 +595,164 @@ class NativeScopedAttemptTests(unittest.TestCase):
         writer_map, rows = self.observe_dependency_readbacks(events)
         self.assertEqual(writer_map.declaration, expected_map.declaration)
         self.assertEqual(rows, expected_rows)
-        for bead_id in (self.check, self.control):
-            self.assertEqual([event for event in events if event[1] == (bead_id,)],
-                [("show", (bead_id,)), ("snapshot", (bead_id,)), ("show", (bead_id,))])
+        show_events = [event for event in events if event[0] == "show"]
+        self.assertEqual(len(show_events), 2)
+        proof_ids = show_events[0][1]
+        self.assertIn(self.check, proof_ids)
+        self.assertIn(self.control, proof_ids)
+        self.assertEqual(show_events, [("show", proof_ids), ("show", proof_ids)])
+        first_show = events.index(show_events[0])
+        second_show = events.index(show_events[1], first_show + 1)
+        self.assertEqual(events[first_show + 1:second_show], [("snapshot", proof_ids)])
+
+    def test_large_physical_proof_batch_maps_reversed_rows_and_bounds_native_reads(self):
+        ids = [f"proof-{number:03d}" for number in range(41)]
+        expected, rows, details = {}, {}, {}
+        for bead_id in ids:
+            row = copy.deepcopy(self.rows[self.check])
+            row["id"] = bead_id
+            rows[bead_id] = row
+            detail = copy.deepcopy(self.details[self.check])
+            detail["id"] = bead_id
+            detail["dependencies"] = []
+            details[bead_id] = detail
+            expected[bead_id] = []
+        snapshots, show_batches = [], []
+        original_snapshot = self.store.snapshot
+        def snapshot(batch):
+            snapshots.append(tuple(batch))
+            return {bead_id: copy.deepcopy(rows[bead_id]) for bead_id in batch}
+        def native(gc, cwd, argv, rig, **options):
+            self.assertEqual(argv[:5], ["bd", "show", "--exact-store", "--json", "--"])
+            self.assertEqual(rig, "fixture")
+            self.assertTrue(options["require_array"])
+            self.assertFalse(options.get("unwrap_singleton", False))
+            batch = argv[5:]
+            show_batches.append(tuple(batch))
+            return [copy.deepcopy(details[bead_id]) for bead_id in reversed(batch)]
+        with patch.object(self.store, "snapshot", side_effect=snapshot), \
+             patch.object(cooked, "native_json", side_effect=native):
+            revisions = cooked._verify_physical_blocks(self.store, rows, expected, rig="fixture",
+                store_ref=self.store.store_ref, workflow_root_id=self.root)
+        self.assertEqual(revisions, {bead_id: "1" for bead_id in ids})
+        self.assertEqual(show_batches, [tuple(ids), tuple(ids)])
+        self.assertEqual(snapshots, [tuple(ids)])
+        self.assertEqual(len(show_batches) + len(snapshots), 3)
+        self.assertEqual(original_snapshot([self.check])[self.check], self.rows[self.check])
+
+    def test_physical_proof_batches_are_capped_at_native_snapshot_limit(self):
+        ids = [f"proof-{number:03d}" for number in range(101)]
+        rows, details, expected = {}, {}, {}
+        for bead_id in ids:
+            row = copy.deepcopy(self.rows[self.check])
+            row["id"] = bead_id
+            rows[bead_id] = row
+            detail = copy.deepcopy(self.details[self.check])
+            detail["id"] = bead_id
+            detail["dependencies"] = []
+            details[bead_id] = detail
+            expected[bead_id] = []
+        shows, snapshots, events = [], [], []
+        stored_rows = copy.deepcopy(rows)
+        drift_enabled = [False]
+        def native(gc, cwd, argv, rig, **options):
+            batch = argv[5:]
+            shows.append(len(batch))
+            events.append(("show", len(batch)))
+            if drift_enabled[0] and batch == ids[100:]:
+                stored_rows[ids[0]]["revision"] = "2"
+            return [copy.deepcopy(details[bead_id]) for bead_id in reversed(batch)]
+        def snapshot(batch):
+            snapshots.append(len(batch))
+            events.append(("snapshot", len(batch)))
+            return {bead_id: copy.deepcopy(stored_rows[bead_id]) for bead_id in batch}
+        with patch.object(self.store, "snapshot", side_effect=snapshot), \
+             patch.object(cooked, "native_json", side_effect=native):
+            cooked._verify_physical_blocks(self.store, rows, expected, rig="fixture",
+                store_ref=self.store.store_ref, workflow_root_id=self.root)
+        self.assertEqual(shows, [100, 1, 100, 1])
+        self.assertEqual(snapshots, [100, 1])
+        self.assertEqual(events, [("show", 100), ("show", 1), ("snapshot", 100),
+                                  ("snapshot", 1), ("show", 100), ("show", 1)])
+
+        shows.clear()
+        snapshots.clear()
+        events.clear()
+        drift_enabled[0] = True
+        with patch.object(self.store, "snapshot", side_effect=snapshot), \
+             patch.object(cooked, "native_json", side_effect=native), \
+             self.assertRaisesRegex(RecordError, "native scope check changed during dependency readback") as failure:
+            cooked._verify_physical_blocks(self.store, rows, expected, rig="fixture",
+                store_ref=self.store.store_ref, workflow_root_id=self.root)
+        self.assertNotIn('"revision":"2"', str(failure.exception))
+        self.assertEqual(shows, [100, 1])
+        self.assertEqual(snapshots, [100, 1])
+        self.assertEqual(events, [("show", 100), ("show", 1), ("snapshot", 100),
+                                  ("snapshot", 1)])
+
+    def test_physical_proof_batches_refuse_missing_duplicate_foreign_and_malformed_rows(self):
+        ids = [f"proof-{number:03d}" for number in range(3)]
+        rows, details, expected = {}, {}, {}
+        for bead_id in ids:
+            row = copy.deepcopy(self.rows[self.check])
+            row["id"] = bead_id
+            rows[bead_id] = row
+            detail = copy.deepcopy(self.details[self.check])
+            detail["id"] = bead_id
+            detail["dependencies"] = []
+            details[bead_id] = detail
+            expected[bead_id] = []
+        for mode in ("missing", "duplicate", "foreign", "malformed"):
+            with self.subTest(mode=mode):
+                calls, snapshots = [], []
+                def native(gc, cwd, argv, rig, **options):
+                    calls.append(tuple(argv[5:]))
+                    result = [copy.deepcopy(details[bead_id]) for bead_id in ids]
+                    if mode == "missing":
+                        result.pop()
+                    elif mode == "duplicate":
+                        result[-1] = copy.deepcopy(result[0])
+                    elif mode == "foreign":
+                        result[-1]["id"] = "proof-foreign"
+                    else:
+                        result[-1] = "malformed"
+                    return result
+                def snapshot(batch):
+                    snapshots.append(tuple(batch))
+                    return {bead_id: copy.deepcopy(rows[bead_id]) for bead_id in batch}
+                with patch.object(self.store, "snapshot", side_effect=snapshot), \
+                     patch.object(cooked, "native_json", side_effect=native), \
+                     self.assertRaises(RecordError):
+                    cooked._verify_physical_blocks(self.store, rows, expected, rig="fixture",
+                        store_ref=self.store.store_ref, workflow_root_id=self.root)
+                self.assertEqual(calls, [tuple(ids)])
+                self.assertEqual(snapshots, [])
+
+    def test_physical_proof_batches_refuse_row_and_edge_drift_before_final_read(self):
+        ids = ["proof-000", "proof-001"]
+        rows, details, expected = {}, {}, {}
+        for bead_id in ids:
+            row = copy.deepcopy(self.rows[self.check])
+            row["id"] = bead_id
+            rows[bead_id] = row
+            detail = copy.deepcopy(self.details[self.check])
+            detail["id"] = bead_id
+            detail["dependencies"] = []
+            details[bead_id] = detail
+            expected[bead_id] = []
+        calls = []
+        def native(gc, cwd, argv, rig, **options):
+            calls.append(tuple(argv[5:]))
+            result = [copy.deepcopy(details[bead_id]) for bead_id in argv[5:]]
+            if len(calls) == 1:
+                result[0]["dependencies"] = [{"id": "wrong", "dependency_type": "blocks"}]
+            return result
+        with patch.object(self.store, "snapshot", return_value=rows), \
+             patch.object(cooked, "native_json", side_effect=native), \
+             self.assertRaisesRegex(RecordError, "physical blocks dependencies"):
+            cooked._verify_physical_blocks(self.store, rows, expected, rig="fixture",
+                store_ref=self.store.store_ref, workflow_root_id=self.root)
+        self.assertEqual(calls, [tuple(ids)])
 
     def test_changed_repeat_cooked_row_refuses_before_second_show(self):
         for field, value in (("revision", "2"), ("status", "closed"), ("assignee", "other"),
@@ -600,8 +767,12 @@ class NativeScopedAttemptTests(unittest.TestCase):
                 diagnostic = self.readback_diagnostic(failure.exception, "cooked_row", expected, observed)
                 self.assertTrue(any(path == "/" + field or path.startswith("/" + field + "/")
                                     for path in diagnostic["changed_paths"]))
-                self.assertEqual([event for event in events if event[1] == (self.check,)],
-                    [("show", (self.check,)), ("snapshot", (self.check,))])
+                proof_ids = next(event[1] for event in events if event[0] == "show")
+                self.assertIn(self.check, proof_ids)
+                self.assertEqual([event for event in events if event[0] == "show"], [("show", proof_ids)])
+                first_show = events.index(("show", proof_ids))
+                self.assertEqual([event for event in events[first_show + 1:] if event[0] == "snapshot"],
+                                 [("snapshot", proof_ids)])
 
     def test_changed_repeat_show_refuses_and_names_the_changed_operand(self):
         for nested in (False, True):
@@ -619,8 +790,13 @@ class NativeScopedAttemptTests(unittest.TestCase):
                 self.assertEqual(diagnostic["changed_paths"],
                     ["/dependencies/0/updated_at" if nested else "/updated_at"])
                 self.assertNotIn("private-display-value", str(failure.exception))
-                self.assertEqual([event for event in events if event[1] == (self.check,)],
-                    [("show", (self.check,)), ("snapshot", (self.check,)), ("show", (self.check,))])
+                proof_ids = next(event[1] for event in events if event[0] == "show")
+                self.assertIn(self.check, proof_ids)
+                self.assertEqual([event for event in events if event[0] == "show"],
+                                 [("show", proof_ids), ("show", proof_ids)])
+                first_show = events.index(("show", proof_ids))
+                second_show = events.index(("show", proof_ids), first_show + 1)
+                self.assertEqual(events[first_show + 1:second_show], [("snapshot", proof_ids)])
 
     def test_changed_repeat_show_array_order_still_refuses(self):
         self.details[self.check]["labels"] = ["private-first", "private-second"]

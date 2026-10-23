@@ -13,7 +13,7 @@ from workspace_records import RecordError, canonical_bytes, formula_variable_tex
 from workspace_attempts import discover_attempts, physical_attempt_edges
 from workspace_run import native_json
 from workspace_store import (CookedWriterMap, MAX_COOKED_CONTEXT_ROWS, TOPOLOGY,
-                             _dependencies, _formula_identity, _kinds, _root,
+                             MAX_ROWS, _dependencies, _formula_identity, _kinds, _root,
                              read_cooked_context, require, validate_cooked_writer_map)
 
 
@@ -56,6 +56,70 @@ def _readback_change(bead_id, operand, expected, observed, *, store_ref, workflo
         observed_sha256=hashlib.sha256(canonical_bytes(observed)).hexdigest(),
         changed_paths=paths[:16], changed_paths_truncated=len(paths) > 16, path_depth_limit=3)
     return "native scope check changed during dependency readback; diagnostic=" + canonical_bytes(diagnostic).decode("utf-8")
+
+
+def _verify_physical_blocks(store, rows, expected_blocks, *, rig, store_ref, workflow_root_id):
+    """Repeat the original native detail/guarded-row/detail fence in bounded batches."""
+    ids = list(expected_blocks)
+    require(1 <= len(ids) <= MAX_COOKED_CONTEXT_ROWS and len(set(ids)) == len(ids),
+            "native physical dependency proof IDs are malformed or oversized")
+    require(all(isinstance(bead_id, str) and bead_id and bead_id in rows for bead_id in ids),
+            "native physical dependency proof is missing its original guarded row")
+    batches = [ids[offset:offset + MAX_ROWS] for offset in range(0, len(ids), MAX_ROWS)]
+
+    def show_batches():
+        details_by_id = {}
+        for batch in batches:
+            details = native_json(store.gc, store.cwd,
+                ["bd", "show", "--exact-store", "--json", "--", *batch], rig,
+                require_array=True)
+            require(isinstance(details, list) and len(details) == len(batch),
+                    "native exact batch show returned an incomplete physical row set")
+            batch_ids = set(batch)
+            batch_details = {}
+            for detail in details:
+                require(isinstance(detail, dict) and isinstance(detail.get("id"), str),
+                        "native exact batch show returned a malformed physical row")
+                bead_id = detail["id"]
+                require(bead_id in batch_ids and bead_id not in batch_details,
+                        "native exact batch show returned a duplicate or foreign physical ID")
+                batch_details[bead_id] = detail
+            require(set(batch_details) == batch_ids,
+                    "native exact batch show omitted a requested physical ID")
+            details_by_id.update(batch_details)
+        require(set(details_by_id) == set(ids),
+                "native exact batch show returned a different physical ID set")
+        return details_by_id
+
+    first = show_batches()
+    for bead_id in ids:
+        detail = first[bead_id]
+        require(all(detail.get(key) == rows[bead_id][key]
+                    for key in ("id", "revision", "status", "metadata"))
+                and detail.get("assignee", "") == rows[bead_id]["assignee"],
+                "native scope check readback differs from its original guarded row")
+        dependencies = detail.get("dependencies", [])
+        require(isinstance(dependencies, list) and len(dependencies) <= MAX_COOKED_CONTEXT_ROWS
+                and all(isinstance(edge, dict) and isinstance(edge.get("id"), str)
+                        and isinstance(edge.get("dependency_type"), str) for edge in dependencies),
+                "native scope check dependency readback is malformed")
+        actual = [edge["id"] for edge in dependencies if edge["dependency_type"] == "blocks"]
+        require(sorted(actual) == expected_blocks[bead_id],
+                "native scope check physical blocks dependencies differ from compiled lineage")
+
+    repeated_rows = read_cooked_context(store, ids)
+    for bead_id in ids:
+        repeated_row = repeated_rows[bead_id]
+        if repeated_row != rows[bead_id]:
+            require(False, _readback_change(bead_id, "cooked_row", rows[bead_id], repeated_row,
+                store_ref=store_ref, workflow_root_id=workflow_root_id))
+
+    repeated = show_batches()
+    for bead_id in ids:
+        if repeated[bead_id] != first[bead_id]:
+            require(False, _readback_change(bead_id, "native_show", first[bead_id], repeated[bead_id],
+                store_ref=store_ref, workflow_root_id=workflow_root_id))
+    return {bead_id: detail["revision"] for bead_id, detail in first.items()}
 
 
 def _metadata(step, variables):
@@ -261,31 +325,8 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
     def observe_blocks(bead_id, expected):
         require(bead_id not in observed_blocks or observed_blocks[bead_id] == sorted(expected),
                 "native physical dependency proofs disagree")
-        if bead_id in observed_blocks:
-            return rows[bead_id]["revision"]
-        detail = native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
-                             unwrap_singleton=True, require_array=True)
-        require(all(detail.get(key) == rows[bead_id][key] for key in ("id", "revision", "status", "metadata"))
-                and detail.get("assignee", "") == rows[bead_id]["assignee"],
-                "native scope check readback differs from its original guarded row")
-        dependencies = detail.get("dependencies", [])
-        require(isinstance(dependencies, list) and len(dependencies) <= MAX_COOKED_CONTEXT_ROWS
-                and all(isinstance(edge, dict) and isinstance(edge.get("id"), str)
-                        and isinstance(edge.get("dependency_type"), str) for edge in dependencies),
-                "native scope check dependency readback is malformed")
-        actual = [edge["id"] for edge in dependencies if edge["dependency_type"] == "blocks"]
-        require(sorted(actual) == sorted(expected), "native scope check physical blocks dependencies differ from compiled lineage")
-        repeated_row = read_cooked_context(store, [bead_id])[bead_id]
-        if not repeated_row == rows[bead_id]:
-            require(False, _readback_change(bead_id, "cooked_row", rows[bead_id], repeated_row,
-                store_ref=store.store_ref, workflow_root_id=workflow_root_id))
-        repeated_detail = native_json(store.gc, store.cwd, ["bd", "show", bead_id, "--json"], rig,
-                                     unwrap_singleton=True, require_array=True)
-        if not repeated_detail == detail:
-            require(False, _readback_change(bead_id, "native_show", detail, repeated_detail,
-                store_ref=store.store_ref, workflow_root_id=workflow_root_id))
         observed_blocks[bead_id] = sorted(expected)
-        return detail["revision"]
+        return rows[bead_id]["revision"]
     for descriptor in descriptors:
         descriptor["physical_revisions"] = {bead_id: observe_blocks(bead_id, expected)
             for bead_id, expected in physical_attempt_edges(descriptor).items()}
@@ -318,6 +359,15 @@ def read_cooked_writer_map(store, *, workflow_root_id, claimed_step_id, read_onl
                     "compiled scope check control dependencies are ambiguous or absent")
             binding[("check" if occurrence is check else "subject") + "_revision"] = observe_blocks(occurrence["bead_id"], expected)
         scope_checks.append(binding)
+    if observed_blocks:
+        verified_revisions = _verify_physical_blocks(store, rows, observed_blocks, rig=rig,
+            store_ref=store.store_ref, workflow_root_id=workflow_root_id)
+        for descriptor in descriptors:
+            descriptor["physical_revisions"].update({bead_id: verified_revisions[bead_id]
+                for bead_id in descriptor["physical_revisions"]})
+        for binding in scope_checks:
+            for key in ("check", "subject"):
+                binding[key + "_revision"] = verified_revisions[binding[key + "_id"]]
     if scope_checks:
         declaration["scope_checks"] = scope_checks
     writer_map = CookedWriterMap(canonical_bytes(declaration), continuation=continuation,

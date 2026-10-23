@@ -308,6 +308,32 @@ class RunCaptureTests(unittest.TestCase):
                 run.native_json("gc", str(self.root), ["bd", "show", "native-1", "--json"],
                     "example", unwrap_singleton=True)
 
+    def test_native_json_array_mode_returns_exact_array_and_preserves_shape_checks(self):
+        details = [{"id": "native-2"}, {"id": "native-1"}]
+        output = json.dumps(details)
+        with patch.object(run.subprocess, "run", return_value=
+                subprocess.CompletedProcess([], 0, output, "")) as command:
+            self.assertEqual(run.native_json("gc", str(self.root),
+                ["bd", "show", "--exact-store", "--json", "--", "native-1", "native-2"],
+                "example", require_array=True), details)
+            self.assertEqual(command.call_args.args[0], ["gc", "--city", str(self.root), "--rig", "example",
+                "bd", "show", "--exact-store", "--json", "--", "native-1", "native-2"])
+
+        one = json.dumps([details[0]])
+        with patch.object(run.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, one, "")):
+            self.assertEqual(run.native_json("gc", str(self.root), ["bd", "show", "--json", "--", "native-2"],
+                "example", unwrap_singleton=True, require_array=True), details[0])
+        for output in ('{"id":"native-1"}', '[{"id":"one","id":"two"}]', '['):
+            with self.subTest(output=output), patch.object(run.subprocess, "run", return_value=
+                    subprocess.CompletedProcess([], 0, output, "")), self.assertRaises(RecordError):
+                run.native_json("gc", str(self.root), ["bd", "show", "native-1", "--json"],
+                    "example", require_array=True)
+        for output in ('{"id":"native-1"}', '[{"id":"one"},{"id":"two"}]'):
+            with self.subTest(singleton_output=output), patch.object(run.subprocess, "run", return_value=
+                    subprocess.CompletedProcess([], 0, output, "")), self.assertRaises(RecordError):
+                run.native_json("gc", str(self.root), ["bd", "show", "native-1", "--json"],
+                    "example", unwrap_singleton=True, require_array=True)
+
     def test_registered_rig_refuses_wrong_city_store_and_ambiguous_name(self):
         data = {"city_path": str(self.root), "city_name": "fixture",
                 "rigs": [{"name": "example", "path": str(self.repo)}]}

@@ -146,7 +146,7 @@ def capture_payload(*, workflow_root_id: str, input_convoy_id: str, source_ancho
 
 
 def native_json(gc: str, city_root: str, args: list[str], rig: str | None = None,
-                *, unwrap_singleton: bool = False, require_array: bool = False) -> dict[str, Any]:
+                *, unwrap_singleton: bool = False, require_array: bool = False) -> Any:
     command = [gc, "--city", city_root]
     if rig is not None:
         command += ["--rig", rig]
@@ -159,9 +159,18 @@ def native_json(gc: str, city_root: str, args: list[str], rig: str | None = None
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RunError(f"native source read failed: {exc}") from exc
     require(result.returncode == 0, "native source read failed: " + result.stderr.strip()[-1000:])
+    if require_array:
+        value = parse_record('{"value":' + result.stdout + '}')["value"]
+        require(isinstance(value, list), "native bead read must return an array")
+        if not unwrap_singleton:
+            return value
+        if isinstance(value, list):
+            require(len(value) == 1, "native bead read must return exactly one physical row")
+            value = value[0]
+        require(isinstance(value, dict), "native bead read must return an object")
+        return value
     if unwrap_singleton:
         value = parse_record('{"value":' + result.stdout + '}')["value"]
-        require(not require_array or isinstance(value, list), "native bead listing must return an array")
         if isinstance(value, list):
             require(len(value) == 1, "native bead read must return exactly one physical row")
             value = value[0]

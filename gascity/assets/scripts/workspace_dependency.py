@@ -703,13 +703,13 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
             writer_map=writer_map, writer_rows=frozen.original_rows, source_rows=frozen.rows, acknowledge=frozen.acknowledge,
             native_runtime=runtime)
         workspace = prepared['workspace']
-        runtime.bind_workspace(workspace, frozen.rows)
         integration_evidence = None
         if bundle['strategy'] == 'integration':
             path = integration_receipt_path(artifacts, bundle)
             if workspace['phase'] == 'active':
                 _, integration_evidence = _integration_receipt(path, bundle, workspace)
             else:
+                runtime.bind_workspace(workspace, frozen.rows)
                 try:
                     require(not path.exists(), 'partial integration evidence requires explicit recovery; do not merge again')
                     merged = materialize_integration(Path(workspace['work_dir']), bundle,

@@ -429,6 +429,7 @@ class DependencyNativeCompositionTests(unittest.TestCase):
     def test_native_child_prepares_exact_dependency_and_inherits_original_run_atomically(self):
         from workspace_entry import read_entry
         from workspace_store import CONTINUATION_KEY
+        from workspace_runtime import NativeSourceRuntime
         self.child_fixture(); f = self.fixture
         before = self.state()
         discovered = read_entry(f.store, gc=str(f.port), city_root=str(f.city), rig_name='fixture',
@@ -439,13 +440,24 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         self.assertEqual(['C'], owners)
         self.assertNotIn('gc.source_plan_ref', before['stores']['rig:fixture']['child-C']['metadata'])
         self.assertNotIn('gc.source_plan_ref', before['stores']['rig:fixture']['root']['metadata'])
-        result = self.prepare(workflow_root_id=discovered['workflow_root_id'],
-            input_convoy_id=discovered['native_input_convoy_id'],
-            member_id=member_id, workspace_owner_id=owners[0])
+        bindings = []
+        original_bind = NativeSourceRuntime.bind_workspace
+        def record_binding(runtime, workspace, native_rows):
+            bindings.append(copy.deepcopy(workspace))
+            return original_bind(runtime, workspace, native_rows)
+        with patch.object(NativeSourceRuntime, 'bind_workspace', new=record_binding):
+            result = self.prepare(workflow_root_id=discovered['workflow_root_id'],
+                input_convoy_id=discovered['native_input_convoy_id'],
+                member_id=member_id, workspace_owner_id=owners[0])
         rows = self.state()['stores']['rig:fixture']
         workspace = result['workspace']
+        self.assertEqual(1, len(bindings))
+        self.assertEqual(workspace, bindings[0])
         self.assertEqual(f.oid, result['input_oid'])
+        self.assertEqual(f.oid, f.git(Path(result['path']), 'rev-parse', 'HEAD'))
         self.assertEqual('root', workspace['workflow_root_id'])
+        self.assertEqual('prepare-C', workspace['writer_step_id'])
+        self.assertEqual(f.attempts['prepare-C'].writer_attempt_id, workspace['writer_attempt_id'])
         self.assertEqual('child-C', rows[workspace['workspace_bead_id']]['metadata']['gc.root_bead_id'])
         self.assertEqual('root', rows['C']['metadata']['gc.root_bead_id'])
         self.assertEqual(before['stores']['rig:fixture']['run-record']['metadata']['gc.implementation_run'],
@@ -461,8 +473,33 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         self.assertIn('gc.workspace', changed[workspace['workspace_bead_id']])
 
     def test_native_child_ordered_integration_and_readonly_dirty_continuation(self):
+        from workspace_runtime import NativeSourceRuntime
         self.child_fixture(integration=True); f = self.fixture
-        first = self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        bindings = []
+        callback_bindings = []
+        callback_heads = []
+        original_bind = NativeSourceRuntime.bind_workspace
+        original_verify = NativeSourceRuntime.verify_integration
+        def record_binding(runtime, workspace, native_rows):
+            bindings.append(copy.deepcopy(workspace))
+            return original_bind(runtime, workspace, native_rows)
+        def record_integration_verify(runtime, work_dir, bundle, head_oid):
+            callback_bindings.append(copy.deepcopy(runtime._bound_workspace))
+            callback_heads.append((head_oid, f.git(Path(work_dir), 'rev-parse', 'HEAD')))
+            return original_verify(runtime, work_dir, bundle, head_oid)
+        with patch.object(NativeSourceRuntime, 'bind_workspace', new=record_binding), \
+                patch.object(NativeSourceRuntime, 'verify_integration', new=record_integration_verify):
+            first = self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        self.assertEqual(2, len(bindings))
+        self.assertEqual(bindings[0], callback_bindings[0])
+        self.assertEqual('integration', callback_bindings[0]['strategy'])
+        self.assertEqual('entry', callback_bindings[0]['phase'])
+        integration = json.loads(Path(first['integration_evidence']['path']).read_text())
+        self.assertEqual(len(integration['integration_inputs']) + 1, len(callback_bindings))
+        self.assertEqual([bindings[0]] * len(callback_bindings), callback_bindings)
+        self.assertEqual(f.plan['base_oid'], callback_heads[0][0])
+        self.assertTrue(all(expected == actual for expected, actual in callback_heads))
+        self.assertEqual(first['input_oid'], callback_heads[-1][0])
         work = Path(first['path'])
         self.assertEqual('FLAG = 7\n', (work/'other.py').read_text())
         (work/'partial.py').write_text('PARTIAL = 1\n')
@@ -477,6 +514,25 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         self.assertFalse(continued['accepted'])
         self.assertEqual(before, self.state())
         self.assertEqual('unfinished child work\n', (work/'notes.txt').read_text())
+
+    def test_native_child_stale_integration_bind_refuses_before_blocking_or_materializing(self):
+        from workspace_runtime import NativeSourceRuntime
+        from workspace_store import RecordError
+        import workspace_inputs
+        self.child_fixture(integration=True); f = self.fixture
+        def stale_binding(runtime, workspace, native_rows):
+            raise RecordError('synthetic stale native workspace binding')
+        with patch.object(NativeSourceRuntime, 'bind_workspace', new=stale_binding), \
+                patch.object(workspace_inputs, 'materialize_integration') as materialize, \
+                patch.object(self.helper, '_block_integration') as block:
+            with self.assertRaisesRegex(RecordError, 'synthetic stale native workspace binding'):
+                self.prepare(workflow_root_id='child-C', input_convoy_id='child-C-unit')
+        materialize.assert_not_called()
+        block.assert_not_called()
+        rows = self.state()['stores']['rig:fixture']
+        reference = json.loads(rows['C']['metadata']['gc.workspace_ref'])
+        workspace = json.loads(rows[reference['bead_id']]['metadata']['gc.workspace'])
+        self.assertEqual('entry', workspace['phase'])
 
     def test_changed_native_child_relationship_refuses_before_allocating_or_creating_git(self):
         self.child_fixture(); f = self.fixture

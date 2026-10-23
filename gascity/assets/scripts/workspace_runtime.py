@@ -90,16 +90,25 @@ class _ReadFence:
                     continuation, rows = read_native_continuation(self, claimed_step_id=writer["id"],
                         requested_root_id=workspace["workflow_root_id"], observed_rows=self.rows)
                     self.retain(rows)
-        if continuation is not None:
+        if continuation is None and bead_id in self.rows:
+            # Decode the retained original and use one fresh physical read to
+            # prove it is still byte-identical before returning it.
+            expected = copy.deepcopy(self.rows[bead_id])
+            payload = self.store.decode_record_snapshot(kind, expected, identity)
+            row = self.snapshot([bead_id])[bead_id]
+            require(canonical_bytes(row) == canonical_bytes(expected),
+                    "record changed during native readback")
+        elif continuation is not None:
             require(isinstance(continuation, NativeRunContinuation), "record read requires typed native inheritance")
             self.snapshot(list(dict.fromkeys([bead_id, *continuation.row_ids])))
             validate_native_continuation(continuation, self.rows, store_ref=self.store_ref,
                 workflow_root_id=continuation.binding["workflow_root_id"], require_reference=True)
             payload = self.store.read_record(kind, bead_id, identity, continuation=continuation)
             self.snapshot(list(dict.fromkeys([bead_id, *continuation.row_ids])))
+            row = self.snapshot([bead_id])[bead_id]
         else:
             payload = self.store.read_record(kind, bead_id, identity)
-        row = self.snapshot([bead_id])[bead_id]
+            row = self.snapshot([bead_id])[bead_id]
         raw = row["metadata"].get(contracts()[kind]["metadata_key"])
         require((raw is None) == (payload is None), "record changed during native readback")
         if payload is not None:

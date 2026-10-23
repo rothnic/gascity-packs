@@ -244,6 +244,51 @@ class NativeRuntimeTests(unittest.TestCase):
             review=review, artifacts=[outputs.artifact(self.summary, self.artifacts)], required_checks=self.requirements,
             artifact_root=self.artifacts, work_dir=self.work)
 
+    def test_retained_record_decode_uses_one_fresh_snapshot_and_refuses_drift(self):
+        from workspace_runtime import _ReadFence
+
+        state_path = self.root / "port.json"
+        original_state = json.loads(state_path.read_text())
+        bead_id = "run-record"
+        original_row = original_state["stores"]["rig:fixture"][bead_id]
+        original_row["metadata"]["typed_fact"] = True
+        state_path.write_text(json.dumps(original_state))
+        expected = original_state["stores"]["rig:fixture"][bead_id]
+        identity = record_identity("run", self.run)
+
+        fence = _ReadFence(self.store)
+        fence.retain(self.store.snapshot([bead_id]))
+        start = len((self.root / "port.commands").read_text().splitlines())
+        self.assertEqual(self.run, fence.read_record("run", bead_id, identity))
+        commands = [json.loads(line) for line in
+                    (self.root / "port.commands").read_text().splitlines()[start:]]
+        self.assertEqual(1, len(commands))
+        self.assertIn("--snapshot=" + bead_id, commands[0])
+
+        for name, mutate in (
+            ("revision", lambda row: row.update(revision="2")),
+            ("typed metadata", lambda row: row["metadata"].update(typed_fact=1)),
+            ("native authority", lambda row: row["metadata"].update({"gc.root_bead_id": "foreign"})),
+        ):
+            with self.subTest(drift=name):
+                state_path.write_text(json.dumps(original_state))
+                fence = _ReadFence(self.store)
+                fence.retain(fence.store.snapshot([bead_id]))
+                changed_state = copy.deepcopy(original_state)
+                changed_row = changed_state["stores"]["rig:fixture"][bead_id]
+                mutate(changed_row)
+                state_path.write_text(json.dumps(changed_state))
+                start = len((self.root / "port.commands").read_text().splitlines())
+                with self.assertRaises(RecordError):
+                    fence.read_record("run", bead_id, identity)
+                commands = [json.loads(line) for line in
+                            (self.root / "port.commands").read_text().splitlines()[start:]]
+                self.assertEqual(1, len(commands))
+                self.assertIn("--snapshot=" + bead_id, commands[0])
+                self.assertFalse(any(any(value.startswith("--request=") for value in command)
+                                     for command in commands))
+                self.assertEqual(expected, fence.rows[bead_id])
+
     def git(self, path, *args):
         env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
         env.update(GIT_AUTHOR_NAME="Fixture", GIT_AUTHOR_EMAIL="fixture@example.invalid", GIT_COMMITTER_NAME="Fixture",

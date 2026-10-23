@@ -346,15 +346,22 @@ def validate(continuation, rows, *, store_ref, workflow_root_id, claimed_step_id
     return data
 
 
-def read(store, *, claimed_step_id, requested_root_id=None, recorded_root_id=None, observed_rows=None):
+def read(store, *, claimed_step_id, requested_root_id=None, recorded_root_id=None, observed_rows=None,
+         reuse_rows=None):
     from workspace_entry import healthy, native_root, reference
     from workspace_store import CONTINUATION_KEY, NativeRunContinuation, require
     require(observed_rows is None or isinstance(observed_rows, dict) and not observed_rows,
             'suffix observations must start empty')
     rows = {} if observed_rows is None else observed_rows
+    reuse_rows = reuse_rows if isinstance(reuse_rows, dict) else {}
     def get(bead_id):
         require(isinstance(bead_id, str) and bead_id and bead_id == bead_id.strip(), 'suffix has no exact native relationship ID')
-        if bead_id not in rows: rows.update(store.snapshot([bead_id]))
+        if bead_id not in rows:
+            if bead_id in reuse_rows:
+                rows[bead_id] = reuse_rows[bead_id]
+            else:
+                rows.update(store.snapshot([bead_id]))
+        require(rows[bead_id].get('id') == bead_id, 'suffix readback has a different physical ID')
         healthy(rows[bead_id]); return rows[bead_id]
     claim = get(claimed_step_id); physical = get(native_root(claim)); suffix = physical
     control_id = physical['metadata'].get('gc.drain_control_id')

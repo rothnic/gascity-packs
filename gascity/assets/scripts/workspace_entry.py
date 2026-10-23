@@ -160,8 +160,16 @@ def allocate_run_placeholders(store, attempt, *, workflow_root_id: str, input_co
                 "captured_run": captured, "allocation_rows": rows, "allocation_journal": str(path)}
 
 
-def _load(store, kind: str, ref: dict[str, Any]) -> dict[str, Any]:
-    payload = store.read_record(kind, ref["bead_id"], identity=ref["identity"])
+def _load(store, kind: str, ref: dict[str, Any], *, rows=None) -> dict[str, Any]:
+    bead_id = ref["bead_id"]
+    if isinstance(rows, dict) and bead_id in rows:
+        from workspace_store import WorkspaceStore
+        require(rows[bead_id].get("id") == bead_id, f"{kind} snapshot has a different physical ID")
+        payload = WorkspaceStore.decode_record_snapshot(kind, rows[bead_id], identity=ref["identity"])
+        require(payload is not None, f"{kind} reference points to a missing record")
+        return payload
+    else:
+        payload = store.read_record(kind, bead_id, identity=ref["identity"])
     require(payload is not None, f"{kind} reference points to a missing record")
     validate_record(kind, payload)
     require(list(record_identity(kind, payload)) == ref["identity"], f"{kind} reference identity changed")
@@ -169,7 +177,8 @@ def _load(store, kind: str, ref: dict[str, Any]) -> dict[str, Any]:
 
 
 def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: str | None = None,
-                             recorded_root_id: str | None = None):
+                             recorded_root_id: str | None = None, observed_rows=None,
+                             _defer_revalidation: bool = False):
     """Resolve a native drain child through its recorded control and unit convoy.
 
     This reads native rows only. Publishing inherited references belongs in the
@@ -178,17 +187,43 @@ def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: 
     from workspace_store import NativeRunContinuation, validate_native_continuation
     from workspace_suffix import read as read_suffix
     rows = {}
+    observed_rows = observed_rows if isinstance(observed_rows, dict) else {}
+    require(not _defer_revalidation or bool(observed_rows),
+            "continuation revalidation may only be deferred to an inherited read-set owner")
+
+    def revalidate(current):
+        refreshed = store.snapshot(list(current))
+        require(set(refreshed) == set(current) and all(refreshed[value]["id"] == value for value in current),
+                "native continuation revalidation returned a different physical read set")
+        changed = [value for value in current
+                   if not _same_native_row(observed_rows.get(value, current[value]), refreshed[value])]
+        if changed:
+            initial = {value: observed_rows.get(value, current[value]) for value in changed}
+            updated = {value: refreshed[value] for value in changed}
+            raise RecordError(_continuation_refusal(store, initial, updated,
+                phase="continuation.readview-revalidation", message="native continuation changed during fresh read-set validation"))
+        return refreshed
+
     suffix = read_suffix(store, claimed_step_id=claimed_step_id, requested_root_id=requested_root_id,
-                         recorded_root_id=recorded_root_id, observed_rows=rows)
+                         recorded_root_id=recorded_root_id, observed_rows=rows,
+                         reuse_rows=observed_rows)
     if suffix is not None:
-        return suffix
+        continuation, rows = suffix
+        if observed_rows and not _defer_revalidation:
+            rows = revalidate(rows)
+            validate_native_continuation(continuation, rows, store_ref=store.store_ref,
+                workflow_root_id=continuation.binding["workflow_root_id"], claimed_step_id=claimed_step_id)
+        return continuation, rows
 
     def read(bead_id, *related_ids):
         requested = (bead_id, *related_ids)
         require(all(isinstance(value, str) and bool(value.strip()) and value == value.strip()
                     for value in requested), "native continuation has no exact physical relationship ID")
         ids = list(dict.fromkeys(requested))
-        missing = [value for value in ids if value not in rows]
+        missing = [value for value in ids if value not in rows and value not in observed_rows]
+        for value in ids:
+            if value not in rows and value in observed_rows:
+                rows[value] = observed_rows[value]
         require(len(rows) + len(missing) <= 100, "native continuation exceeds the guarded row bound")
         if missing:
             snapshot = store.snapshot(missing)
@@ -246,6 +281,8 @@ def read_native_continuation(store, *, claimed_step_id: str, requested_root_id: 
         "run_sha256": record_sha256(run_payload), "source_plan_sha256": record_sha256(plan),
         "check_policy_sha256": hashlib.sha256(canonical_bytes(policy)).hexdigest()}
     continuation = NativeRunContinuation(canonical_bytes(binding))
+    if observed_rows and not _defer_revalidation:
+        rows = revalidate(rows)
     validate_native_continuation(continuation, rows, store_ref=store.store_ref,
         workflow_root_id=run_root_id, claimed_step_id=claimed_step_id)
     return continuation, rows
@@ -264,6 +301,11 @@ def _continuation_candidate(store, root, requested_root_id=None, recorded_root_i
         source_root = convoy["metadata"].get("gc.source_root_id")
         return bool(source_root) and source_root != root["id"]
     return False
+
+
+def _same_native_row(before, after):
+    """Compare native JSON rows without Python's bool/int equality alias."""
+    return canonical_bytes(before) == canonical_bytes(after)
 
 
 def _changed_json_paths(before, after, path=""):
@@ -319,7 +361,8 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
                workflow_root_id: str, claimed_step_id: str, worktree_lifecycle: str,
                generation: int, input_convoy_id: str | None = None,
                require_plan: bool = False, expected_run_sha256: str | None = None,
-               expected_plan_sha256: str | None = None, recorded_root_id: str | None = None) -> dict[str, Any]:
+               expected_plan_sha256: str | None = None, recorded_root_id: str | None = None,
+               observed_rows=None) -> dict[str, Any]:
     """Read immutable provenance separately from the mutable current convoy.
 
     Native attached suffixes retain the original root. Drain children retain
@@ -333,15 +376,52 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
         require(city_root == store.cwd, "selected city conflicts with the native store adapter")
         rig_root = registered_rig(gc, city_root, rig_name, store.store_ref)
         rows = store.snapshot(list(dict.fromkeys([workflow_root_id, claimed_step_id])))
+
+        def snapshot_rows(ids):
+            ids = list(dict.fromkeys(ids))
+            missing = [bead_id for bead_id in ids if bead_id not in rows]
+            if missing:
+                incoming = store.snapshot(missing)
+                require(set(incoming) == set(missing)
+                        and all(incoming[bead_id].get("id") == bead_id for bead_id in missing),
+                        "native snapshot returned a different physical read set")
+                prior = observed_rows if isinstance(observed_rows, dict) else {}
+                changed = [bead_id for bead_id in missing
+                           if bead_id in prior and not _same_native_row(prior[bead_id], incoming[bead_id])]
+                if changed:
+                    raise EntryError(_continuation_refusal(store,
+                        {bead_id: prior[bead_id] for bead_id in changed},
+                        {bead_id: incoming[bead_id] for bead_id in changed},
+                        phase="entry.retained-row-reuse",
+                        message="native continuation changed after its original entry snapshot"))
+                rows.update(incoming)
+            return {bead_id: rows[bead_id] for bead_id in ids}
+
         root, step = rows[workflow_root_id], rows[claimed_step_id]
         continuation = None
         physical_root_id = native_root(step)
-        physical_root = root if physical_root_id == workflow_root_id else store.snapshot([physical_root_id])[physical_root_id]
+        physical_root = (root if physical_root_id == workflow_root_id
+                         else snapshot_rows([physical_root_id])[physical_root_id])
         if _continuation_candidate(store, physical_root, workflow_root_id, recorded_root_id):
+            continuation_seed = dict(observed_rows) if isinstance(observed_rows, dict) else {}
+            changed = [bead_id for bead_id, row in rows.items()
+                       if bead_id in continuation_seed and not _same_native_row(continuation_seed[bead_id], row)]
+            if changed:
+                raise EntryError(_continuation_refusal(store,
+                    {bead_id: continuation_seed[bead_id] for bead_id in changed},
+                    {bead_id: rows[bead_id] for bead_id in changed},
+                    phase="entry.continuation-seed",
+                    message="native continuation changed after its original entry snapshot"))
+            continuation_seed.update(rows)
             continuation, continuation_rows = read_native_continuation(store, claimed_step_id=claimed_step_id,
-                requested_root_id=workflow_root_id, recorded_root_id=recorded_root_id)
-            if not all(bead_id not in rows or rows[bead_id] == row for bead_id, row in continuation_rows.items()):
-                raise EntryError(_continuation_refusal(store, rows, continuation_rows))
+                requested_root_id=workflow_root_id, recorded_root_id=recorded_root_id,
+                observed_rows=continuation_seed, _defer_revalidation=True)
+            changed = [bead_id for bead_id, row in continuation_rows.items()
+                       if bead_id in rows and not _same_native_row(rows[bead_id], row)]
+            if changed:
+                raise EntryError(_continuation_refusal(store,
+                    {bead_id: rows[bead_id] for bead_id in changed},
+                    {bead_id: continuation_rows[bead_id] for bead_id in changed}))
             rows.update(continuation_rows)
             workflow_root_id = continuation.binding["workflow_root_id"]
             next_plan = (continuation.binding["version"] == 2 and not require_plan
@@ -362,7 +442,7 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
                 and step["status"] == "in_progress" and bool(step["assignee"]),
                 "claimed entry step belongs to another native root/store or is no longer claimed")
         ref = reference(root["metadata"].get(RUN_REF), "run")
-        captured = _load(store, "run", ref)
+        captured = _load(store, "run", ref, rows=rows if continuation else None)
         require(captured["workflow_root_id"] == workflow_root_id,
                 "recorded run belongs to another workflow")
         # Reuse the capture validator without selecting HEAD or any current ref.
@@ -377,8 +457,8 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
         pin = expected_run_sha256 or root["metadata"].get("gc.implementation_run_sha256")
         require(pin is None or pin == digest, "recorded run hash differs from the continuation binding")
         original_ids = list(dict.fromkeys([captured["input_convoy_id"], captured["source_anchor_id"]]))
-        original = store.snapshot(original_ids)
-        require(all(bead_id not in rows or rows[bead_id] == row for bead_id, row in original.items()),
+        original = snapshot_rows(original_ids) if continuation else store.snapshot(original_ids)
+        require(all(bead_id not in rows or _same_native_row(rows[bead_id], row) for bead_id, row in original.items()),
                 "original source changed after continuation admission")
         rows.update(original)
         require(original[captured["input_convoy_id"]]["type"] == "convoy", "original run input is no longer a native convoy")
@@ -394,8 +474,9 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
         require(isinstance(current_id, str) and bool(current_id), "current workflow has no native input convoy")
         rendered_id = continuation.binding["unit_convoy_id"] if continuation else current_id
         require(input_convoy_id is None or input_convoy_id == rendered_id, "rendered input differs from the current native convoy")
-        convoy = store.snapshot([current_id])[current_id]
-        require(current_id not in rows or rows[current_id] == convoy,
+        convoy = (snapshot_rows([current_id])[current_id] if continuation
+                  else store.snapshot([current_id])[current_id])
+        require(current_id not in rows or _same_native_row(rows[current_id], convoy),
                 "current convoy changed after continuation admission")
         rows[current_id] = convoy
         healthy(convoy)
@@ -414,7 +495,10 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
             result.update(native_workflow_root_id=physical_root_id, native_input_convoy_id=rendered_id,
                           native_continuation=continuation.binding, _native_rows=rows)
         if worktree_lifecycle == "new":
-            result["check_policy"] = read_check_policy(store, ref["bead_id"], replay)
+            if continuation:
+                require(ref["bead_id"] in rows, "native continuation omitted its original run record")
+            result["check_policy"] = read_check_policy(store, ref["bead_id"], replay,
+                observed_row=rows.get(ref["bead_id"]) if continuation else None)
             if continuation:
                 require(hashlib.sha256(canonical_bytes(result["check_policy"])).hexdigest()
                         == continuation.binding["check_policy_sha256"],
@@ -423,9 +507,10 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
             from workspace_source_plan import source_node_ids, validate_source_plan
             owner_id = convoy["metadata"].get("gc.source_plan_owner_id")
             require(isinstance(owner_id, str) and bool(owner_id), "implementation convoy has no declared source-plan owner")
-            owner = store.snapshot([owner_id])[owner_id]
+            owner = (snapshot_rows([owner_id])[owner_id] if continuation
+                     else store.snapshot([owner_id])[owner_id])
             plan_ref = reference(owner["metadata"].get(PLAN_REF), "source-plan")
-            plan = _load(store, "source-plan", plan_ref)
+            plan = _load(store, "source-plan", plan_ref, rows=rows if continuation else None)
             require(plan["source_plan_owner_id"] == owner_id and plan["generation"] == generation,
                     "source plan has a different owner or generation")
             plan_digest = record_sha256(plan)
@@ -435,14 +520,15 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
                         "inherited source plan changed after its original native snapshot")
             pin = expected_plan_sha256 or convoy["metadata"].get("gc.source_plan_sha256")
             require(pin is None or pin == plan_digest, "source-plan hash differs from the continuation binding")
-            nodes = store.snapshot(list(dict.fromkeys([owner_id, *source_node_ids(plan)])))
-            require(all(bead_id not in rows or rows[bead_id] == row for bead_id, row in nodes.items()),
+            node_ids = list(dict.fromkeys([owner_id, *source_node_ids(plan)]))
+            nodes = snapshot_rows(node_ids) if continuation else store.snapshot(node_ids)
+            require(all(bead_id not in rows or _same_native_row(rows[bead_id], row) for bead_id, row in nodes.items()),
                     "source membership changed after continuation admission")
             rows.update(nodes)
             canonical = None
             if generation > 1:
                 canonical_ref = reference(root["metadata"].get("gc.canonical_ref"), "canonical")
-                canonical = _load(store, "canonical", canonical_ref)
+                canonical = _load(store, "canonical", canonical_ref, rows=rows if continuation else None)
             # An existing generation is exact replay, not a proposal based on
             # the current canonical result that it may have produced itself.
             from workspace_suffix import retain_source_owner
@@ -450,6 +536,21 @@ def read_entry(store, *, gc: str, city_root: str, rig_name: str,
             validate_source_plan(plan, replay, rows, store_ref=store.store_ref, canonical=canonical, stored=plan)
             result.update(source_plan=plan, source_plan_reference=plan_ref, source_plan_sha256=plan_digest)
         if continuation or (require_plan and len(rows) > len(nodes)):
+            if continuation:
+                require(1 <= len(rows) <= 100, "complete native entry evidence exceeds the guarded row bound")
+                refreshed = store.snapshot(list(rows))
+                require(set(refreshed) == set(rows)
+                        and all(refreshed[bead_id].get("id") == bead_id for bead_id in rows),
+                        "native entry revalidation returned a different physical read set")
+                changed = [bead_id for bead_id in rows
+                           if not _same_native_row(rows[bead_id], refreshed[bead_id])]
+                if changed:
+                    raise EntryError(_continuation_refusal(store,
+                        {bead_id: rows[bead_id] for bead_id in changed},
+                        {bead_id: refreshed[bead_id] for bead_id in changed},
+                        phase="entry.final-readview",
+                        message="native continuation changed during final entry read-set validation"))
+                rows = refreshed
             result['_native_rows'] = rows
         return result
     except (RecordError, RunError, OSError, KeyError, TypeError, ValueError) as exc:

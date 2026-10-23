@@ -88,7 +88,7 @@ class _ReadFence:
                 writer = self.snapshot([workspace["writer_step_id"]])[workspace["writer_step_id"]]
                 if native_root(writer) != workspace["workflow_root_id"]:
                     continuation, rows = read_native_continuation(self, claimed_step_id=writer["id"],
-                        requested_root_id=workspace["workflow_root_id"])
+                        requested_root_id=workspace["workflow_root_id"], observed_rows=self.rows)
                     self.retain(rows)
         if continuation is not None:
             require(isinstance(continuation, NativeRunContinuation), "record read requires typed native inheritance")
@@ -139,7 +139,8 @@ class NativeSourceRuntime:
             with transition_locks(common, scope, store.timeout):
                 entered = True
                 entry = read_entry(store, **arguments, expected_run_sha256=run_hash,
-                                   expected_plan_sha256=plan_hash)
+                                   expected_plan_sha256=plan_hash,
+                                   observed_rows=discovery.get("_native_rows"))
                 require({key: entry.get(key) for key in keys} == binding
                         and entry["run"]["common_git_dir"] == common
                         and record_sha256(entry["run"]) == run_hash
@@ -238,7 +239,8 @@ class NativeSourceRuntime:
         entry = read_entry(self._fence, gc=self.gc, city_root=self.city_root, rig_name=self.rig_name,
             workflow_root_id=self.run["workflow_root_id"], claimed_step_id=self.claimed_step_id,
             worktree_lifecycle="new", generation=self.plan["generation"], require_plan=True,
-            expected_run_sha256=record_sha256(self.run), expected_plan_sha256=record_sha256(self.plan))
+            expected_run_sha256=record_sha256(self.run), expected_plan_sha256=record_sha256(self.plan),
+            observed_rows=self._fence.rows)
         verify_replay("run", self.run, entry["run"])
         verify_replay("source-plan", self.plan, entry["source_plan"])
         self._fence.retain(entry.get("_native_rows", {}))
@@ -281,7 +283,7 @@ class NativeSourceRuntime:
         if native_root(step) == self.run["workflow_root_id"]:
             return None
         continuation, rows = read_native_continuation(self._fence, claimed_step_id=claimed_step_id,
-            requested_root_id=self.run["workflow_root_id"])
+            requested_root_id=self.run["workflow_root_id"], observed_rows=self._fence.rows)
         self._fence.retain(rows)
         binding = validate_native_continuation(continuation, self._fence.rows, store_ref=self.store.store_ref,
             workflow_root_id=self.run["workflow_root_id"], claimed_step_id=claimed_step_id,

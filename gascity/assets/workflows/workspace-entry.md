@@ -95,6 +95,12 @@ item's unit convoy and drain control to the original workflow, then verifies its
 run, source plan, member and captured checks. It keeps the original base even if
 the repository's default branch has advanced.
 
+Entry validation reuses rows already read for that continuation within the
+current operation; this is not a cache across entries or writes. After decoding
+and validating the complete evidence set, it takes one fresh snapshot of every
+row and refuses if an ID or row changed before return. Later guarded writes keep
+their own fresh read and equality checks.
+
 The first workspace publication records that inherited relationship in the
 same guarded operation as its workspace record and references. Native worktree
 ownership names the item's actual workflow root; the run and source-plan records

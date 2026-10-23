@@ -323,7 +323,7 @@ def main(argv: list[str] | None = None) -> int:
             context, original = None, None
             if native_root(claim) != plan['workflow_root_id']:
                 context, original = read_native_continuation(store, claimed_step_id=args.claimed_step_id,
-                    requested_root_id=plan['workflow_root_id'])
+                    requested_root_id=plan['workflow_root_id'], observed_rows={claim['id']: claim})
             writer_map, writer_rows = read_cooked_writer_map(store, workflow_root_id=plan["workflow_root_id"],
                 claimed_step_id=args.claimed_step_id, continuation=context, continuation_rows=original)
             prepared = declare_plan(store, Attempt.from_env(args.claimed_step_id), plan,

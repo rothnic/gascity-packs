@@ -47,8 +47,10 @@ def capture_check_policy(run: dict[str, Any], run_record_id: str, raw: Any) -> d
             "required_checks": config["required_checks"], "policy_sha256": digest}
 
 
-def read_check_policy(store: Any, run_record_id: str, run: dict[str, Any]) -> dict[str, Any]:
-    row = store.snapshot([run_record_id])[run_record_id]
+def read_check_policy(store: Any, run_record_id: str, run: dict[str, Any], *, observed_row=None) -> dict[str, Any]:
+    row = store.snapshot([run_record_id])[run_record_id] if observed_row is None else observed_row
+    require(isinstance(row, dict) and row.get("id") == run_record_id,
+            "recorded check policy readback has a different physical ID")
     raw = row["metadata"].get(CHECKS_POLICY_KEY)
     require(isinstance(raw, str), "recorded run has no immutable required-check policy; migrate explicitly")
     policy = parse_record(raw)

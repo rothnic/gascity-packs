@@ -221,6 +221,50 @@ class EntryTests(unittest.TestCase):
         self.assertLess(len(calls), len(expected))
         self.assertEqual(sum(len(call["ids"]) for call in calls), len(expected))
 
+    def test_retained_continuation_readview_revalidates_once_and_refuses_midread_drift(self):
+        self.drain_child()
+        store, source, log = self.native_snapshot_store()
+        first, observed = entry.read_native_continuation(store, claimed_step_id="step-1",
+            requested_root_id="child-1")
+        prior_calls = len(log.read_text().splitlines())
+        replay, refreshed = entry.read_native_continuation(store, claimed_step_id="step-1",
+            requested_root_id="child-1", observed_rows=observed)
+        calls = [json.loads(line) for line in log.read_text().splitlines()]
+        replay_calls = calls[prior_calls:]
+        print(f"readview snapshot calls: cold={prior_calls}, warm={len(replay_calls)}, warm_rows={sum(len(call['ids']) for call in replay_calls)}")
+        self.assertEqual(replay, first)
+        self.assertEqual(refreshed, observed)
+        self.assertGreater(prior_calls, 1)
+        self.assertEqual(len(replay_calls), 1)
+        self.assertEqual(set(row for call in replay_calls for row in call["ids"]), set(observed))
+
+        class DriftAfterFirstRead:
+            def __init__(self, delegate):
+                self.delegate = delegate
+                self.changed = False
+            def __getattr__(self, name):
+                return getattr(self.delegate, name)
+            def snapshot(self, ids):
+                if not self.changed:
+                    rows = json.loads(source.read_text())
+                    rows["step-1"]["revision"] = "2"
+                    rows["child-1"]["metadata"]["note/~"] = "native stamp"
+                    source.write_bytes(canonical_bytes(rows))
+                    self.changed = True
+                return self.delegate.snapshot(ids)
+
+        (self.root / ".gc").mkdir()
+        with self.assertRaisesRegex(entry.RecordError, "changed during fresh read-set validation"):
+            entry.read_native_continuation(DriftAfterFirstRead(store), claimed_step_id="step-1",
+                requested_root_id="child-1", observed_rows=observed)
+        self.assertTrue(source.exists())
+        changed_rows = json.loads(source.read_text())
+        self.assertEqual(changed_rows["step-1"]["revision"], "2")
+        self.assertEqual(changed_rows["child-1"]["metadata"]["note/~"], "native stamp")
+        diagnostic, = (self.root / ".gc" / "workspace-entry-diagnostics").iterdir()
+        packet = json.loads(diagnostic.read_text())
+        self.assertEqual(set(packet["overlapping_rows"]), {"step-1", "child-1"})
+
     def test_native_continuation_later_admission_rereads_and_rejects_changed_authority(self):
         self.drain_child()
         store, source, log = self.native_snapshot_store()
@@ -281,6 +325,86 @@ class EntryTests(unittest.TestCase):
         with self.assertRaisesRegex(entry.EntryError, "rendered input differs from the current native convoy"):
             self.read(workflow_root_id="child-1", input_convoy_id="implementation-1", require_plan=True)
 
+    def test_entry_reuses_continuation_records_and_revalidates_its_complete_read_set(self):
+        from workspace_store import StoreError, WorkspaceStore
+
+        self.drain_child()
+        snapshot = self.store.snapshot
+        snapshot_calls = []
+
+        def counted_snapshot(ids):
+            snapshot_calls.append(tuple(ids))
+            return snapshot(ids)
+
+        continuation_end = None
+        original_continuation_read = entry.read_native_continuation
+
+        def mark_continuation_end(*args, **kwargs):
+            nonlocal continuation_end
+            result = original_continuation_read(*args, **kwargs)
+            continuation_end = len(snapshot_calls)
+            return result
+
+        with patch.object(self.store, "snapshot", side_effect=counted_snapshot), \
+             patch.object(entry, "read_native_continuation", side_effect=mark_continuation_end), \
+             patch.object(self.store, "read_record", side_effect=AssertionError("retained records must be decoded from rows")):
+            result = self.read(input_convoy_id="unit-1", require_plan=True)
+
+        self.assertIsNotNone(continuation_end)
+        self.assertEqual(snapshot_calls.count(("child-1",)), 1)
+        post_continuation_calls = snapshot_calls[continuation_end:]
+        captured_original_ids = list(dict.fromkeys([
+            result["run"]["input_convoy_id"], result["run"]["source_anchor_id"],
+        ]))
+        observed_before_continuation = {
+            bead_id for batch in snapshot_calls[:continuation_end] for bead_id in batch
+        }
+        missing_original_ids = tuple(
+            bead_id for bead_id in captured_original_ids if bead_id not in observed_before_continuation
+        )
+        expected_post_continuation_calls = ([missing_original_ids] if missing_original_ids else []) + [
+            tuple(result["_native_rows"]),
+        ]
+        self.assertEqual(
+            post_continuation_calls,
+            expected_post_continuation_calls,
+            f"post-continuation snapshots must be missing original rows then one final full set; calls={snapshot_calls!r}",
+        )
+        self.assertEqual(set(post_continuation_calls[-1]), set(result["_native_rows"]))
+        run_row = result["_native_rows"]["record-1"]
+        self.assertEqual(WorkspaceStore.decode_record_snapshot("run", run_row, self.reference["identity"]),
+                         self.record)
+        routed_run = copy.deepcopy(run_row)
+        routed_run["metadata"]["gc.session_id"] = "foreign-session"
+        with self.assertRaisesRegex(StoreError, "dedicated record carries native runtime routing identity"):
+            WorkspaceStore.decode_record_snapshot("run", routed_run, self.reference["identity"])
+        with self.assertRaisesRegex(StoreError, "record identity does not match its exact reference"):
+            WorkspaceStore.decode_record_snapshot("run", run_row, ["wrong-workflow", *self.reference["identity"][1:]])
+
+        full_read_set = set(result["_native_rows"])
+        refreshed = False
+        after_continuation = False
+
+        def drift_before_final_batch(ids):
+            nonlocal refreshed
+            if after_continuation and not refreshed and set(ids) == full_read_set:
+                self.rows["step-1"]["revision"] = "2"
+                refreshed = True
+            return snapshot(ids)
+
+        def mark_after_continuation(*args, **kwargs):
+            nonlocal after_continuation
+            result = original_continuation_read(*args, **kwargs)
+            after_continuation = True
+            return result
+
+        with patch.object(self.store, "snapshot", side_effect=drift_before_final_batch), \
+             patch.object(entry, "read_native_continuation", side_effect=mark_after_continuation), \
+             patch.object(self.store, "read_record", side_effect=AssertionError("retained records must be decoded from rows")), \
+             self.assertRaisesRegex(entry.EntryError, "changed during final entry read-set validation"):
+            self.read(input_convoy_id="unit-1", require_plan=True)
+        self.assertTrue(refreshed)
+
     def test_child_continuation_rejects_wrong_native_chain_store_generation_and_ref(self):
         self.drain_child()
         original = copy.deepcopy(self.rows)
@@ -316,7 +440,7 @@ class EntryTests(unittest.TestCase):
 
         with patch.object(entry, "read_native_continuation", side_effect=changed), \
              patch.object(entry, "allocate_placeholder") as allocate, \
-             self.assertRaisesRegex(entry.EntryError, "native continuation changed after its original entry snapshot") as failure:
+             self.assertRaisesRegex(entry.EntryError, "native continuation changed during final entry read-set validation") as failure:
             self.read(workflow_root_id="child-1", require_plan=True)
         allocate.assert_not_called()
         directory = self.root / ".gc" / "workspace-entry-diagnostics"
@@ -342,6 +466,32 @@ class EntryTests(unittest.TestCase):
         self.assertIn(hashlib.sha256(proof.read_bytes()).hexdigest(), str(failure.exception))
         self.assertNotIn("replacement-session", str(failure.exception))
         self.assertNotIn(entry.RUN_REF, self.rows["child-1"]["metadata"])
+
+    def test_final_readview_distinguishes_boolean_and_integer_metadata(self):
+        self.drain_child()
+        (self.root / ".gc").mkdir()
+        self.rows["step-1"]["metadata"]["typed_marker"] = True
+        initial_revision = self.rows["step-1"]["revision"]
+        original_continuation_read = entry.read_native_continuation
+
+        def change_json_type(*args, **kwargs):
+            result = original_continuation_read(*args, **kwargs)
+            self.rows["step-1"]["metadata"]["typed_marker"] = 1
+            return result
+
+        with patch.object(entry, "read_native_continuation", side_effect=change_json_type), \
+             patch.object(entry, "allocate_placeholder") as allocate, \
+             self.assertRaisesRegex(entry.EntryError,
+                 "native continuation changed during final entry read-set validation"):
+            self.read(workflow_root_id="child-1", require_plan=True)
+        allocate.assert_not_called()
+        self.assertEqual(self.rows["step-1"]["revision"], initial_revision)
+        diagnostic, = (self.root / ".gc" / "workspace-entry-diagnostics").iterdir()
+        packet = json.loads(diagnostic.read_text())
+        pair = packet["overlapping_rows"]["step-1"]
+        self.assertIs(pair["initial"]["metadata"]["typed_marker"], True)
+        self.assertEqual(pair["continuation"]["metadata"]["typed_marker"], 1)
+        self.assertEqual(pair["changed_paths"], ["/metadata/typed_marker"])
 
     def test_unchanged_continuation_creates_no_diagnostic(self):
         self.drain_child()
@@ -377,11 +527,17 @@ class EntryTests(unittest.TestCase):
             with self.subTest(changed=key):
                 self.rows["step-1"] = copy.deepcopy(initial)
                 calls = []
+                step_reads = 0
+                drift_call_index = None
 
                 def changed(ids):
+                    nonlocal step_reads, drift_call_index
                     calls.append(list(ids))
-                    if len(calls) == 2:
+                    if "step-1" in ids:
+                        step_reads += 1
+                    if "step-1" in ids and step_reads == 2:
                         self.rows["step-1"][key] = value
+                        drift_call_index = len(calls)
                     return snapshot(ids)
 
                 fence = runtime._ReadFence(self.store)
@@ -391,7 +547,8 @@ class EntryTests(unittest.TestCase):
                      patch.object(entry, "native_json") as native, \
                      self.assertRaisesRegex(entry.EntryError, "cooked context changed after its original snapshot") as failure:
                     self.read(workflow_root_id="child-1", require_plan=True)
-                self.assertEqual(len(calls), 2)  # Diagnostic adds no store read.
+                self.assertEqual(step_reads, 2)
+                self.assertEqual(len(calls), drift_call_index)  # Diagnostic adds no store read.
                 self.assertEqual(fence.original_rows["step-1"], initial)
                 allocate.assert_not_called()
                 native.assert_not_called()
@@ -420,13 +577,19 @@ class EntryTests(unittest.TestCase):
             with self.subTest(failure=failure):
                 self.rows["step-1"] = copy.deepcopy(initial)
                 calls = []
+                step_reads = 0
+                drift_call_index = None
 
                 def changed(ids):
+                    nonlocal step_reads, drift_call_index
                     calls.append(list(ids))
-                    if len(calls) == 2:
+                    if "step-1" in ids:
+                        step_reads += 1
+                    if "step-1" in ids and step_reads == 2:
                         self.rows["step-1"]["assignee"] = "replacement-worker"
                         if failure == "oversize":
                             self.rows["step-1"]["metadata"]["large"] = "x" * (1024 * 1024)
+                        drift_call_index = len(calls)
                     return snapshot(ids)
 
                 fence = runtime._ReadFence(self.store)
@@ -437,7 +600,8 @@ class EntryTests(unittest.TestCase):
                      patch.object(entry, "native_json") as native, \
                      self.assertRaisesRegex(entry.EntryError, "cooked context changed.*private diagnostic unavailable"):
                     self.read(workflow_root_id="child-1", require_plan=True)
-                self.assertEqual(len(calls), 2)
+                self.assertEqual(step_reads, 2)
+                self.assertEqual(len(calls), drift_call_index)
                 self.assertEqual(fence.original_rows["step-1"], initial)
                 if failure == "oversize":
                     save.assert_not_called()
@@ -663,7 +827,7 @@ class EntryTests(unittest.TestCase):
         create.assert_not_called()
 
     def test_entry_cli_read_and_prepare_inherit_the_recorded_mode(self):
-        from workspace_store import Attempt
+        from workspace_store import Attempt, WorkspaceStore
         args = ["--city-root", str(self.root), "--store-ref", "rig:example", "--rig", "example",
                 "--claimed-step", "step-1"]
         for child in (False, True):
@@ -677,7 +841,8 @@ class EntryTests(unittest.TestCase):
                 for workflow_root in (("root-1", "child-1") if child else ("root-1",)):
                     for action in ("read", "prepare"):
                         with self.subTest(mode=mode, child=child, root=workflow_root, action=action), \
-                             patch("workspace_store.WorkspaceStore", return_value=self.store), \
+                             patch("workspace_store.WorkspaceStore", wraps=WorkspaceStore,
+                                   return_value=self.store), \
                              patch("workspace_store.Attempt.from_env", return_value=Attempt("session-1", "instance-1", "step-1")), \
                              patch.object(entry, "registered_rig", return_value=str(self.repo)), \
                              contextlib.redirect_stdout(io.StringIO()) as stdout, \

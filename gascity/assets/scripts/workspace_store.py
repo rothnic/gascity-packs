@@ -969,16 +969,16 @@ class WorkspaceStore:
                     continuation: NativeRunContinuation | None = None) -> dict | None:
         if kind not in contracts():
             raise StoreError("unknown record kind")
-        native_roots = ()
         if continuation is None:
-            rows = self.snapshot([bead_id])
-        else:
-            require(kind == "workspace" and isinstance(continuation, NativeRunContinuation),
-                    "typed continuation record reads are limited to workspace records")
-            rows = self.snapshot(list(dict.fromkeys([bead_id, *continuation.row_ids])))
-            binding = validate_native_continuation(continuation, rows, store_ref=self.store_ref,
-                workflow_root_id=continuation.binding["workflow_root_id"], require_reference=True)
-            native_roots = (binding["child_root_id"],)
+            row = self.snapshot([bead_id])[bead_id]
+            return self.decode_record_snapshot(kind, row, identity)
+        native_roots = ()
+        require(kind == "workspace" and isinstance(continuation, NativeRunContinuation),
+                "typed continuation record reads are limited to workspace records")
+        rows = self.snapshot(list(dict.fromkeys([bead_id, *continuation.row_ids])))
+        binding = validate_native_continuation(continuation, rows, store_ref=self.store_ref,
+            workflow_root_id=continuation.binding["workflow_root_id"], require_reference=True)
+        native_roots = (binding["child_root_id"],)
         row = rows[bead_id]
         record = _metadata_record(row, contracts()[kind]["metadata_key"])
         if record is not None:
@@ -997,6 +997,21 @@ class WorkspaceStore:
                              or row["metadata"].get("gc.root_bead_id") == binding["child_root_id"]),
                         "workspace read differs from its retained native continuation")
             self._dedicated(row, record if kind == "workspace" else None, native_roots=native_roots)
+            if identity is not None and list(record_identity(kind, record)) != list(identity):
+                raise StoreError("record identity does not match its exact reference")
+        return record
+
+    @staticmethod
+    def decode_record_snapshot(kind: str, row: dict, identity: list | tuple | None = None) -> dict | None:
+        """Decode a record from an already retained native row without rereading it."""
+        if kind not in contracts():
+            raise StoreError("unknown record kind")
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str):
+            raise StoreError("record snapshot has no exact physical ID")
+        record = _metadata_record(row, contracts()[kind]["metadata_key"])
+        if record is not None:
+            validate_record(kind, record)
+            WorkspaceStore._dedicated(row, record if kind == "workspace" else None)
             if identity is not None and list(record_identity(kind, record)) != list(identity):
                 raise StoreError("record identity does not match its exact reference")
         return record

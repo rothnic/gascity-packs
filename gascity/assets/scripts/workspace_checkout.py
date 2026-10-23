@@ -662,7 +662,7 @@ def _occurrence_continuation(store, workflow_root_id, step_id, rows, *, require_
         return None
     try:
         continuation, original = read_native_continuation(store, claimed_step_id=step_id,
-                                                         requested_root_id=workflow_root_id)
+            requested_root_id=workflow_root_id, observed_rows=rows)
         _retain_rows(rows, original)
         validate_native_continuation(continuation, rows, store_ref=store.store_ref,
             workflow_root_id=workflow_root_id, claimed_step_id=step_id, require_reference=require_reference)

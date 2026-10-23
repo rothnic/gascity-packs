@@ -1037,7 +1037,7 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.synthesize-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "00368419cec822ec5dec7a4a8b42854e3ee1b74b8ad6c3ff6fbac79f12ca6c5b"
+      "sha256": "6042bf9dd9de22c0d81009fdcb35e88d632e320b5d17de0fa1e8b36bb9f1860b"
     },
     "compound-engineering/assets/workflows/compound-planning/plan-review.md": {
       "classification": "reference",

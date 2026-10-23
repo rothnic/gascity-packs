@@ -18,13 +18,19 @@ stale canonical subject or required finding means `iterate`; preserve each
 finding and its lane attribution.
 
 Write `gc.verdict-report.v1`, kind `review`, to the recorded report path.
-Only an approved current plan with no unresolved findings may receive
-`verdict: pass`, `severity: none`, and `findings: []`. After reviewing those
-bytes, capture its exact `subject` with the imported
+Treat the plan front matter and `gc.build.plan_status` as author readiness. If
+either is not `approved`, record the required change for the apply lane; those
+bytes cannot receive a passing review. The native workflow root's
+`gc.build.plan_review_status=draft` is expected until the finalizer validates a
+passing report and records independent review approval. Do not treat that
+draft review-status field alone as an unresolved plan finding.
+
+For an author-approved plan with no unresolved findings, write
+`verdict: pass`, `severity: none`, and `findings: []`. Capture its exact
+`subject` with the imported
 `validate_plan_review.py subject` command from the shared contract. Do not
-rewrite the plan while synthesizing. If its status still needs approval,
-record that required change for the apply lane; the changed bytes need another
-review. A report or recommendation alone does not authorize decomposition.
+rewrite the plan while synthesizing. A report or recommendation alone does not
+authorize decomposition.
 
 Use finding severities `minor`, `major`, or `blocker`. Use report severities
 `none`, `minor`, `major`, or `blocker`. The report severity must equal the

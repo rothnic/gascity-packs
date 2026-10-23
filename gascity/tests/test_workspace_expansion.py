@@ -395,6 +395,15 @@ class ExpansionCompositionTests(unittest.TestCase):
         self.attempt = self.workspace["attempt"] = Attempt("session-1", "incarnation-1", native.claim)
         def read(gc, city, arguments, rig, **options):
             if arguments[:2] == ["bd", "show"]:
+                if arguments[2:5] == ["--exact-store", "--json", "--"]:
+                    self.assertTrue(options["require_array"])
+                    self.assertFalse(options.get("unwrap_singleton", False))
+                    result = []
+                    for bead_id in arguments[5:]:
+                        detail = copy.deepcopy(self.port.rows[bead_id])
+                        detail["dependencies"] = copy.deepcopy(native.scope_details[bead_id]["dependencies"])
+                        result.append(detail)
+                    return result
                 bead_id = arguments[2]
                 if bead_id == native.detail["id"]:
                     return copy.deepcopy(native.detail)

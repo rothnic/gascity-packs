@@ -178,6 +178,10 @@ class NativeAttemptTests(unittest.TestCase):
     def read(self, claimed=None, read_only=False):
         def native(gc, cwd, argv, rig, **options):
             if argv[:2] == ["bd", "show"]:
+                if argv[2:5] == ["--exact-store", "--json", "--"]:
+                    self.assertTrue(options["require_array"])
+                    self.assertFalse(options.get("unwrap_singleton", False))
+                    return [copy.deepcopy(self.scope_details[bead_id]) for bead_id in argv[5:]]
                 self.assertTrue(options["unwrap_singleton"] and options["require_array"])
                 if argv[2] in self.scope_details:
                     return copy.deepcopy(self.scope_details[argv[2]])
@@ -534,6 +538,10 @@ class NativeScopeHistoryTests(unittest.TestCase):
     def read(self, claim=None, read_only=False):
         def native(gc, cwd, argv, rig, **options):
             if argv[:2] == ["bd", "show"]:
+                if argv[2:5] == ["--exact-store", "--json", "--"]:
+                    self.assertTrue(options["require_array"])
+                    self.assertFalse(options.get("unwrap_singleton", False))
+                    return [copy.deepcopy(self.details[bead_id]) for bead_id in argv[5:]]
                 self.assertTrue(options["unwrap_singleton"] and options["require_array"])
                 return copy.deepcopy(self.details[argv[2]])
             return copy.deepcopy(self.formula)

@@ -2208,8 +2208,8 @@
     },
     "gascity/assets/scripts/workspace_dependency.py": {
       "classification": "new",
-      "responsibility": "composed native workspace helper and command entrypoint",
-      "sha256": "d4f1c2b430d8d1b7e82894c6838d184e930eac90119ad733cfa0592200901a0a"
+      "responsibility": "native dependency workspace preparation with conditional integration binding",
+      "sha256": "10898d3957ad3fc1baa5d31b461f87749bef1e6806083170e97c6d9aeda96b92"
     },
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",

@@ -1037,7 +1037,7 @@
     "compound-engineering/assets/workflows/compound-plan-review/{target}.synthesize-plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "e4c75427f900e81b4b2c320d23211ed842fa52d06c1f782cec1b228a60ea7abd"
+      "sha256": "2f59d8196fcc8eef788f8d96cfcb68cae4f6d6f7317eb9b1073ba7b26b357336"
     },
     "compound-engineering/assets/workflows/compound-planning/plan-review.md": {
       "classification": "reference",
@@ -1982,7 +1982,7 @@
     "gascity/assets/workflows/workspace-entry.md": {
       "classification": "new",
       "responsibility": "inherited-contract",
-      "sha256": "a855214886f7bc267cbedc92b3cf5252030a35c82cb8bb2d48154b0ead76ccc7"
+      "sha256": "3f5af571a8df4d4e18e5ba2dd89090b6c210ba6970899e4ec7f4cef94521c51c"
     },
     "gascity/assets/workflows/workspace-publication.md": {
       "classification": "new",

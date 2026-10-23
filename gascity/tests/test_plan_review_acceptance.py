@@ -166,7 +166,11 @@ class PlanReviewAcceptanceTests(unittest.TestCase):
         with self.assertRaises(review.ERRORS):
             review.validate_recorded_review(self.native_root, artifact_root=self.root / "other")
 
-    def test_native_gate_reads_exact_root_and_refuses_blocked_report(self):
+    def test_native_gate_accepts_draft_review_state_and_refuses_blocked_report(self):
+        self.native_root["metadata"].update({
+            "gc.build.plan_status": "approved",
+            "gc.build.plan_review_status": "draft",
+        })
         step = {"id": "review-1", "metadata": {"gc.root_bead_id": "workflow-1"}}
         with patch.dict(os.environ, {"GC_BEAD_ID": "review-1", "GC_RIG_ROOT": str(self.root)}), \
              patch.object(review, "show", side_effect=[step, self.native_root]), redirect_stdout(io.StringIO()):

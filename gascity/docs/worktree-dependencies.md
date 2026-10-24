@@ -134,6 +134,14 @@ Native execution has not yet verified shared checkpoints or continuation with
 dirty files or new commits. Preserve a refused checkout until the workflow can
 verify the recorded member and its current native ownership.
 
+For an isolated or dependent workspace, if the first preparation call loses
+its response after publishing the active workspace, repeating the same admitted
+preparation claim can recover the prepared input while the first member remains
+at its exact input with a clean checkout. This readback returns the existing
+workspace and a native checkpoint receipt; it does not accept implementation
+work. Dirty or advanced work remains a continuation and must follow the normal
+result/checkpoint path. Shared-chain work retains its continuation behavior.
+
 The pack prepares workspaces through native worktree commands. Detached or
 attached HEAD, placement, and lock timeout are native command options rather
 than additional workflow variables. Missing native capabilities stop preparation.

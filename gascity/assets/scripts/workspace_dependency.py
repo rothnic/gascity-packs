@@ -645,6 +645,46 @@ def prepare_dependency_workspace(store, attempt, *, gc, city_root, rig_name, wor
             integration_evidence = None
             if bundle['strategy'] == 'integration':
                 _, integration_evidence = _integration_receipt(integration_receipt_path(artifacts, bundle), bundle, existing)
+            expected_input = bundle['input_oid'] or bundle['base_oid']
+            same_first_claim = (workspace['phase'] == 'active'
+                and bundle['strategy'] in ('isolated', 'dependent')
+                and bundle['member_position'] == 0 and workspace['next_member_position'] == 0
+                and workspace['active_member_id'] == member_id
+                and workspace['input_oid'] == workspace['current_oid'] == expected_input
+                and workspace['output_oid'] is None and workspace['native_provenance'] is not None
+                and workspace['native_attempt_id'] is not None
+                and existing['writer_step_id'] == attempt.claimed_bead_id
+                and existing['writer_attempt_id'] == attempt.writer_attempt_id
+                and existing['claim_binding'] == workspace['claim_binding'])
+            if (same_first_claim and continued.get('state') == 'continuation'
+                    and continued.get('accepted') is False and continued.get('checkpoint_required') is True
+                    and continued.get('head') == expected_input and continued.get('git_state') == 'clean'
+                    and not continued.get('commit_oids')):
+                # A first prepare may publish its active checkpoint and lose
+                # only the final response. Re-publish that exact checkpoint
+                # under the same admitted claim so the caller receives a real
+                # native receipt. This does not accept an implementation result.
+                member_result_ref = frozen.metadata(member_id, 'gc.workspace_result_ref')
+                member_output_ref = frozen.metadata(member_id, 'gc.workspace_output_ref')
+                owner_result_ref = frozen.metadata(workspace_owner_id, 'gc.workspace_result_ref')
+                owner_output_ref = frozen.metadata(workspace_owner_id, 'gc.workspace_output_ref')
+                blocker_ref = frozen.metadata(workspace_owner_id, 'gc.workspace_blocker_ref')
+                if all(value is MISSING for value in
+                       (member_result_ref, member_output_ref, owner_result_ref, owner_output_ref, blocker_ref)):
+                    runtime.recheck_continuation()
+                    receipt = publish_checkpoint(frozen, attempt, workspace, authority_id=authority_id,
+                        writer_map=writer_map, plan_record_id=plan_record_id, native_runtime=runtime,
+                        launch_step_ids=launch_step_ids)
+                    runtime.bind_workspace(workspace, frozen.rows)
+                    verified = WorkspaceCheckout(run, workspace, store_ref=store.store_ref,
+                        evidence_dir=str(directory), parent=parent, allow_external_parent=allow_external_parent,
+                        gc=gc, city_root=city_root, **checkout_context(writer_map, frozen.rows)).verify()
+                    require(verified['head'] == expected_input,
+                            'replayed preparation no longer points at its exact clean input')
+                    return dict(ok=True, state='prepared', evidence_level='native-record-component',
+                        workspace=workspace, input_oid=workspace['input_oid'], path=workspace['work_dir'],
+                        authority_id=authority_id, workspace_record_id=workspace_record_id,
+                        launch_step_ids=list(launch_step_ids), integration_evidence=None, receipts=[receipt])
             return dict(continued, ok=True, input_oid=existing['input_oid'], authority_id=authority_id,
                 workspace_record_id=workspace_record_id, launch_step_ids=list(launch_step_ids),
                 integration_evidence=integration_evidence, receipts=[])

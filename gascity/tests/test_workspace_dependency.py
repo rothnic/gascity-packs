@@ -411,7 +411,7 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         attempt = options.pop('attempt', f.attempts['prepare-'+member])
         return self.helper.prepare_dependency_workspace(f.store,attempt,gc=str(f.port),city_root=str(f.city),
             rig_name='fixture',workflow_root_id=options.pop('workflow_root_id', 'root'),
-            input_convoy_id=options.pop('input_convoy_id', 'convoy'),generation=1,
+            input_convoy_id=options.pop('input_convoy_id', 'convoy'),generation=options.pop('generation',1),
             workspace_owner_id=options.pop('workspace_owner_id', 'C'),member_id=member,artifact_root=f.artifacts,evidence_dir=f.diagnostics,
             parent=str(f.work.parent),allow_external_parent=True, **options)
 
@@ -794,6 +794,141 @@ class DependencyNativeCompositionTests(unittest.TestCase):
         self.assertEqual(head,continued['head'])
         self.assertEqual(before,self.state())
         self.assertEqual('unfinished work\n',(work/'notes.txt').read_text())
+
+    def test_interrupted_pristine_first_prepare_replays_exact_checkpoint_with_receipt(self):
+        self.prepare_fixture();f=self.fixture
+        publish=self.helper.publish_checkpoint
+        interrupted=[]
+        def lose_final_response(*args,**kwargs):
+            result=publish(*args,**kwargs)
+            workspace=args[2]
+            if workspace['phase']=='active' and workspace['workspace_owner_id']=='C' and not interrupted:
+                interrupted.append(True)
+                raise self.helper.RecordError('fixture: response lost after active checkpoint publication')
+            return result
+        with patch.object(self.helper,'publish_checkpoint',side_effect=lose_final_response):
+            with self.assertRaisesRegex(self.helper.RecordError,'response lost'):
+                self.prepare()
+        self.assertEqual([True],interrupted)
+        failed=self.state()
+        rows=failed['stores']['rig:fixture']
+        workspace_ref=json.loads(rows['C']['metadata']['gc.workspace_ref'])
+        active=json.loads(rows[workspace_ref['bead_id']]['metadata']['gc.workspace'])
+        self.assertEqual('active',active['phase'])
+        self.assertEqual(0,active['next_member_position'])
+        self.assertEqual(active['input_oid'],active['current_oid'])
+        self.assertIsNone(active['output_oid'])
+        self.assertNotIn('gc.workspace_result_ref',rows['C']['metadata'])
+        self.assertNotIn('gc.workspace_output_ref',rows['C']['metadata'])
+
+        before_retry=self.state()
+        allocations=before_retry['allocation_number']
+        existing_records=set(before_retry['stores']['rig:fixture'])
+        request_count=len(before_retry.get('requests',[]))
+        launch_refs={key:row['metadata']['gc.worktree_ref'] for key,row in before_retry['stores']['rig:fixture'].items()
+                     if 'gc.worktree_ref' in row['metadata']}
+        result=self.prepare()
+        after_retry=self.state()
+        self.assertEqual('prepared',result['state'])
+        self.assertEqual(active['workspace_bead_id'],result['workspace']['workspace_bead_id'])
+        self.assertEqual(active['work_dir'],result['path'])
+        self.assertEqual(active['input_oid'],result['input_oid'])
+        self.assertIsNone(result['workspace']['output_oid'])
+        self.assertEqual(allocations,after_retry['allocation_number'])
+        self.assertEqual(existing_records,set(after_retry['stores']['rig:fixture']))
+        self.assertEqual(request_count+1,len(after_retry['requests']))
+        self.assertEqual(1,len(result['receipts']))
+        receipt=result['receipts'][0]
+        self.assertIn(receipt['outcome'],('committed','replayed'))
+        self.assertTrue(Path(receipt['request_path']).is_file())
+        self.assertEqual(receipt['request_sha256'],json.loads(Path(receipt['request_path']).read_text())['request_sha256'])
+        rows=after_retry['stores']['rig:fixture']
+        self.assertEqual(workspace_ref,json.loads(rows['C']['metadata']['gc.workspace_ref']))
+        replayed=json.loads(rows[active['workspace_bead_id']]['metadata']['gc.workspace'])
+        self.assertEqual(active,replayed)
+        self.assertEqual(launch_refs,{key:row['metadata']['gc.worktree_ref'] for key,row in rows.items()
+                                      if 'gc.worktree_ref' in row['metadata']})
+
+    def test_interrupted_prepare_with_ahead_and_dirty_work_continues_without_writes(self):
+        self.prepare_fixture();f=self.fixture
+        publish=self.helper.publish_checkpoint
+        def lose_final_response(*args,**kwargs):
+            result=publish(*args,**kwargs)
+            workspace=args[2]
+            if workspace['phase']=='active' and workspace['workspace_owner_id']=='C':
+                raise self.helper.RecordError('fixture: response lost after active checkpoint publication')
+            return result
+        with patch.object(self.helper,'publish_checkpoint',side_effect=lose_final_response):
+            with self.assertRaisesRegex(self.helper.RecordError,'response lost'):
+                self.prepare()
+        rows=self.state()['stores']['rig:fixture']
+        workspace_ref=json.loads(rows['C']['metadata']['gc.workspace_ref'])
+        active=json.loads(rows[workspace_ref['bead_id']]['metadata']['gc.workspace'])
+        work=Path(active['work_dir'])
+        (work/'partial.py').write_text('PARTIAL = 1\n')
+        f.git(work,'add','partial.py');f.git(work,'commit','-qm','partial implementation')
+        head=f.git(work,'rev-parse','HEAD')
+        (work/'notes.txt').write_text('unfinished work\n')
+        before=self.state()
+
+        result=self.prepare()
+
+        self.assertEqual('continuation',result['state'])
+        self.assertFalse(result['accepted'])
+        self.assertTrue(result['checkpoint_required'])
+        self.assertEqual(head,result['head'])
+        self.assertEqual([],result['receipts'])
+        self.assertEqual(before,self.state())
+        self.assertEqual('unfinished work\n',(work/'notes.txt').read_text())
+        self.assertEqual('PARTIAL = 1\n',(work/'partial.py').read_text())
+
+    def test_interrupted_shared_chain_prepare_keeps_continuation_behavior(self):
+        self.prepare_fixture(shared=True);f=self.fixture
+        publish=self.helper.publish_checkpoint
+        def lose_final_response(*args,**kwargs):
+            result=publish(*args,**kwargs)
+            workspace=args[2]
+            if workspace['phase']=='active' and workspace['workspace_owner_id']=='C':
+                raise self.helper.RecordError('fixture: response lost after active checkpoint publication')
+            return result
+        with patch.object(self.helper,'publish_checkpoint',side_effect=lose_final_response):
+            with self.assertRaisesRegex(self.helper.RecordError,'response lost'):
+                self.prepare()
+        before=self.state()
+
+        result=self.prepare()
+
+        self.assertEqual('continuation',result['state'])
+        self.assertFalse(result['accepted'])
+        self.assertTrue(result['checkpoint_required'])
+        self.assertEqual([],result['receipts'])
+        self.assertEqual(before,self.state())
+
+    def test_pristine_prepare_replay_rejects_wrong_claim_and_generation(self):
+        self.prepare_fixture();f=self.fixture
+        publish=self.helper.publish_checkpoint
+        def lose_final_response(*args,**kwargs):
+            result=publish(*args,**kwargs)
+            workspace=args[2]
+            if workspace['phase']=='active' and workspace['workspace_owner_id']=='C':
+                raise self.helper.RecordError('fixture: response lost after active checkpoint publication')
+            return result
+        with patch.object(self.helper,'publish_checkpoint',side_effect=lose_final_response):
+            with self.assertRaisesRegex(self.helper.RecordError,'response lost'):
+                self.prepare()
+        before=self.state()
+        with self.assertRaises(self.helper.RecordError):
+            self.prepare(attempt=f.attempts['producer'])
+        self.assertEqual(before,self.state())
+        with self.assertRaises(self.helper.RecordError):
+            self.prepare(generation=2)
+        self.assertEqual(before,self.state())
+        stale=copy.deepcopy(before)
+        stale['stores']['rig:fixture']['convoy']['metadata']['gc.source_plan_sha256']='f'*64
+        (f.root/'port.json').write_text(json.dumps(stale))
+        with self.assertRaises(self.helper.RecordError):
+            self.prepare()
+        self.assertEqual(stale,self.state())
 
     def test_resolved_integration_requires_exact_decision_and_resumes_original_checkpoint(self):
         self.prepare_fixture(integration=True,conflict=True);f=self.fixture

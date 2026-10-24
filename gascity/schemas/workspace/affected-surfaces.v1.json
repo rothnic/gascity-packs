@@ -2209,7 +2209,7 @@
     "gascity/assets/scripts/workspace_dependency.py": {
       "classification": "new",
       "responsibility": "native dependency workspace preparation with conditional integration binding",
-      "sha256": "10898d3957ad3fc1baa5d31b461f87749bef1e6806083170e97c6d9aeda96b92"
+      "sha256": "67d86b99715b4aa49fd60f29eaef33e8954f9ca42ba6a9f2faeb343fbd67ba5d"
     },
     "gascity/assets/scripts/workspace_runtime.py": {
       "classification": "new",

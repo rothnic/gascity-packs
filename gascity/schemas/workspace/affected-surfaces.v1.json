@@ -202,7 +202,7 @@
     "gascity/assets/workflows/build-base/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "6b5917fb050386f289af84d766b2535232e5180879d278a445e73cab8e6d6a50"
+      "sha256": "49de3f62e539b0cac16f033e027fdbe2b94b11a19e4066b61bcb3fd94fa2c05b"
     },
     "gascity/assets/workflows/build-base/plan.md": {
       "classification": "reference",
@@ -257,7 +257,7 @@
     "gascity/assets/workflows/build-basic/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "53add5171ed28e1f907eea821990f2baec79edfd515b4465e67923e9aab040b1"
+      "sha256": "42773678fc45503be1292b043afe5a2ebc4dbb382a39807f913dbc253df0cffd"
     },
     "gascity/assets/workflows/build-basic/plan.md": {
       "classification": "reference",
@@ -357,7 +357,7 @@
     "gascity/assets/workflows/build-from-plan-base/plan-review.md": {
       "classification": "new",
       "responsibility": "continuation",
-      "sha256": "6da579eb657c17cc9d65062e74a796c42eda13ac8e8a246abf22640c675fc779"
+      "sha256": "138d3f6f40a6cf7bc438d18487304deb01c039e1eddf1e8c8b9be81161251921"
     },
     "gascity/assets/workflows/build-from-plan-base/plan.md": {
       "classification": "new",
@@ -722,7 +722,7 @@
     "gascity/assets/workflows/planning-base/plan-review.md": {
       "classification": "reference",
       "responsibility": "reference",
-      "sha256": "fe3fb2c86eaeb964ca1e8f2919c858a84d84385f5cbfe7b6ff6e9524fbb32cab"
+      "sha256": "4244de87d118cc597fa85e2e26262af105fd376d0f003d3e8ed6d249af6d63bd"
     },
     "gascity/assets/workflows/planning-base/plan.md": {
       "classification": "reference",
@@ -2234,7 +2234,7 @@
     "gascity/assets/scripts/validate_plan_review.py": {
       "classification": "new",
       "responsibility": "read-only current native plan and upstream approval gate before task allocation",
-      "sha256": "a8ffaf0c0e4559703fe709864d4650a7dc3687d5ce1c1d8a41a0702329f82abb"
+      "sha256": "5e535b37f3fe7c8b3a20f249fdd8705f08cde67bb1af6f3e0ff35efc55f17414"
     },
     "gascity/assets/scripts/checks/plan-review-approved.py": {
       "classification": "new",

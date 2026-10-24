@@ -86,10 +86,9 @@ def current_subject(plan_path: Path, *, workflow_root_id: str, artifact_root: Pa
             "plan": {"path": str(plan_path), "sha256": digest(raw)}, "upstream": upstream}
 
 
-def validate_review(plan_path: Path, report_path: Path, *, workflow_root_id: str,
-                    artifact_root: Path, required_upstream: tuple[str, ...] = ()) -> dict[str, Any]:
-    report_path = artifact_path(str(report_path), artifact_root)
-    text = report_path.read_text(encoding="utf-8")
+def validate_review_text(plan_path: Path, text: str, *, workflow_root_id: str,
+                         artifact_root: Path,
+                         required_upstream: tuple[str, ...] = ()) -> dict[str, Any]:
     report = verdict.validate_report_text(text, expected_kind="review")
     require(report.verdict == "pass" and not report.findings,
             "plan review has unresolved findings; repair or retain a failing verdict")
@@ -99,6 +98,15 @@ def validate_review(plan_path: Path, report_path: Path, *, workflow_root_id: str
     require(data.get("subject") == subject,
             "plan review does not approve the exact current plan and upstream files")
     return subject
+
+
+def validate_review(plan_path: Path, report_path: Path, *, workflow_root_id: str,
+                    artifact_root: Path, required_upstream: tuple[str, ...] = ()) -> dict[str, Any]:
+    report_path = artifact_path(str(report_path), artifact_root)
+    return validate_review_text(plan_path, report_path.read_text(encoding="utf-8"),
+                                workflow_root_id=workflow_root_id,
+                                artifact_root=artifact_root,
+                                required_upstream=required_upstream)
 
 
 def review_claim(row: dict[str, Any], *, workflow_root_id: str, step: str) -> int:
@@ -181,6 +189,54 @@ def validate_recorded_review(root: dict[str, Any], *, artifact_root: Path) -> di
                            Path(recorded_path(metadata, REPORT_KEYS)), workflow_root_id=root["id"],
                            artifact_root=artifact_root,
                            required_upstream=(requirements,) if requirements else ())
+
+
+def validate_native_review_report(root: dict[str, Any], reviewer: dict[str, Any], *,
+                                  artifact_root: Path, report_path: Path,
+                                  report_sha256: str) -> dict[str, Any]:
+    """Check a claimed review report before it is published or the step is closed."""
+    require(isinstance(root.get("metadata"), dict) and isinstance(root.get("id"), str),
+            "native workflow metadata is malformed")
+    attempt = review_claim(reviewer, workflow_root_id=root["id"], step="plan-review-verdict")
+    require(reviewer.get("status") == "in_progress",
+            "report completeness requires the current claimed native reviewer")
+    report_path = artifact_path(str(report_path), artifact_root)
+    raw = report_path.read_bytes()
+    require(re.fullmatch("[0-9a-f]{64}", report_sha256) is not None
+            and digest(raw) == report_sha256,
+            "current native review report changed since it was read")
+    text = raw.decode("utf-8")
+    report = verdict.validate_report_text(text, expected_kind="review")
+    requirements = recorded_path(root["metadata"], REQUIREMENTS_KEYS, optional=True)
+    plan_path = Path(recorded_path(root["metadata"], PLAN_KEYS))
+    required_upstream = (requirements,) if requirements else ()
+    if report.verdict == "pass":
+        subject = validate_review_text(plan_path, text, workflow_root_id=root["id"],
+                                       artifact_root=artifact_root,
+                                       required_upstream=required_upstream)
+        return {"report": {"path": str(report_path), "sha256": digest(raw)},
+                "review_verdict": "pass", "subject": subject,
+                "reviewer": {"bead_id": reviewer["id"], "attempt": attempt},
+                "complete": True, "approval": False}
+
+    require(bool(report.findings), "a failing review needs actionable findings")
+    _, data, _ = build.parse_front_matter(text)
+    expected = repair_subject(plan_path, workflow_root_id=root["id"],
+                              artifact_root=artifact_root, reviewer=reviewer,
+                              required_upstream=required_upstream)
+    reported_subject = data.get("repair_subject")
+    reported_reviewer = (reported_subject.get("reviewer")
+                         if isinstance(reported_subject, dict) else None)
+    require(isinstance(reported_reviewer, dict),
+            "blocked report has no current native repair subject")
+    require(type(reported_reviewer.get("attempt")) is int,
+            "blocked report repair attempt must be an integer")
+    require(data.get("repair_subject") == expected,
+            "blocked report has no current native repair subject")
+    return {"report": {"path": str(report_path), "sha256": digest(raw)},
+            "review_verdict": "fail", "repair_subject": expected,
+            "reviewer": {"bead_id": reviewer["id"], "attempt": attempt},
+            "complete": True, "approval": False}
 
 
 def review_required(rows: list[dict[str, Any]]) -> bool:
@@ -298,7 +354,8 @@ ERRORS = (ValueError, build.ValidationError, verdict.ValidationError, OSError, U
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", choices=("subject", "check", "native-check",
-                                        "native-repair-subject", "native-repair-check"))
+                                        "native-repair-subject", "native-repair-check",
+                                        "native-review-report-check"))
     parser.add_argument("--plan", type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--workflow-root")
@@ -323,6 +380,13 @@ def main(argv: list[str] | None = None) -> int:
                 require(args.report_sha256 is not None, "--report-sha256 is required")
                 subject = validate_recorded_repair(root, claim, artifact_root=artifact_root,
                                                    report_sha256=args.report_sha256)
+            elif args.mode == "native-review-report-check":
+                require(claim.get("status") == "in_progress",
+                        "report completeness requires a claimed native reviewer")
+                require(args.report is not None and args.report_sha256 is not None,
+                        "--report and --report-sha256 are required")
+                subject = validate_native_review_report(root, claim, artifact_root=artifact_root,
+                    report_path=args.report, report_sha256=args.report_sha256)
             else:
                 subject = validate_recorded_review(root, artifact_root=artifact_root)
         else:

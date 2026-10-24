@@ -16,18 +16,30 @@ An earlier report is prior feedback. After an author repair, independently
 review the current plan and upstream bytes again. Preserve genuine findings
 and earlier reports. Complete this report handoff in order:
 
-1. Obtain the exact current `subject` with the acceptance helper. If a malformed
-   plan trace prevents it, retain that diagnostic as a blocking finding and
-   capture `repair_subject` with `native-repair-subject` as the contract directs.
-   Every blocked report needs that repair identity for the next author attempt.
-   Write a new `gc.verdict-report.v1` report for this claimed review with the
-   captured identity and your actual verdict and findings. Never invent a
-   complete approval subject for an unreadable upstream file.
+1. Obtain the exact current `subject` with the acceptance helper. If it cannot
+   be read, retain the diagnostic as a blocking finding; never invent an
+   approval subject. For every blocked review, capture `repair_subject` with
+   `native-repair-subject` while this reviewer is claimed, even when the plan
+   and its `subject` are valid. Write a new `gc.verdict-report.v1` report for
+   this claimed review with the actual verdict and findings. A failing report
+   must include that repair identity; it does not approve the plan. Preserve
+   earlier reports rather than retrofitting their identities.
+   If `native-repair-subject` itself fails because the plan front matter,
+   schema, workflow identity, or required native input is unavailable, do not
+   fabricate an identity or publish the diagnostic as an author-repair report.
+   Set `gc.outcome=fail` and `gc.failure_reason` on this claimed reviewer with
+   the exact helper diagnostic, then close it. Do not record a report path or
+   continue to step 2; this failure cannot authorize author repair.
 2. Read back the new report from its absolute path before validation.
-3. Run `validate_plan_review.py check` with the current native plan, workflow
-   root and artifact root, and `--report` set to that same absolute path.
-   Checking an earlier failing report does not review the repaired plan.
-4. Record that same existing path on the workflow root as
+3. Hash the report bytes you just read, then run
+   `validate_plan_review.py native-review-report-check --report <absolute-path>
+   --report-sha256 <sha256>`. This checks the report against the current
+   claimed reviewer, workflow root, plan and requirements before publication.
+   It accepts a complete failing handoff as complete but still failing; it
+   does not grant approval. A missing or stale repair identity must be fixed
+   in this current report and checked again. Checking an earlier report does
+   not review repaired plan bytes.
+4. Record that same checked path on the workflow root as
    `gc.build.plan_review_report_path`, even when the new report remains blocked.
 
 Do not write or overwrite

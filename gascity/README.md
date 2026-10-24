@@ -366,14 +366,20 @@ The scope body is a native control, with no worker route. Functional stages
 such as `finalize` and `publish` are required members, rather than teardown.
 Cleanup may run after failure only when explicitly authored as native teardown.
 
-Plan-review repair distinguishes current repair inputs from approval. A blocked
-default reviewer records the exact plan/requirements bytes and its native
-claim/attempt as `repair_subject`, including when a malformed trace prevents a
-complete approval subject. The next authorized author verifies the current
-native report path/hash and preceding failed reviewer before editing the plan.
-Changed inputs or a report replayed into a later attempt refuse repair. A new
-independent review must still validate every upstream file before approval or
-task creation. See [Plan-review acceptance](docs/plan-review-acceptance.md).
+Plan-review repair distinguishes a complete handoff from approval. Every
+blocked default reviewer records the exact plan/requirements bytes and its
+native claim/attempt as `repair_subject`, even when the approval subject is
+otherwise valid. Before recording the report path or closing the reviewer, the
+pack checks the same report bytes it hashed against the current claim and
+artifact bytes. A complete failing handoff remains a failure. If the identity
+cannot be constructed, the reviewer records the helper diagnostic as
+`gc.failure_reason`, fails and closes its own claim, and does not hand the
+incomplete diagnostic to the author. The next authorized author
+verifies the native report path/hash and preceding failed reviewer before
+editing the plan. Changed inputs or a report replayed into a later attempt
+refuse repair. A new independent review must still validate every upstream
+file before approval or task creation. See
+[Plan-review acceptance](docs/plan-review-acceptance.md).
 
 Third-party methodology packs can extend `build-base` and override only the
 stages they need. For implementation, packs should keep the Gas City drain

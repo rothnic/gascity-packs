@@ -71,24 +71,54 @@ findings with `id`, `severity`, `title`, `evidence`, and `required_fix`. Retain
 the actual findings. Never turn a blocked report into a passing report just to
 make a stage close.
 
-**Repair identity.** A malformed upstream path or hash can prevent the helper
-from constructing a complete approval `subject`. The independent native
-`plan-review-verdict` child must record that diagnostic as a real finding. While
-that reviewer is claimed in `GC_BEAD_ID`, capture a separate identity:
+**Repair identity.** Every blocked review needs a separate `repair_subject`,
+even when its plan and approval `subject` are otherwise valid. A malformed
+upstream path or hash can also prevent the helper from constructing a complete
+approval `subject`; the independent native `plan-review-verdict` child must
+record that diagnostic as a real finding. While that reviewer is claimed in
+`GC_BEAD_ID`, capture the repair identity:
 
 ```sh
 python3 <pack-scripts>/validate_plan_review.py native-repair-subject
 ```
 
-Copy this JSON object as `repair_subject` in the new failing report, even when
-the complete `subject` could not be obtained. Do this for every blocked default
-review that may need author repair. The identity binds the native workflow,
+Copy this JSON object as `repair_subject` in the new failing report. Do this for
+every blocked default review that may need author repair. The identity binds the native workflow,
 exact current plan path/hash, current native-recorded requirements path/hash,
 and actual reviewer bead/attempt. It does not resolve the plan's malformed
 trace or claim those upstream files are valid. Unreadable plan front matter,
 another schema/workflow, or unavailable native requirements still blocks it.
 Keep earlier report files and record the new report's absolute path on the
-root before closing this reviewer with its real failing outcome.
+root before closing this reviewer with its real failing outcome. Do not retrofit
+a prior attempt's report with the current claim identity; preserve it and write
+a new report for the current reviewer.
+
+If `native-repair-subject` itself fails because the plan front matter/schema or
+workflow identity is unreadable, or a required native input is unavailable,
+do not invent or publish a repair identity. Preserve the helper's exact
+diagnostic as the reviewer claim's `gc.failure_reason`, set its `gc.outcome` to
+`fail`, and close that claim without recording a report path. This is a
+terminal review failure, not an author-repair handoff; the author preflight
+continues to reject reports without a valid current `repair_subject`.
+
+**Reviewer pre-publication check.** After writing the report, read it back and
+hash those exact bytes. While the reviewer claim is still current, run:
+
+```sh
+python3 <pack-scripts>/validate_plan_review.py native-review-report-check \
+  --report <absolute-report-path> --report-sha256 <sha256-of-the-report-just-read>
+```
+
+This check binds the report to the current claimed reviewer and native workflow,
+uses the same captured report text for its hash and pass/fail validation,
+checks the current plan and requirements bytes, and requires the exact
+`repair_subject` on a failing report. A complete fail handoff passes this
+completeness check with `review_verdict: fail` and `approval: false`; it remains
+a failure. A passing report still needs the exact current approval `subject`,
+an approved plan, no findings, and the native approval gate. The command does
+not stamp workflow metadata or turn a failing review into approval. Fix a
+missing or stale identity in the current report and rerun the check before
+recording the report path or closing the reviewer.
 
 **Author preflight.** On the next native author attempt, read that current
 native-recorded report and capture its SHA-256. Run this command with the actual
@@ -121,7 +151,8 @@ Only the unchanged logical check can approve that result. Missing
 headless approval remains blocked. Methodology-specific loops retain their
 own authored repair roles and the same final exact-subject boundary.
 
-Record the absolute report path on the native workflow root:
+After the pre-publication check, record the same checked absolute report path
+on the native workflow root:
 
 ```sh
 gc bd update <native-workflow-root-id> \

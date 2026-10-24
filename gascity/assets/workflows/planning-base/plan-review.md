@@ -30,7 +30,18 @@ For an authorized repair, read the control's `gc.attempt_log` and review the
 changed subject again. Preserve report-only and headless authority limits.
 
 For every blocked review, capture `repair_subject` with `native-repair-subject`
-while this reviewer is claimed. A malformed trace may prevent a complete
-`subject`; retain the actual diagnostic and use the repair identity only in a
-failing report. Follow the contract's repair preflight and new-report handoff.
+while this reviewer is claimed, including when the plan and `subject` are
+otherwise valid. If a malformed trace prevents a complete `subject`, retain
+the actual diagnostic and use the repair identity only in a failing report.
+If `native-repair-subject` itself fails because plan front matter, schema,
+workflow identity, or a required native input is unavailable, do not fabricate
+an identity or publish an author-repair report. Set `gc.outcome=fail` and
+`gc.failure_reason` on this claimed reviewer with the exact helper diagnostic,
+then close it without recording a report path; this cannot authorize repair.
+Otherwise read the report back, hash those exact bytes, then run
+`validate_plan_review.py native-review-report-check --report <absolute-path>
+--report-sha256 <sha256>` before recording its path or closing this step. This
+checks current report completeness and identity; a valid failing handoff stays
+`fail` and never approves the plan. Follow the contract's repair preflight and
+new-report handoff.
 Only a newly validated complete subject can authorize decomposition.

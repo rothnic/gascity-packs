@@ -21,9 +21,19 @@ bytes. Record its absolute path on the workflow root as
 gate validates that subject and the approved plan; it allows three attempts.
 
 For every blocked review, capture `repair_subject` with `native-repair-subject`
-while this reviewer is claimed. If a malformed trace prevents a complete
-`subject`, record that diagnostic and the repair identity in a failing report
-as the contract directs. A repair identity cannot approve decomposition.
+while this reviewer is claimed, including when the plan and `subject` are
+otherwise valid. If a malformed trace prevents a complete `subject`, record
+that diagnostic and the repair identity in a failing report. Read the report
+back and hash those exact bytes. If `native-repair-subject` itself fails
+because plan front matter, schema, workflow identity, or a required native
+input is unavailable, do not fabricate an identity or publish an author-repair
+report. Set `gc.outcome=fail` and `gc.failure_reason` on this claimed reviewer
+with the exact helper diagnostic, then close it without recording a report
+path; this cannot authorize repair. Otherwise run
+`validate_plan_review.py native-review-report-check --report <absolute-path>
+--report-sha256 <sha256>` before recording its path or closing this step. This
+checks current report completeness and identity; a valid failing handoff stays
+`fail` and never approves decomposition.
 
 Set `gc.outcome=pass` only for `verdict: pass`, `severity: none`, and empty
 findings after the exact subject validates. Otherwise preserve a failing report,

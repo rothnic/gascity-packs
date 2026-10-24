@@ -16,7 +16,13 @@ import test_plan_review_acceptance as acceptance
 
 
 PACK = Path(__file__).resolve().parents[1]
-PROMPT = PACK / "assets" / "workflows" / "planning-base" / "repair-plan-review.md"
+REPAIR_PROMPT = PACK / "assets" / "workflows" / "planning-base" / "repair-plan-review.md"
+REVIEW_PROMPTS = (
+    PACK / "assets" / "workflows" / "build-basic" / "plan-review.md",
+    PACK / "assets" / "workflows" / "planning-base" / "plan-review.md",
+    PACK / "assets" / "workflows" / "build-base" / "plan-review.md",
+    PACK / "assets" / "workflows" / "build-from-plan-base" / "plan-review.md",
+)
 
 
 class PlanReviewRepairTests(unittest.TestCase):
@@ -54,16 +60,25 @@ class PlanReviewRepairTests(unittest.TestCase):
                     "sha256": hashlib.sha256(self.requirements.read_bytes()).hexdigest()}],
                 "reviewer": {"bead_id": "review-1", "attempt": 1}}
 
+    def current_repair_subject(self, *, reviewer="review-2", attempt=2):
+        subject = self.repair_subject()
+        subject["reviewer"] = {"bead_id": reviewer, "attempt": attempt}
+        return subject
+
     def native_rows(self, *, root="workflow-1"):
         def child(bead_id, step, attempt, status):
-            return {"id": bead_id, "status": status, "issue_type": "task", "metadata": {
+            metadata = {
                 "gc.root_bead_id": root, "gc.ralph_step_id": "plan-review", "gc.kind": "task",
-                "gc.step_id": step, "gc.attempt": attempt, "gc.outcome": "fail"}}
+                "gc.step_id": step, "gc.attempt": attempt}
+            if status == "closed":
+                metadata["gc.outcome"] = "fail"
+            return {"id": bead_id, "status": status, "issue_type": "task", "metadata": metadata}
         rows = {root: {"id": root, "metadata": {"gc.build.plan_path": self.plan.name,
                     "gc.build.requirements_path": self.requirements.name,
                     "gc.build.plan_review_report_path": self.report.name}},
                 "author-2": child("author-2", "author-repair", "2", "in_progress"),
-                "review-1": child("review-1", "plan-review-verdict", "1", "closed")}
+                "review-1": child("review-1", "plan-review-verdict", "1", "closed"),
+                "review-2": child("review-2", "plan-review-verdict", "2", "in_progress")}
         # First cooked reviewers are plain task rows; later attempts stamp gc.kind.
         del rows["review-1"]["metadata"]["gc.kind"]
         return rows
@@ -74,11 +89,23 @@ class PlanReviewRepairTests(unittest.TestCase):
         argv = [mode]
         if mode == "native-repair-check":
             argv += ["--report-sha256", report_sha256 or hashlib.sha256(self.report.read_bytes()).hexdigest()]
+        elif mode == "native-review-report-check":
+            argv += ["--report", str(self.report), "--report-sha256",
+                     report_sha256 or hashlib.sha256(self.report.read_bytes()).hexdigest()]
         with patch.object(acceptance.review, "show", side_effect=lambda key: rows[key]), \
              patch.dict(os.environ, GC_BEAD_ID=claim, GC_RIG_ROOT=str(rig_root or self.root)), \
              redirect_stdout(output), redirect_stderr(error):
             rc = acceptance.review.main(argv)
         return subprocess.CompletedProcess(argv, rc, output.getvalue(), error.getvalue())
+
+    def test_plan_review_prompts_require_current_repair_identity_for_every_block(self):
+        for prompt in REVIEW_PROMPTS:
+            with self.subTest(prompt=prompt.name):
+                text = prompt.read_text()
+                self.assertIn("native-review-report-check", text)
+                self.assertIn("native-repair-subject", text)
+                self.assertIn("every blocked review", text.lower())
+                self.assertIn("gc.failure_reason", text)
 
     def test_native_repair_uses_recorded_artifact_root_instead_of_rig_root(self):
         rig_root = self.root / "rig"
@@ -89,7 +116,7 @@ class PlanReviewRepairTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def guard(self, *, root="workflow-1", rows=None, report_sha256=None):
-        self.assertIn('native-repair-check --report-sha256 "$REPORT_SHA256"', PROMPT.read_text())
+        self.assertIn('native-repair-check --report-sha256 "$REPORT_SHA256"', REPAIR_PROMPT.read_text())
         before = {path: path.read_bytes() for path in (self.requirements, self.plan, self.report)}
         result = self.native("native-repair-check", rows=rows or self.native_rows(root=root),
                              report_sha256=report_sha256)
@@ -107,6 +134,133 @@ class PlanReviewRepairTests(unittest.TestCase):
         with self.assertRaisesRegex(acceptance.review.ReviewError, "unresolved findings"):
             acceptance.review.validate_review(self.plan, self.report,
                 workflow_root_id="workflow-1", artifact_root=self.root)
+
+    def test_native_review_report_check_rejects_blocked_report_missing_repair_identity(self):
+        _, data, body = acceptance.review.build.parse_front_matter(self.report.read_text())
+        del data["repair_subject"]
+        self.report.write_text("---\n" + acceptance.review.build.yaml.safe_dump(data, sort_keys=False)
+                               + "---\n" + body)
+        result = self.native("native-review-report-check", claim="review-2")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("repair subject", result.stderr.lower())
+
+    def test_native_review_report_check_accepts_complete_fail_without_approval(self):
+        _, data, body = acceptance.review.build.parse_front_matter(self.report.read_text())
+        data["repair_subject"] = self.current_repair_subject()
+        self.report.write_text("---\n" + acceptance.review.build.yaml.safe_dump(data, sort_keys=False)
+                               + "---\n" + body)
+        result = self.native("native-review-report-check", claim="review-2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["review_verdict"], "fail")
+        self.assertFalse(observed["approval"])
+        self.assertEqual(observed["repair_subject"], self.current_repair_subject())
+
+    def test_native_review_report_check_allows_blocked_malformed_trace_without_fake_subject(self):
+        self.plan.write_text(self.plan.read_text().replace(
+            str(self.requirements), "missing-requirements.md"))
+        _, data, body = acceptance.review.build.parse_front_matter(self.report.read_text())
+        data.pop("subject")
+        data["repair_subject"] = self.current_repair_subject()
+        self.report.write_text("---\n" + acceptance.review.build.yaml.safe_dump(data, sort_keys=False)
+                               + "---\n" + body)
+        result = self.native("native-review-report-check", claim="review-2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["review_verdict"], "fail")
+        self.assertFalse(observed["approval"])
+
+    def test_native_repair_subject_refuses_malformed_plan_without_editing_inputs(self):
+        self.write_report()
+        self.plan.write_text("---\nschema: gc.build.other.v1\nworkflow: {}\n---\nNot a plan.\n")
+        before = {path: path.read_bytes() for path in (self.plan, self.requirements, self.report)}
+        checked = self.native("native-review-report-check", claim="review-2")
+        self.assertNotEqual(checked.returncode, 0)
+        self.assertIn("repair plan", checked.stderr.lower())
+        self.assertEqual(before, {path: path.read_bytes() for path in before})
+        result = self.native("native-repair-subject", claim="review-2")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("repair plan", result.stderr.lower())
+        self.assertEqual(before, {path: path.read_bytes() for path in before})
+
+    def test_native_review_report_check_uses_the_hashed_report_text_if_path_changes(self):
+        self.write_report(verdict="pass")
+        _, data, body = acceptance.review.build.parse_front_matter(self.report.read_text())
+        data.pop("repair_subject")
+        self.report.write_text("---\n" + acceptance.review.build.yaml.safe_dump(data, sort_keys=False)
+                               + "---\n" + body)
+        original = self.report.read_bytes()
+        original_hash = hashlib.sha256(original).hexdigest()
+        validate = acceptance.review.verdict.validate_report_text
+        mutated = False
+
+        def mutate_after_parse(text, *, expected_kind):
+            nonlocal mutated
+            report = validate(text, expected_kind=expected_kind)
+            if not mutated:
+                mutated = True
+                self.report.write_text(text.replace("verdict: pass", "verdict: fail")
+                                       .replace("severity: none", "severity: blocker"))
+            return report
+
+        with patch.object(acceptance.review.verdict, "validate_report_text",
+                          side_effect=mutate_after_parse):
+            result = self.native("native-review-report-check", claim="review-2",
+                                 report_sha256=original_hash)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["review_verdict"], "pass")
+        self.assertEqual(observed["report"]["sha256"], original_hash)
+        self.assertNotEqual(self.report.read_bytes(), original)
+
+    def test_native_review_report_check_refuses_stale_replayed_or_changed_identity(self):
+        for fault in ("old-reviewer", "foreign-root", "changed-plan", "changed-requirements",
+                      "changed-report", "boolean-attempt", "float-attempt"):
+            with self.subTest(fault=fault):
+                rows = None
+                self.requirements.write_text("# Requirements\nREQ-1: implement the requested behavior.\n")
+                self.plan.write_text(acceptance.plan_text(self.root))
+                self.subject = acceptance.review.current_subject(
+                    self.plan, workflow_root_id="workflow-1", artifact_root=self.root)
+                self.write_report()
+                _, data, body = acceptance.review.build.parse_front_matter(self.report.read_text())
+                data["repair_subject"] = self.current_repair_subject()
+                if fault == "old-reviewer":
+                    data["repair_subject"]["reviewer"] = {"bead_id": "review-1", "attempt": 1}
+                elif fault == "foreign-root":
+                    data["repair_subject"]["workflow_root_id"] = "other-workflow"
+                elif fault in ("boolean-attempt", "float-attempt"):
+                    rows = self.native_rows()
+                    rows["review-2"]["metadata"]["gc.attempt"] = "1"
+                    data["repair_subject"]["reviewer"]["attempt"] = (
+                        True if fault == "boolean-attempt" else 1.0)
+                self.report.write_text("---\n" + acceptance.review.build.yaml.safe_dump(data, sort_keys=False)
+                                       + "---\n" + body)
+                read_hash = hashlib.sha256(self.report.read_bytes()).hexdigest()
+                if fault == "changed-report":
+                    self.report.write_text(self.report.read_text() + "\nChanged after read.\n")
+                if fault == "changed-plan":
+                    self.plan.write_text(self.plan.read_text() + "\nChanged after review.\n")
+                if fault == "changed-requirements":
+                    self.requirements.write_text(self.requirements.read_text() + "\nChanged after review.\n")
+                result = self.native("native-review-report-check", rows=rows, claim="review-2",
+                                     report_sha256=read_hash)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+
+    def test_native_review_report_check_keeps_pass_subject_validation(self):
+        self.write_report(verdict="pass")
+        _, data, body = acceptance.review.build.parse_front_matter(self.report.read_text())
+        data.pop("repair_subject")
+        self.report.write_text("---\n" + acceptance.review.build.yaml.safe_dump(data, sort_keys=False)
+                               + "---\n" + body)
+        result = self.native("native-review-report-check", claim="review-2")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        observed = json.loads(result.stdout)
+        self.assertEqual(observed["review_verdict"], "pass")
+        self.assertEqual(observed["subject"], self.subject)
+        self.assertEqual(observed["reviewer"], {"bead_id": "review-2", "attempt": 2})
+        self.assertTrue(observed["complete"])
+        self.assertFalse(observed["approval"])
 
     def test_malformed_upstream_can_be_repaired_without_approving(self):
         valid_plan = self.plan.read_text()
